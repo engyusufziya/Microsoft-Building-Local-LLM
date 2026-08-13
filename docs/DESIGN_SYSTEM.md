@@ -213,18 +213,26 @@ animasyon eklemek okunabilirliği bozar. Yalnızca yanıp sönen imleç.
 | `ChatInput` / `ThinkingIndicator` | `web/components/chat/*.tsx` | `frontend-chat` |
 | `SourceChips` | `web/components/chat/source-chips.tsx` | `frontend-chat` |
 | `RetrievalInspector` / `ChunkCard` | `web/components/inspector/**` | `frontend-chat` |
-| SSE okuyucu | `web/lib/sse.ts` | `frontend-chat` |
 | Chat metinleri | `web/lib/i18n/chat.ts` | `frontend-chat` |
 | — | — | — |
 | Metrics sayfası ve grafikleri | `web/components/metrics/**` | `metrics-ui` |
 | Metrics metinleri | `web/lib/i18n/metrics.ts` | `metrics-ui` |
 | — | — | — |
 | API istemcisi + tipler | `web/lib/api.ts`, `web/lib/types.ts` | **entegrasyon (ben)** |
+| SSE ayrıştırıcı | `web/lib/sse.ts` | **entegrasyon (ben)** |
 | Sayfa/layout | `web/app/layout.tsx`, `web/app/page.tsx` | **entegrasyon (ben)** |
 
 `lib/api.ts` ve `lib/types.ts`'i bilinçli olarak kimseye vermiyorum: üç
 frontend agent'ı da bunları okuyacak, ortak dosyayı paralel yazmak en yüksek
 çakışma riski.
+
+> [!note] `lib/sse.ts` sahipliği değişti (Wave 2 öncesi)
+> Bu dosya ilk taslakta `frontend-chat`'e verilmişti. Wave 2 başlamadan
+> entegrasyona alındı: sohbet akışı (`POST /api/chat`) ve belge yükleme
+> ilerlemesi (`POST /api/documents`) **aynı** wire format'ı kullanıyor
+> (`backend/sse.py`). İki agent'ın aynı düşük seviye ayrıştırıcıyı ayrı ayrı
+> yazması hem tekrar hem tutarsızlık riskiydi. `frontend-chat` ve
+> `frontend-kb` bunun üzerine kendi özelliğe özgü tüketim mantıklarını kurar.
 
 ---
 
