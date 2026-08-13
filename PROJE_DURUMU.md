@@ -1,110 +1,171 @@
-# Proje Durumu — Local RAG AI Assistant (Foundry Local)
+# Proje Durumu
 
-> Bu dosyayı Claude Code'a (VS Code) verip "bu projeye kaldığımız yerden devam
-> edelim, önce bu dosyayı oku" diyerek bağlamı aktarabilirsin.
+> Bu dosya projenin güncel teknik durumunu, alınan kararları ve gerekçelerini
+> özetler. Aşağıdaki her sonuç koddan veya ölçümden doğrulanmıştır; hiçbiri
+> varsayım değildir.
 
 ## Proje
 
-Microsoft Türkiye AI Innovators programı — Foundry Local + RAG ile tamamen
-offline çalışan Türkçe bir belge Q&A asistanı. 2 günlük sprint hedefi.
-macOS Apple Silicon üzerinde geliştiriliyor.
+Microsoft Türkiye AI Innovators programı kapsamında geliştirilen, Foundry
+Local üzerinde **tamamen offline çalışan Türkçe bir PDF belge Q&A asistanı**.
+Kullanıcı PDF yükler, sistem belgeyi parçalayıp embed eder; sorular yalnızca
+yüklenen belgelerden, kaynak atıflı olarak cevaplanır.
 
-## Şu ana kadar doğrulanmış kararlar
+Motor (RAG çekirdeği) tamamlanmış ve ölçülmüş durumda. Proje şu anda
+Streamlit/CLI prototipinden, portföy niteliğinde bir SaaS ürününe
+dönüştürülüyor (bkz. "v2 Dönüşümü" bölümü).
 
-- **Ortam:** Foundry Local kurulu (Homebrew), Python venv + `foundry-local-sdk` kurulu.
+## Ortam
 
-- **Chat modeli: KARAR HENÜZ KESİNLEŞMEDİ, karşılaştırma yarım kaldı.**
-  - `qwen2.5-0.5b` denendi: Türkçe'de çok tutarsız çıktı verdi, elendi.
-  - `phi-4-mini` (GPU/Metal doğrulandı, model ID `Phi-4-mini-instruct-generic-gpu:5`):
-    açık uçlu/bağlamsız soruda Türkçe halüsinasyon ve tekrar döngüsü gösterdi
-    ("geriatörik" gibi uydurma terimler). **Ama bağlam verilip (RAG'e yakın
-    koşul) üretim uzunluğu sınırlandığında temiz, doğru, tekrarsız Türkçe
-    cevap üretti.** Şu ana kadarki en güçlü aday.
-  - `qwen2.5-7b`: benchmark verisinde (Microsoft'un phi-4-mini model kartı
-    karşılaştırması) genel skor ve çok dillilikte phi-4-mini'den daha iyi
-    görünüyor (Multilingual MMLU 64.4 vs 49.3). Kullanıcı bunu da test etmek
-    istedi; `test_qwen25_7b_grounded.py` hazırlandı (phi-4-mini ile aynı
-    bağlam/sorularla birebir kıyaslanabilir), **ama indirilip çalıştırılıp
-    sonucu değerlendirilmedi.** GPU varyantı ~5.2 GB, phi-4-mini'nin (~3.7 GB)
-    üzerinde, 16 GB+ RAM önerilir (kullanıcının gerçek RAM/çip bilgisi hâlâ
-    doğrulanmadı).
-  - **Yapılacak ilk iş: `test_qwen25_7b_grounded.py`'yi çalıştırıp phi-4-mini'nin
-    bilinen iyi sonucuyla (üç adım + amaç sorularına temiz cevap) kıyaslayıp
-    chat modelini kesinleştirmek.**
-- **Dil:** Türkçe. Belge seti Türkçe hazırlandı.
-- **Belge seti:** `data/` klasöründe 6 adet `.md` dosyası — projenin kendi
-  kavramlarını anlatıyor (RAG, embedding, Foundry Local, SQLite, prompt
-  engineering, chunking). Kaynağı doğrulanmış, orijinal yazılmış içerik.
+Apple M4 MacBook Air, 16 GB RAM, macOS 26.5. Foundry Local 0.8.119,
+`foundry-local-sdk` 1.2.4, Python venv.
 
-## Mimari
+## Mimari (v1 — motor)
 
 ```
-Kullanıcı → Streamlit arayüzü → RAG pipeline
-  1. Soru embed edilir (qwen3-embedding-0.6b)
-  2. SQLite'tan (rag.db) en benzer top-k chunk bulunur (cosine similarity)
-  3. Bağlam + soru, [KESİNLEŞMEMİŞ chat modeli]'ne system prompt ile gönderilir
-  4. Model sadece bağlama dayanarak cevap üretir
+PDF yükleme  ──> pdf_loader (sayfa bazlı metin, OCR yedek yolu)
+             ──> chunking (130 kelime pencere + 30 overlap, sayfa sınırı korunur)
+             ──> embedding (qwen3-embedding-0.6b, 1024 boyut)
+             ──> store (SQLite, float32 BLOB, L2-normalize matris önbelleği)
+
+Soru ──> retrieve (cosine benzerlik + eşik)
+     ──> answer (system prompt + qwen2.5-7b)
+     ──> cevap + [Kaynak: dosya.pdf s.4]
 ```
 
-## Mevcut test/yardımcı script'ler (proje klasöründe olmalı)
+Modül haritası: `rag/config.py` (tüm sabitler ve gerekçeleri), `rag/models.py`
+(Foundry Local istemcisi), `rag/pdf_loader.py`, `rag/chunking.py`,
+`rag/store.py`, `rag/ingest.py`, `rag/retrieve.py`, `rag/answer.py`,
+`rag/ocr.py`. Arayüzler: `cli.py`, `streamlit_app.py`. Değerlendirme:
+`eval/eval_set.json`, `eval/run_eval.py`.
 
-Bunları tekrar yazmaya gerek yok, hepsi hazır ve daha önce en az bir kez
-çalıştırıldı:
+## Model seçimi ve gerekçesi
 
-- `test_setup.py` — embedding + chat modelinin temel çalışırlığını doğrular.
-- `test_phi4mini.py` — phi-4-mini'yi açık uçlu Türkçe sorularla test eder
-  (halüsinasyon/tekrar döngüsü sorununu burada gördük).
-- `test_phi4mini_grounded.py` — phi-4-mini'yi bağlam verilerek test eder
-  (temiz sonuç bunda alındı, RAG'in gerçek koşuluna en yakın test).
-- `test_qwen25_7b_grounded.py` — aynı bağlam/sorularla qwen2.5-7b testi.
-  **Sonucu henüz alınmadı, öncelik bu.**
-- `ingest.py` — belgeleri chunk'layıp embed edip SQLite'a yazan script.
-  **İçinde düzeltilmemiş olabilecek bir hata var, aşağıya bak.**
+- **Embedding:** `qwen3-embedding-0.6b` (id `qwen3-embedding-0.6b-generic-gpu:1`,
+  vektör boyutu 1024, context 32768).
+- **Chat:** `qwen2.5-7b` (id `qwen2.5-7b-instruct-generic-gpu:4`, 5.2 GB).
 
-## Şu anki blokaj / son yapılan iş
+`phi-4-mini` (3.7 GB) denendi ve **grounded (bağlam verilmiş) testte elendi**:
+bağlamın ilk cümlesinde açıkça duran "Retrieval-Augmented Generation"
+açılımını bulamayıp "belgelerde yok" dedi, "Recurrent Attention Generation"
+diye uydurma bir açılım üretti ve 118 kelimelik anlamsız bir tekrar döngüsüne
+girdi. Aynı koşulda `qwen2.5-7b` bağlama sadık kaldı ve tekrar döngüsüne
+girmedi.
 
-İki paralel açık iş var:
+## Kritik teknik bulgu: sampling parametreleri işlemiyor
 
-1. **Model karşılaştırması yarım kaldı.** `test_qwen25_7b_grounded.py`
-   hazırlandı ama çalıştırılmadı/sonucu değerlendirilmedi. phi-4-mini'nin
-   bilinen iyi sonucuyla kıyaslanıp chat modeli kesinleştirilmeli.
-2. **`ingest.py` içinde bilinen bir hata vardı:** script içindeki
-   `EMBEDDING_MODEL` değişkeni bir noktada yanlışlıkla `"phi-4-mini"` olarak
-   ayarlanmıştı (olması gereken: `"qwen3-embedding-0.6b"`). Kullanıcıya bunu
-   `grep -n "EMBEDDING_MODEL" ingest.py` ile kontrol edip düzeltmesi
-   söylendi ama düzeltildiği teyit edilmedi. **Claude Code önce bu satırı
-   kontrol etmeli.**
+`ChatClientSettings` içindeki `temperature`, `top_p`, `frequency_penalty`,
+`presence_penalty`, `random_seed` alanları SDK tarafından istek gövdesine
+konuyor (`_serialize()` çıktısında görünüyorlar) ama Foundry Local runtime'ı
+bunları **yok sayıyor**. Ölçüm: `temperature=0.0` ile `temperature=1.5`
+birebir aynı çıktıyı, farklı `random_seed` değerleri birebir aynı çıktıyı
+üretti. Pratikte yalnızca `max_tokens` etkili. Sonuç: üretim kalitesi
+sampling ile değil, yalnızca **prompt ve model seçimiyle** kontrol
+edilebiliyor. (Bkz. `rag/config.py` içindeki `TEMPERATURE`/`TOP_P` yorumları.)
 
-## Sıradaki adımlar (öncelik sırasıyla)
+## Retrieval eşiği (MIN_SCORE) — kalibrasyon hikâyesi
 
-1. `test_qwen25_7b_grounded.py`'yi çalıştır, phi-4-mini'nin bilinen iyi
-   sonucuyla kıyasla, chat modelini kesinleştir.
-2. `ingest.py`'deki `EMBEDDING_MODEL` satırını kontrol et/düzelt, çalıştır,
-   `rag.db` oluştuğunu ve chunk sayısının beklenenle eşleştiğini doğrula.
-3. `retrieve.py` yaz: `get_top_chunks(query, k=3)` — cosine similarity ile
-   SQLite'tan en benzer chunk'ları getirir. 5 test sorusuyla gözle doğrula.
-4. `answer_query()` yaz: retrieval + seçilen chat modelinin client'ını
-   birleştir. System prompt: "sadece bağlamı kullan, kısa cevap ver, tekrar
-   etme."
-5. Kaynak atıfı ekle (`[Kaynak: dosya_adı]`) + similarity eşiği (düşük
-   skorda LLM'i çağırmadan "bilmiyorum" dönsün).
-6. Streamlit arayüzü (`@st.cache_resource` ile model önbellekleme şart,
-   yoksa her soruda modeller yeniden yüklenir).
-7. 15 soruluk değerlendirme seti (10 cevaplanabilir + 3 cevaplanamaz + 2
-   kenar durum).
-8. Offline kanıtı (Wi-Fi kapalı test).
-9. README + kod temizliği + sunum provası.
+Kalibrasyon: cevabı olan sorular 0.65–0.84 aralığında, olmayanlar 0.43–0.74
+aralığında skor alıyor. **Gruplar örtüşüyor** — tek bir eşik ikisini kesin
+ayıramaz, çünkü anlamsal benzerlik cevabın var olduğu anlamına gelmiyor
+("Foundry Local'da fine-tuning nasıl yapılır?" sorusu 0.74 alıyor çünkü konu
+aynı, ama cevap belgede yok).
 
-## Önemli teknik notlar
+Bu yüzden savunma iki katmanlı: (1) eşik konu dışı soruyu LLM'e hiç
+göndermeden eler, (2) "konu yakın ama cevap yok" kararını system prompt ile
+LLM verir.
 
-- Foundry Local Python SDK güncel API'si (doğrulanmış, Microsoft Learn'den):
-  `Configuration`, `FoundryLocalManager.initialize()`,
-  `manager.catalog.get_model(alias)`, `.download()`, `.load()`,
-  `.get_embedding_client()` / `.get_chat_client()`,
-  `client.generate_embeddings(list)`, `client.complete_streaming_chat(messages)`.
-- Streaming loop'ta son chunk'ta `chunk.choices` boş gelebilir — kontrol
-  etmeden `chunk.choices[0]` erişmek `IndexError` verir.
-- GPU/CPU kontrolü: `model.id` içinde `-gpu` veya `-cpu` geçer, yüklemeden
-  önce yazdırıp doğrulamak iyi bir alışkanlık.
-- macOS'ta paket: `pip install foundry-local-sdk` (Windows'a özel
-  `foundry-local-sdk-winml` DEĞİL).
+Eşik ilk olarak 0.55 seçildi (eval setine bakarak). Sonra set **dışından**
+sorulan "Pencere boyu ve örtüşme kaç kelimedir?" sorusu — cevabı
+`belge_06_chunking_stratejisi.md`'de açıkça yazan bir soru — 0.49 alıp
+reddedildi. Eşik, eval setinin ifade biçimlerine aşırı uydurulmuştu; 10
+örnek gerçek skor tabanını temsil etmiyordu. **0.45'e indirildi**, eval
+sonucu değişmedi (hâlâ 15/15).
+
+## Chunking
+
+PDF için 130 kelime pencere + 30 kelime overlap; chunk'lar **sayfa sınırını
+aşmaz** (kaynak atıfında "s.4" diyebilmek için). `data/*.md` test
+belgeleri için ayrı ve daha küçük pencere (60 kelime) kullanılıyor — belgeler
+~130 kelime olduğundan büyük pencereyle her belge tek chunk'a düşüyor ve
+top-k=4 korpusun yarısını döndürüyordu (7 chunk → 60 kelimelik pencereyle
+17 chunk).
+
+## Depolama
+
+SQLite, embedding'ler **float32 BLOB** olarak saklanıyor (JSON değil — 1024
+boyutlu vektör JSON'da ~20 KB, BLOB'da 4 KB). Matris L2-normalize edilmiş
+tutuluyor, böylece cosine benzerlik tek bir `matrix @ query_vector`
+çarpımına iniyor. `PRAGMA foreign_keys = ON` zorunlu (SQLite'ta varsayılan
+kapalı, yoksa `ON DELETE CASCADE` sessizce çalışmaz).
+
+## OCR (taranmış sayfa yedek yolu)
+
+macOS Vision (`pyobjc-framework-Vision`) kullanılıyor. `tr-TR` desteği
+**çalışma anında doğrulandı**, varsayılmadı (30 dil destekleniyor).
+Foundry Local katalogundaki görüntü alabilen modeller (`qwen3-vl-*`)
+yalnızca CPU varyantına sahip ve — daha önemlisi — bir görüntü-dil modeli
+metni okumaz, **üretir**; okuyamadığı kelimeyi makul görünen başkasıyla
+doldurabilir. RAG korpusunda bu, alıntı yapılan cümlede sessizce sadakat
+kaybına yol açar. Görüntüler `pypdf`'in `page.images`'ı ile alınıyor (ek
+bağımlılık yok). OCR'dan gelen chunk'lar `via_ocr=True` ile işaretleniyor.
+Uçtan uca test edildi: sentetik taranmış bir PDF üretilip OCR'sız
+atlandığı, OCR'lı okunduğu doğrulandı.
+
+## Değerlendirme sonuçları
+
+15 soruluk set (10 cevaplanabilir + 3 cevaplanamaz "yakın tuzak" + 2 kenar
+durum): **15/15 geçiyor**. Retrieval **10/10** doğru kaynak belgeyi
+buluyor. Ortalama 6.6 sn/soru (non-streaming). Eşik kısa devresinde
+(konu dışı soru, LLM hiç çağrılmıyor) 0.1 sn.
+
+Streaming ölçümü: ilk token 0.74 sn, toplam üretim 3.09 sn — algılanan
+gecikmede yaklaşık %76 kazanç. Akışta ara sıra boş `chunk.choices` geldiği
+doğrulandı; tüketen kod bunu kontrol etmeden erişirse `IndexError` verir.
+
+**Bilinen sınır:** eval'deki `expected_keywords` metriği bazen gevşek
+raporluyor (tam metin doğruyken anahtar kelime tam eşleşmediği için "eksik"
+görünebiliyor). Metrik kasıtlı olarak gevşetilmedi. Ayrıca `qwen2.5-7b`'nin
+Türkçe dilbilgisi kusursuz değil, ara sıra bozuk çekim üretebiliyor.
+
+## Arayüzler (v1)
+
+- `streamlit_app.py` — PDF yükleme, sohbet, Retrieval Inspector (expander
+  içinde). Çalışıyor, `st.testing.v1.AppTest` ile doğrulandı.
+- `cli.py` — REPL, `--show-chunks` ile getirilen bağlamı gösterir.
+
+## v2 Dönüşümü — SaaS ürünü
+
+Hedef: motoru değiştirmeden, arayüzü Linear/Notion AI seviyesinde bir ürüne
+dönüştürmek.
+
+**Faz 1 (Mimari denetim) — kapandı.** Karar: **FastAPI backend + Next.js
+(statik export) frontend**. Next.js build'i (`output: 'export'`) FastAPI
+tarafından servis edilir; çalışma anında tek süreç, sıfır ağ — offline
+garantisi korunur. `rag/` paketine dokunulmuyor; tek eklenecek şey
+`rag/answer.py`'ye bir streaming varyantı.
+
+**Faz 2 (Design System) — taslak hazır, uygulanabilir plana çevriliyor.**
+Renk paleti Indigo/Purple + retrieval güven skoru için semantik renk
+katmanı (≥0.70 güçlü, 0.55–0.70 orta, 0.45–0.55 zayıf, <0.45 elendi).
+Tipografi Inter + JetBrains Mono (yerel paketlenmiş, CDN yok). Bileşen
+kütüphanesi shadcn/ui. Üç kolonlu masaüstü düzeni: Sidebar (260px) ·
+Chat (esnek) · Retrieval Inspector (380px, kalıcı).
+
+**Sonraki adımlar:** Faz 3 (Core Features & Explainability spec) onayı,
+ardından Faz 4 (kodlama).
+
+## Açık işler
+
+- Offline kanıtı: Wi-Fi kapalı tam eval koşumu ve kaydı.
+- v2 arayüzünün baştan sona kurulması (yukarıda özetlenen plan).
+
+## Hızlı komutlar
+
+```bash
+.venv/bin/python cli.py "RAG kaç adımdan oluşur?"       # tek soru
+.venv/bin/python cli.py --show-chunks                    # etkileşimli, bağlamlı
+.venv/bin/streamlit run streamlit_app.py                 # web arayüzü
+.venv/bin/python eval/run_eval.py                        # 15 soruluk değerlendirme
+.venv/bin/python -m rag.ingest --pdf dosya.pdf            # yeni belge yükle
+```
