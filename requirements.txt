@@ -3,6 +3,10 @@ pypdf>=6.0.0
 numpy>=2.0.0
 streamlit>=1.40.0
 
+# v2 backend (Faz 4) — Streamlit üzerinden aynı motoru HTTP'ye açan ince
+# katman. uvicorn/starlette/python-multipart/pydantic zaten kuruluydu.
+fastapi>=0.141.0
+
 # Taranmış PDF sayfaları için OCR (macOS Vision). İsteğe bağlı: kurulu değilse
 # metin katmanı olmayan sayfalar atlanır ve kullanıcıya bildirilir.
 pyobjc-framework-Vision>=10.0; sys_platform == "darwin"
