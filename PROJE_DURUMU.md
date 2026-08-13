@@ -119,9 +119,19 @@ durum): **15/15 geçiyor**. Retrieval **10/10** doğru kaynak belgeyi
 buluyor. Ortalama 6.6 sn/soru (non-streaming). Eşik kısa devresinde
 (konu dışı soru, LLM hiç çağrılmıyor) 0.1 sn.
 
-Streaming ölçümü: ilk token 0.74 sn, toplam üretim 3.09 sn — algılanan
-gecikmede yaklaşık %76 kazanç. Akışta ara sıra boş `chunk.choices` geldiği
-doğrulandı; tüketen kod bunu kontrol etmeden erişirse `IndexError` verir.
+Streaming ölçümü (v2 backend üzerinden, gerçek RAG koşulunda, HTTP ile):
+`retrieval` olayı **0.04–0.07 sn**, ilk token **4.8–5.9 sn**, toplam
+5.6–7.6 sn.
+
+Erken bir ölçümde TTFT 0.74 sn çıkmıştı ve bu rakam bir süre dokümanlarda
+kaldı; **yanıltıcıydı**, çünkü bağlamsız kısa bir prompt'la alınmıştı.
+Gerçek RAG'de system prompt 4 chunk'lık bağlam taşıyor ve prefill baskın
+hale geliyor. Sonuç: streaming'in kazancı sanıldığından küçük (~1.3 sn erken
+görüntü); asıl kazanç Inspector'ın 0.05 sn'de dolması — kullanıcı LLM'i
+beklerken hangi kaynakların bulunduğunu anında görüyor.
+
+Akışta ara sıra boş `chunk.choices` geldiği doğrulandı; tüketen kod bunu
+kontrol etmeden erişirse `IndexError` verir.
 
 **Bilinen sınır:** eval'deki `expected_keywords` metriği bazen gevşek
 raporluyor (tam metin doğruyken anahtar kelime tam eşleşmediği için "eksik"

@@ -139,9 +139,24 @@ sequenceDiagram
     end
 ```
 
-**Kritik zamanlama:** `retrieval` olayı LLM'den **önce** gider. Inspector,
-cevap gelmeden ~0.3 sn'de dolar. Ölçülen TTFT 0.74 sn olduğu için kullanıcı
-0.3 sn'de chunk'ları, 0.74 sn'de ilk kelimeyi görür.
+**Kritik zamanlama** (uçtan uca, gerçek modelle HTTP üzerinden ölçüldü):
+
+| | Süre |
+|---|---|
+| `retrieval` olayı | **0.04 – 0.07 sn** |
+| İlk `token` | **4.8 – 5.9 sn** |
+| Toplam | 5.6 – 7.6 sn |
+
+> [!warning] Önceki 0.74 sn'lik TTFT rakamı yanıltıcıydı — düzeltildi
+> O ölçüm bağlamsız kısa bir prompt'la yapılmıştı. Gerçek RAG koşulunda
+> system prompt 4 chunk'lık bağlam (~500 kelime) taşıyor ve prefill süresi
+> baskın hale geliyor; TTFT ~5 sn'ye çıkıyor.
+>
+> Bunun UX sonucu önemli: **streaming'in kazancı sanıldığından küçük**
+> (5.1 sn yerine 6.4 sn'de tam metin — yaklaşık 1.3 sn erken görüntü).
+> Asıl kazanç **Inspector'ın 0.05 sn'de dolması**: kullanıcı LLM'i beklerken
+> hangi kaynakların bulunduğunu neredeyse anında görüyor. Bu yüzden
+> `retrieval` olayının LLM'den önce gitmesi tasarımın en değerli parçası.
 
 ### 1.3 Kaynak inceleme
 

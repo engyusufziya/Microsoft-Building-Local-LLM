@@ -80,6 +80,29 @@ async def lifespan(app: FastAPI):
         app.state.conn.close()
 
 
+class _SpaStaticFiles(StaticFiles):
+    """`/metrics` gibi rotaları `metrics.html`'e düşürerek servis eder.
+
+    Next.js statik export'u `/metrics` rotası için `out/metrics.html` (düz
+    dosya) üretir; `out/metrics/` dizini yalnızca RSC payload'larını içerir ve
+    `index.html` BARINDIRMAZ. Bu yüzden düz `StaticFiles(html=True)` yolu
+    dizin sanıp `metrics/index.html` arar ve 404 döner (ölçüldü).
+
+    Çözüm nginx'in `try_files $uri $uri.html` davranışının aynısı: dosya
+    bulunamazsa `<yol>.html` denenir. URL'ler temiz kalır (`/metrics`,
+    `/metrics/` değil) ve Next'in `trailingSlash` ayarına bağımlılık olmaz.
+    """
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        response = await super().get_response(path, scope)
+        if response.status_code == 404 and path and not path.endswith(".html"):
+            try:
+                return await super().get_response(f"{path}.html", scope)
+            except HTTPException:
+                pass  # `.html` de yoksa orijinal 404 dönsün.
+        return response
+
+
 def _register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -129,10 +152,11 @@ def create_app() -> FastAPI:
             ocr_available=ocr.is_available(),
         )
 
-    # web/out henüz üretilmedi (Next.js `next export` çıktısı). Var olduğunda
-    # API rotalarının ALTINDA (sonra) mount edilir ki /api/* önceliği korunsun.
+    # Next.js statik export çıktısı. API rotalarının ALTINDA (sonra) mount
+    # edilir ki /api/* önceliği korunsun. Build alınmamışsa mount edilmez;
+    # backend tek başına (API-only) çalışmaya devam eder.
     if WEB_OUT_DIR.exists():
-        app.mount("/", StaticFiles(directory=str(WEB_OUT_DIR), html=True), name="static")
+        app.mount("/", _SpaStaticFiles(directory=str(WEB_OUT_DIR), html=True), name="static")
 
     return app
 
