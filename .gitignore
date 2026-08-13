@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Üretilen veritabanları — embedding'ler yeniden hesaplanabilir, ayrıca
+# kullanıcının yüklediği belgelerin metnini içerirler.
+rag.db
+rag.db-wal
+rag.db-shm
+eval/eval.db
+eval/eval.db-wal
+eval/eval.db-shm
+
+# Frontend (Faz 4'te gelecek)
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+
+# Editör / işletim sistemi
+.DS_Store
+.vscode/
+.idea/
+.claude/settings.local.json
+
+# Microsoft program planı — üçüncü taraf doküman, depoda dağıtılmıyor.
+# PDF ingest testleri için herhangi bir metin tabanlı PDF kullanılabilir.
+Foundry_Local_Plan.pdf
