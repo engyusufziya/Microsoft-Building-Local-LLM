@@ -1,0 +1,476 @@
+{
+  "generated_at": "2026-08-13T17:00:22+03:00",
+  "config": {
+    "min_score": 0.45,
+    "top_k": 4,
+    "chunk_words": 130,
+    "chunk_overlap_words": 30
+  },
+  "corpus": {
+    "chunk_count": 17,
+    "document_count": 6
+  },
+  "models": [
+    {
+      "alias": "qwen2.5-7b",
+      "model_id": "qwen2.5-7b-instruct-generic-gpu:4",
+      "is_active": true,
+      "summary": {
+        "passed": 15,
+        "total": 15,
+        "by_category": {
+          "answerable": [
+            10,
+            10
+          ],
+          "unanswerable": [
+            3,
+            3
+          ],
+          "edge_case": [
+            2,
+            2
+          ]
+        },
+        "retrieval_hits": [
+          10,
+          10
+        ],
+        "avg_seconds": 7.45
+      },
+      "questions": [
+        {
+          "id": "Q01",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 27.61,
+          "expected_source": "belge_01_rag_nedir.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "RAG üç adımdan oluşur: retrieval, augmentation ve generation. İlk adımda kullanıcının sorusuyla ilgili metin parçaları aranır, ikinci adımda bulunan metin parçaları modelin girdisine eklenir ve üçüncü adımda model bir cevap üretir."
+        },
+        {
+          "id": "Q02",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 7.15,
+          "expected_source": "belge_01_rag_nedir.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "RAG, modelin kendi eğitim belleğinden tahmin yapmadan doğrudan verilen kaynaktan bilgi almasına olanak tanır, bu da halüsinasyon riskini azaltır."
+        },
+        {
+          "id": "Q03",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 5.79,
+          "expected_source": "belge_02_embedding_ve_benzerlik.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 3,
+          "answer": "Cosine similarity, iki vektör arasındaki açıyı ölçer ve bu değer 1'e yaklaştıkça benzerlik artar, 0'a yaklaştıkça azarlar."
+        },
+        {
+          "id": "Q04",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 10.13,
+          "expected_source": "belge_02_embedding_ve_benzerlik.md",
+          "source_found": true,
+          "keywords_matched": 0,
+          "keywords_total": 4,
+          "answer": "\"Araba\" ve \"otomobil\" kelimelerinin vektörleri birbirine yakın çıkar çünkü anlamları benzerdir. Bu yakınlık RAG'de embedding ve cosign similarity kullanılarak belgenin diğer metin parçalarıyla karşılaştırılmasına yardımcı olur. Bu sayede \"araba\" ile ilgili bilgi \"otomobil\" hakkında sorulara yanıt verebilir."
+        },
+        {
+          "id": "Q05",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 4.92,
+          "expected_source": "belge_03_foundry_local.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "CPU, GPU veya NPU'yı otomatik olarak tespit eder."
+        },
+        {
+          "id": "Q06",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 8.88,
+          "expected_source": "belge_03_foundry_local.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 4,
+          "answer": "Apple Silicon işlemcili Mac'te Foundry Local, Metal aracılığıyla GPU hızlandırması sunar ve modelin CPU'ya göre önemli ölçüde daha hızlı çalışmasını sağlar. Yerel bir RAG sistemi kurmak için tek başına yeterlidir çünkü SQLite ile veri saklama yapabilir ve internet bağlantısı olmadan çalışabilir."
+        },
+        {
+          "id": "Q07",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 7.91,
+          "expected_source": "belge_04_sqlite_veri_saklama.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 3,
+          "answer": "SQLite'a doğrudan yazılamaz çünkü embedding vektörleri sayısal listelerdir. Bu sorun, vektörleri JSON formatına dönüştürerek ve böylece saklayarak çözülmektedir."
+        },
+        {
+          "id": "Q08",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 8.05,
+          "expected_source": "belge_04_sqlite_veri_saklama.md",
+          "source_found": true,
+          "keywords_matched": 4,
+          "keywords_total": 4,
+          "answer": "Bir RAG sisteminde SQLite tablosundaki her satır genellikle benzersiz bir kimlik (id), kaynak belgenin adı (source), metnin kendisi (content) ve metnin embedding vektörü içerebilir."
+        },
+        {
+          "id": "Q09",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 9.03,
+          "expected_source": "belge_05_prompt_engineering.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 4,
+          "answer": "Sistem mesajı, modelin sadece verilen bağlamı kullanarak cevap vereceğini belirtir ve modelin kendi bilgisinden sapmaya çalışmasını engeller. Konudan sapmasını önlemek için, kullanıcının sorularını net bir şekilde belirlemesi ve gerekli belgelerin sistem mesajına eklenmesi gerekmektedir."
+        },
+        {
+          "id": "Q10",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 6.83,
+          "expected_source": "belge_06_chunking_stratejisi.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 4,
+          "answer": "Parçaların uzunluğu yaklaşık iki yüz ila dört yüz kelime arasında tutulur. Parçalar arasında bir paragraflık örtüşme bırakılarak, bir cümlenin iki parça arasında bölünüp bağlamını kaybetmesini önlenir."
+        },
+        {
+          "id": "Q11",
+          "category": "unanswerable",
+          "passed": true,
+          "seconds": 5.33,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q12",
+          "category": "unanswerable",
+          "passed": true,
+          "seconds": 4.35,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q13",
+          "category": "unanswerable",
+          "passed": true,
+          "seconds": 5.14,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q14",
+          "category": "edge_case",
+          "passed": true,
+          "seconds": 0.0,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Lütfen bir soru yazın."
+        },
+        {
+          "id": "Q15",
+          "category": "edge_case",
+          "passed": true,
+          "seconds": 0.04,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        }
+      ]
+    },
+    {
+      "alias": "phi-4-mini",
+      "model_id": "Phi-4-mini-instruct-generic-gpu:5",
+      "is_active": false,
+      "summary": {
+        "passed": 12,
+        "total": 15,
+        "by_category": {
+          "answerable": [
+            10,
+            10
+          ],
+          "unanswerable": [
+            0,
+            3
+          ],
+          "edge_case": [
+            2,
+            2
+          ]
+        },
+        "retrieval_hits": [
+          10,
+          10
+        ],
+        "avg_seconds": 6.89
+      },
+      "questions": [
+        {
+          "id": "Q01",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 19.54,
+          "expected_source": "belge_01_rag_nedir.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "RAG üç adımdan oluşur: retrieval, augmentation ve generation. Bu adımlar arasında ilgili metin parçaları arama (retrieval), bulunan metin parçaları ile girdi arasındaki ilişkiyi artırma (augmentation) ve metin parçası ile girdi arasındaki ilişkiyi kullanarak bir cevap üretme (generation) sürecini içerir."
+        },
+        {
+          "id": "Q02",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 4.68,
+          "expected_source": "belge_01_rag_nedir.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 3,
+          "answer": "RAG kullanmak halüsinasyon riskini azaltır çünkü model cevap üretmeden önce ilgili belgeleri retrieval ve ardından cevaba dahil ederek doğrudan kaynak gösterilebilir. Bu, modelin cevapları oluşturma potansiyelini sınırlayarak hem doğru hem de sahteceştiren yanıtlar üretmesini zorlaştırır. Bu bilgi yüklendiği belgelerde yok."
+        },
+        {
+          "id": "Q03",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 2.98,
+          "expected_source": "belge_02_embedding_ve_benzerlik.md",
+          "source_found": true,
+          "keywords_matched": 1,
+          "keywords_total": 3,
+          "answer": "Cosine similarity, iki vektör arasındaki açıyı ölçer ve benzerlik değerini 1'e artan ve 0'a artan şekilde yorumlarsınız."
+        },
+        {
+          "id": "Q04",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 11.1,
+          "expected_source": "belge_02_embedding_ve_benzerlik.md",
+          "source_found": true,
+          "keywords_matched": 1,
+          "keywords_total": 4,
+          "answer": "\"Araba\" ve \"otomobil\" kelimelerinin vektörleri birbirine yakın çıkar çünkü bu iki kelime arasındaki anlam benzerlikleri yansıtır; her ikisi de motorlu araçlar tanımıdır. Bu yakınlık RAG'de kullanılır; Retrieval adımında, RAG dil modeli, kullanıcının sorusuyla ilgili metin parçalarını bulmak için benzerlik ölçümü kullanır. Bu durumda, benzerlik ölçümü metinlerin embeddisi arasındaki mesafeyi ölçerek çalışır; benzer anlamları yansıtan embeddili metinler (\"araba\" ve \"otomobil\") embeddili vektörler arasındaki mesafe daha az olacaktır. Bu embeddili metinler embeddili uzayda daha yakın olduğundan, embeddili metinler arasındaki benzerlik skoru artar ve embeddili metinler embeddili uzayda daha yakın olduğundan, embeddili metinler embeddili uzayda daha yakın olduğundan embeddili metinler embeddili uzayda daha yakın olduğundan embeddili metinler embeddili uzayda daha yakın olduğundan embeddili metinler embeddili uzayda daha yakın olduğundan embeddili metinler embeddili uzayda daha yakın olduğundan embeddili metinler embeddili uzayda daha yakın olduğundan emb"
+        },
+        {
+          "id": "Q05",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 2.71,
+          "expected_source": "belge_03_foundry_local.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "Foundry Local, CPU, GPU veya NPU gibi çeşitli donanım türlerini otomatik olarak tespit eder."
+        },
+        {
+          "id": "Q06",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 8.98,
+          "expected_source": "belge_03_foundry_local.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 4,
+          "answer": "Foundry Local, Metal aracılığıyla Metal dilini Mac OS bellek yığınına entegre ederek Apple Silicon işlemcili Mac bilgisayarlarında GPU hızlandırmasını sunar. Bu, modelin CPU'ya göre önemli ölçüde daha hızlı çalışmasını sağlar. Bu bilgi Microsoft Foundry Local belgesinde bulunabilir [Kaynak: belge_03_foundry_local.md].\n\nFoundry Local, hem sohbet (chat) modellerini hem de embedding modellerini destekleyerek hem bellek hem de işlem gücü açısından verimli çalışması için optimize edilmiş küçük modellerden büyük modellerine kadar çeşitli boyutlarda modelleri depolama yeteneği sunar. Bu bilgi belgesinde bulunabilir [Kaynak: belge_03_foundry_local.md].\n\nSQLite belgesinde, SQLite'ın sunucusuz ve kendi kendine yeten doğası ve platformlar arası uyumluluğu nedeniyle Foundry Local, internet bağlantısı veya harici bir sunucu gerektirmeden yerel bir RAG sistemi kurmak için tek başına yeterlidir [Kaynak: belge_04_sqlite_veri_saklama.md]."
+        },
+        {
+          "id": "Q07",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 11.28,
+          "expected_source": "belge_04_sqlite_veri_saklama.md",
+          "source_found": true,
+          "keywords_matched": 0,
+          "keywords_total": 3,
+          "answer": "Bu bilgi yüklendiğiniz belgelerde yok. Vektörler metin tabanlıdır ve metinler belgelere yazılamaz. Vektörler depolanan metinler yerine depolamak için metin tabanlı depolama sistemleriyle uyumludur. Metinler depolanan depolama sistemleriyle uyumluyorsa, metinler depolanan depolama sistemleriyle depolanamazsa metin tabanlı depolama sistemleriyle depolama. Metin tabanlı depolama sistemleri depolanan depolama sistemleriyle uyumluyorsa depolamamaya. Metin tabanlı depolama sistemleri depolanan depolama sistemleriyle uyumluyorsa depolamamaya depolayan depolama sistemleriyle depolama. Metin tabanlı depolama sistemleri depolanan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan depolama sistemleriyle depolama depolayan"
+        },
+        {
+          "id": "Q08",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 4.36,
+          "expected_source": "belge_04_sqlite_veri_saklama.md",
+          "source_found": true,
+          "keywords_matched": 1,
+          "keywords_total": 4,
+          "answer": "Bu bilgi yüklendiğinde, her satır bir belgenin parçasını temsil eder ve genellikle bir kimlik idsi, kaynak belgenin adı, metin kendisi ve metnin bir embeddos vektörü içerir."
+        },
+        {
+          "id": "Q09",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 11.74,
+          "expected_source": "belge_05_prompt_engineering.md",
+          "source_found": true,
+          "keywords_matched": 1,
+          "keywords_total": 4,
+          "answer": "Sistem mesajı, RAG uygulamasında modelin genel davranışını belirler ve yalnızca verilen bağlamı kullanarak cevap vererek modelin kendi eğitim belleğinden uydurma yapmasını önler. Bu, halüsinasyon riskini azaltır ve cevapların kaynak gösterilebilir olmasını sağlar. Bir RAG uygulamasında sistem mesajı modelin konudan sapmasını önlemek için başka bir yöntem, modelin dilbilimsel olarak bağlamsal olarak ilgili metin parçalarını bulma yetisini artırmasıdır. Bu, arama sürecinde metin parçalarının anlamsal olarak ilgili metinle uyumlu olmasını sağlayan metin indeklemeleri ve benzerlik ölçümleri gibi teknikler kullanılarak yapılabilir. Bu teknikler, metin parçalarının metin indeklemeleri ve benzerlik ölçümleri kullanılarak bululması için metin indeklemeleri ve benzerlik ölçümleri kullanılarak yapılabilir. Bu metin indeklemeleri ve benzerlik ölçümleri kullanılarak bululması için metin indeklemeleri ve benzerlik ölçümleri kullanılarak yapılabilir. Bu metin indeklemeleri ve benzerlik ölçümleri kullanılarak bululması için metin indeklemeleri ve benzerlik ölçümleri kullanılarak yapılabilir. Bu metin indeklemeleri ve benzerlik ölçümleri"
+        },
+        {
+          "id": "Q10",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 3.89,
+          "expected_source": "belge_06_chunking_stratejisi.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 4,
+          "answer": "Parça uzunluğu yaklaşık iki yüz ila dört yüz kelime olmalıdır ve parçalar arasında bir örtüşme bırakılır ki parça sınırları içinde bir paragraflık oluşturulursa bağlamı kaybetmemeye yardımcı olur."
+        },
+        {
+          "id": "Q11",
+          "category": "unanswerable",
+          "passed": false,
+          "seconds": 13.26,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Cosine similarity, embeddin ve benzerlik ölçümünde metinler arasındaki açıyı ölçerek metinlerin boyutlarsız harflerini dikkate alır. Öklid mesafesi ise embeddin boyutlarsız harflerini dikkate alır ve embeddin boyutu ve yönü dikkate alır.\n\nCosine similarity kullanıldığında, metinlerin boyutlarsız harflerini dikkate alır ve embeddin boyutu ve yönü dikkate almaz. Bu da embeddin boyutu ve yönü etkilemez ve embeddin boyutu ve yönü etkilemez.\n\nÖklid mesafesi embeddin boyutu ve yönü dikkate alır ve embeddin boyutu ve yönü etkilemez. Bu da embeddin boyutu ve yönü etkilemez ve embeddin boyutu ve yönü etkilemez.\n\nSonuç olarak, embeddin boyutu ve yönü etkilemez ve embeddin boyutu ve yönü etkilemez. Bu nedenle, embeddin boyutu ve yönü etkilemez ve embeddin boyutu ve yönü etkilemez.\n\nSonuç olarak, embeddin boyutu ve yönü etkilemez ve embeddin boyutu ve yönü etkilemez. Bu nedenle, embeddin boyutu ve yönü etkilemez ve embeddin boyutu ve yön"
+        },
+        {
+          "id": "Q12",
+          "category": "unanswerable",
+          "passed": false,
+          "seconds": 3.46,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklendiğinde, belgede Chroma ve FAISS'in performansını karşılaştıran detaylı bilgiler yok."
+        },
+        {
+          "id": "Q13",
+          "category": "unanswerable",
+          "passed": false,
+          "seconds": 4.74,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklendiğiniz belgelerde yok. Microsoft Foundry Local'ın modeli finetune etme konusunda ayrıntılı talimatlar sunulmamaktadır. Microsoft Foundry Local'ın resmi belgelerine veya Microsoft'un destek sistemlerine başvurmanız gerekecektir."
+        },
+        {
+          "id": "Q14",
+          "category": "edge_case",
+          "passed": true,
+          "seconds": 0.0,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Lütfen bir soru yazın."
+        },
+        {
+          "id": "Q15",
+          "category": "edge_case",
+          "passed": true,
+          "seconds": 0.05,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        }
+      ]
+    }
+  ],
+  "threshold_sweep": {
+    "answerable_scores": [
+      0.7828,
+      0.729,
+      0.7544,
+      0.6508,
+      0.8376,
+      0.8262,
+      0.8407,
+      0.7688,
+      0.7369,
+      0.737
+    ],
+    "other_scores": [
+      0.7359,
+      0.5068,
+      0.7406,
+      0.4292
+    ],
+    "table": [
+      {
+        "threshold": 0.4,
+        "answerable_passed": 10,
+        "answerable_total": 10,
+        "other_passed": 4,
+        "other_total": 4
+      },
+      {
+        "threshold": 0.45,
+        "answerable_passed": 10,
+        "answerable_total": 10,
+        "other_passed": 3,
+        "other_total": 4
+      },
+      {
+        "threshold": 0.5,
+        "answerable_passed": 10,
+        "answerable_total": 10,
+        "other_passed": 3,
+        "other_total": 4
+      },
+      {
+        "threshold": 0.55,
+        "answerable_passed": 10,
+        "answerable_total": 10,
+        "other_passed": 2,
+        "other_total": 4
+      },
+      {
+        "threshold": 0.6,
+        "answerable_passed": 10,
+        "answerable_total": 10,
+        "other_passed": 2,
+        "other_total": 4
+      },
+      {
+        "threshold": 0.65,
+        "answerable_passed": 10,
+        "answerable_total": 10,
+        "other_passed": 2,
+        "other_total": 4
+      },
+      {
+        "threshold": 0.7,
+        "answerable_passed": 9,
+        "answerable_total": 10,
+        "other_passed": 2,
+        "other_total": 4
+      }
+    ]
+  }
+}

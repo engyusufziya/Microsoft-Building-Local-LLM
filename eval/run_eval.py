@@ -14,6 +14,16 @@ böylece kullanıcının yüklediği PDF'ler sonuçları etkilemez.
     python eval/run_eval.py
     python eval/run_eval.py --model phi-4-mini
     python eval/run_eval.py --sweep-threshold # MIN_SCORE taraması (LLM çağırmaz)
+
+`--json` ile sonuçlar eval/results.json'a yazılır ve /api/metrics bu dosyayı
+servis eder (docs/FEATURE_SPEC.md §6). Yazma BİRLEŞTİRMELİDİR: her model
+çalıştırması yalnızca kendi `models[]` girdisini ekler/günceller,
+`--sweep-threshold` yalnızca `threshold_sweep` anahtarını günceller. Aksi
+halde ikinci çalıştırma birincinin sonucunu silerdi.
+
+    python eval/run_eval.py --json                     # qwen2.5-7b sonucunu yaz
+    python eval/run_eval.py --model phi-4-mini --json  # kıyas girdisini EKLE
+    python eval/run_eval.py --sweep-threshold --json   # eşik taramasını EKLE
 """
 
 from __future__ import annotations
@@ -22,14 +32,72 @@ import argparse
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rag import answer, config, ingest, retrieve, store  # noqa: E402
+from rag import answer, config, ingest, models, retrieve, store  # noqa: E402
 
 EVAL_DB = Path(__file__).resolve().parent / "eval.db"
 EVAL_SET = Path(__file__).resolve().parent / "eval_set.json"
+RESULTS_PATH = Path(__file__).resolve().parent / "results.json"
+
+
+# --------------------------------------------------------------------------- kalıcılaştırma
+
+
+def _fresh_results() -> dict:
+    """Boş iskelet (docs/FEATURE_SPEC.md §6.2 şeması)."""
+    return {
+        "generated_at": None,
+        "config": {},
+        "corpus": {},
+        "models": [],
+        "threshold_sweep": None,
+    }
+
+
+def _load_results(path: Path) -> dict:
+    if not path.exists():
+        return _fresh_results()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        # Bozuk dosya sessizce veri kaybettirmesin; sıfırdan başla.
+        print(f"  [uyarı] {path.name} okunamadı, sıfırdan yazılıyor.")
+        return _fresh_results()
+    skeleton = _fresh_results()
+    skeleton.update(data)
+    return skeleton
+
+
+def _save_results(path: Path, data: dict, conn) -> None:
+    """Ortak alanları tazeleyip diske yazar."""
+    matrix, _ = store.load_matrix(conn)
+    data["generated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    data["config"] = {
+        "min_score": config.MIN_SCORE,
+        "top_k": config.TOP_K,
+        "chunk_words": config.CHUNK_WORDS,
+        "chunk_overlap_words": config.CHUNK_OVERLAP_WORDS,
+    }
+    data["corpus"] = {
+        "chunk_count": int(matrix.shape[0]),
+        "document_count": len(store.list_documents(conn)),
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"\n  -> {path} yazıldı")
+
+
+def _merge_model_result(data: dict, model_result: dict) -> None:
+    """Aynı alias varsa DEĞİŞTİR, yoksa EKLE. Diğer modellerin sonucu korunur."""
+    alias = model_result["alias"]
+    data["models"] = [m for m in data["models"] if m.get("alias") != alias]
+    data["models"].append(model_result)
+    # Aktif model config'ten belirlenir; kıyas çalıştırmaları bunu bozmasın.
+    for m in data["models"]:
+        m["is_active"] = m["alias"] == config.CHAT_MODEL
 
 
 def load_questions() -> list[dict]:
@@ -51,9 +119,16 @@ def refused(text: str) -> bool:
     return config.NO_ANSWER_TEXT.rstrip(".").lower() in text.lower()
 
 
-def run(model: str | None, conn, min_score: float | None) -> int:
+def run(model: str | None, conn, min_score: float | None) -> tuple[int, dict]:
+    """Değerlendirmeyi çalıştırır. (çıkış_kodu, model_sonuç_dict) döndürür.
+
+    Yazdırma davranışı değişmedi; dict yalnızca `--json` için ek olarak
+    toplanır.
+    """
     questions = load_questions()
-    rows, failures = [], []
+    rows, failures, records = [], [], []
+    retrieval_found = 0
+    answerable_total = 0
     t_start = time.time()
 
     for q in questions:
@@ -63,14 +138,20 @@ def run(model: str | None, conn, min_score: float | None) -> int:
         dt = time.time() - t0
         cat = q["category"]
         ok, detail = True, ""
+        found: bool | None = None
+        n_kw: int | None = None
+        kw_total: int | None = None
 
         if cat == "answerable":
+            answerable_total += 1
             hits = retrieve.get_top_chunks(q["question"], min_score=min_score, conn=conn)
             sources = {h.source for h in hits}
             found = q["expected_source"] in sources
+            retrieval_found += int(found)
             n_kw, missing = keyword_hit(result.text, q["expected_keywords"])
+            kw_total = len(q["expected_keywords"])
             ok = found and not refused(result.text)
-            detail = f"kaynak={'+' if found else '-'} kelime={n_kw}/{len(q['expected_keywords'])}"
+            detail = f"kaynak={'+' if found else '-'} kelime={n_kw}/{kw_total}"
             if missing:
                 detail += f" eksik={missing}"
         elif cat == "unanswerable":
@@ -81,6 +162,17 @@ def run(model: str | None, conn, min_score: float | None) -> int:
             detail = f"{len(result.text.split())} kelime"
 
         rows.append((q["id"], cat, ok, dt, detail))
+        records.append({
+            "id": q["id"],
+            "category": cat,
+            "passed": ok,
+            "seconds": round(dt, 2),
+            "expected_source": q.get("expected_source"),
+            "source_found": found,
+            "keywords_matched": n_kw,
+            "keywords_total": kw_total,
+            "answer": result.text,
+        })
         if not ok:
             failures.append((q["id"], q["question"], result.text[:160], detail))
 
@@ -103,14 +195,29 @@ def run(model: str | None, conn, min_score: float | None) -> int:
         for qid, question, text, detail in failures:
             print(f"  {qid} ({detail})\n    S: {question}\n    C: {text}\n")
 
-    return 0 if passed == len(rows) else 1
+    alias = model or config.CHAT_MODEL
+    loaded = models._models.get(alias)
+    model_result = {
+        "alias": alias,
+        "model_id": loaded.id if loaded is not None else None,
+        "is_active": alias == config.CHAT_MODEL,
+        "summary": {
+            "passed": passed,
+            "total": len(rows),
+            "by_category": {c: [sum(v), len(v)] for c, v in by_cat.items()},
+            "retrieval_hits": [retrieval_found, answerable_total],
+            "avg_seconds": round(total / len(rows), 2),
+        },
+        "questions": records,
+    }
+    return (0 if passed == len(rows) else 1), model_result
 
 
-def sweep_threshold(conn) -> int:
+def sweep_threshold(conn) -> tuple[int, dict]:
     """MIN_SCORE'u taramak için: her soru için en yüksek skoru ölçer, LLM çağırmaz.
 
     Amaç, cevabı olan sorularla olmayanların skor aralıklarını görüp eşiği
-    aradaki boşluğa koymak.
+    aradaki boşluğa koymak. (çıkış_kodu, sweep_dict) döndürür.
     """
     questions = load_questions()
     answerable, other = [], []
@@ -132,15 +239,28 @@ def sweep_threshold(conn) -> int:
     print(f"\n  cevaplanabilir  : min={min(a_scores):.4f}  max={max(a_scores):.4f}")
     print(f"  diğer           : min={min(o_scores):.4f}  max={max(o_scores):.4f}")
 
+    table = []
     print(f"\n  {'eşik':>6}  {'geçen answerable':>17}  {'geçen diğer':>12}")
     for thr in [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]:
         a = sum(1 for s in a_scores if s >= thr)
         o = sum(1 for s in o_scores if s >= thr)
         star = "  <-- şu anki" if abs(thr - config.MIN_SCORE) < 1e-9 else ""
         print(f"  {thr:6.2f}  {a:>10}/{len(a_scores)}  {o:>10}/{len(o_scores)}{star}")
+        table.append({
+            "threshold": thr,
+            "answerable_passed": a,
+            "answerable_total": len(a_scores),
+            "other_passed": o,
+            "other_total": len(o_scores),
+        })
     print("\n  Not: 'diğer' grubunun geçmesi kötü değil -- konu yakın sorularda")
     print("  reddetme kararını LLM verir. Eşiğin işi konu DIŞI soruları elemek.")
-    return 0
+
+    return 0, {
+        "answerable_scores": [round(s, 4) for s in a_scores],
+        "other_scores": [round(s, 4) for s in o_scores],
+        "table": table,
+    }
 
 
 def main(argv=None) -> int:
@@ -151,6 +271,9 @@ def main(argv=None) -> int:
     parser.add_argument("--sweep-threshold", action="store_true",
                         help="MIN_SCORE taraması (LLM çağırmaz, hızlı)")
     parser.add_argument("--min-score", type=float, help="bu çalıştırma için eşiği geçersiz kıl")
+    parser.add_argument("--json", nargs="?", const=str(RESULTS_PATH), metavar="YOL",
+                        help=f"sonuçları JSON olarak yaz (varsayılan: {RESULTS_PATH.name}); "
+                             "mevcut dosyayla BİRLEŞTİRİLİR")
     args = parser.parse_args(argv)
 
     if args.ingest or not EVAL_DB.exists():
@@ -167,11 +290,25 @@ def main(argv=None) -> int:
     try:
         matrix, _ = store.load_matrix(conn)
         print(f"=== eval korpusu: {matrix.shape[0]} chunk ===\n")
+
+        json_path = Path(args.json) if args.json else None
+
         if args.sweep_threshold:
-            return sweep_threshold(conn)
+            code, sweep = sweep_threshold(conn)
+            if json_path:
+                data = _load_results(json_path)
+                data["threshold_sweep"] = sweep
+                _save_results(json_path, data, conn)
+            return code
+
         print(f"=== model: {args.model or config.CHAT_MODEL}, "
               f"eşik: {args.min_score if args.min_score is not None else config.MIN_SCORE} ===\n")
-        return run(args.model, conn, args.min_score)
+        code, model_result = run(args.model, conn, args.min_score)
+        if json_path:
+            data = _load_results(json_path)
+            _merge_model_result(data, model_result)
+            _save_results(json_path, data, conn)
+        return code
     finally:
         conn.close()
 
