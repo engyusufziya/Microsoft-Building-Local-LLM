@@ -1,0 +1,8 @@
+foundry-local-sdk>=1.2.4
+pypdf>=6.0.0
+numpy>=2.0.0
+streamlit>=1.40.0
+
+# Taranmış PDF sayfaları için OCR (macOS Vision). İsteğe bağlı: kurulu değilse
+# metin katmanı olmayan sayfalar atlanır ve kullanıcıya bildirilir.
+pyobjc-framework-Vision>=10.0; sys_platform == "darwin"

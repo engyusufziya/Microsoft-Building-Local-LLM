@@ -1,0 +1,125 @@
+{
+  "description": "Türkçe belge Q&A asistanı (Foundry Local + RAG) için değerlendirme seti. 15 soru: 10 answerable (data/ altındaki 6 belgeden türetilmiş, retrieval isabetini ölçer), 3 unanswerable (konu alanına yakın ama belgelerde cevabı olmayan — 'bilmiyorum' davranışını ölçer), 2 edge_case (boş sorgu ve aşırı genel sorgu). Tüm answerable sorular kaynak belgedeki ilgili cümleyle doğrulanmıştır.",
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "RAG kaç adımdan oluşur ve bu adımlar nelerdir?",
+      "category": "answerable",
+      "expected_source": "belge_01_rag_nedir.md",
+      "expected_keywords": ["retrieval", "augmentation", "generation"],
+      "notes": "Kolay/tek noktadan cevap. Belge_01: 'Üç adımdan oluşur.' ardından birinci adım retrieval, ikinci adım augmentation, üçüncü adım generation olarak açıkça sayılıyor."
+    },
+    {
+      "id": "Q02",
+      "question": "RAG kullanmak halüsinasyon riskini neden azaltır?",
+      "category": "answerable",
+      "expected_source": "belge_01_rag_nedir.md",
+      "expected_keywords": ["halüsinasyon", "eğitim belleği", "kaynak"],
+      "notes": "Orta zorluk; aynı belgede iki bilgiyi birleştirmeyi gerektirir: retrieval adımında bağlamın dışarıdan getirilmesi ile 'modelin kendi eğitim belleğinden tahmin yürütmek zorunda kalmaması... halüsinasyon riskini azaltır ve cevapların kaynak gösterilebilir olmasını sağlar' cümlesi."
+    },
+    {
+      "id": "Q03",
+      "question": "Cosine similarity tam olarak neyi ölçer ve değeri nasıl yorumlanır?",
+      "category": "answerable",
+      "expected_source": "belge_02_embedding_ve_benzerlik.md",
+      "expected_keywords": ["açı", "büyüklük", "1'e yaklaş"],
+      "notes": "Kolay/orta. Belge_02: 'Cosine similarity, iki vektör arasındaki açıyı ölçer, vektörlerin büyüklüğünü değil.' ve 'değeri 1'e yaklaştıkça benzerlik artar, 0'a yaklaştıkça benzerlik azalır.'"
+    },
+    {
+      "id": "Q04",
+      "question": "\"araba\" ve \"otomobil\" kelimelerinin vektörleri neden birbirine yakın çıkar ve bu yakınlık RAG'de nasıl kullanılır?",
+      "category": "answerable",
+      "expected_source": "belge_02_embedding_ve_benzerlik.md",
+      "expected_keywords": ["anlamsal", "embedding uzayı", "retrieval", "soru vektörü"],
+      "notes": "Zor; aynı belgede iki ayrı paragrafı birleştirir: 'Benzer anlama gelen metinler, embedding uzayında birbirine yakın vektörler üretir... araba ve otomobil' örneği ile son paragraftaki 'kullanıcının sorusu da bir vektöre çevrilir ve ... en benzer metin parçaları bulunur' bilgisi."
+    },
+    {
+      "id": "Q05",
+      "question": "Foundry Local hangi donanım türlerini otomatik olarak tespit eder?",
+      "category": "answerable",
+      "expected_source": "belge_03_foundry_local.md",
+      "expected_keywords": ["CPU", "GPU", "NPU"],
+      "notes": "Kolay/tek cümleden cevap. Belge_03: 'kullanılabilir donanımı (CPU, GPU veya NPU) otomatik olarak tespit eder ve en uygun model sürümünü seçer.'"
+    },
+    {
+      "id": "Q06",
+      "question": "Apple Silicon işlemcili bir Mac'te Foundry Local hız avantajını neyle sağlar ve yerel bir RAG sistemi kurmak için neden tek başına yeterlidir?",
+      "category": "answerable",
+      "expected_source": "belge_03_foundry_local.md",
+      "expected_keywords": ["Metal", "GPU hızlandırma", "sohbet modeli", "embedding modeli"],
+      "notes": "Zor; iki paragrafı birleştirir: 'Apple Silicon işlemcili Mac bilgisayarlarda Foundry Local, Metal aracılığıyla GPU hızlandırması sunar.' ve 'hem sohbet (chat) modellerini hem de embedding modellerini destekler, bu da onu yerel bir RAG sisteminin her iki bileşeni için de uygun hale getirir.'"
+    },
+    {
+      "id": "Q07",
+      "question": "Embedding vektörleri SQLite'a neden doğrudan yazılamaz, bu sorun nasıl çözülür?",
+      "category": "answerable",
+      "expected_source": "belge_04_sqlite_veri_saklama.md",
+      "expected_keywords": ["sayısal liste", "JSON", "metne çevirme"],
+      "notes": "Orta. Belge_04: 'Embedding vektörleri sayısal listeler olduğu için, SQLite'a doğrudan yazılamazlar. Bunun için vektör, JSON formatında bir metne çevrilerek saklanır; okunurken tekrar sayısal listeye dönüştürülür.'"
+    },
+    {
+      "id": "Q08",
+      "question": "Bir RAG sisteminde SQLite tablosundaki her satır hangi alanları içerebilir?",
+      "category": "answerable",
+      "expected_source": "belge_04_sqlite_veri_saklama.md",
+      "expected_keywords": ["id", "source", "content", "embedding"],
+      "notes": "Kolay/tek cümleden cevap. Belge_04: 'Her satır bir belge parçasını temsil eder ve şu alanları içerebilir: benzersiz bir kimlik (id), kaynak belgenin adı (source), metnin kendisi (content) ve metnin embedding vektörü.'"
+    },
+    {
+      "id": "Q09",
+      "question": "Bir RAG uygulamasında sistem mesajı ne işe yarar ve modelin konudan sapmasını önlemek için başka ne yapılabilir?",
+      "category": "answerable",
+      "expected_source": "belge_05_prompt_engineering.md",
+      "expected_keywords": ["sistem mesajı", "sadece verilen bağlam", "üç cümle", "uzunluk sınırı"],
+      "notes": "Zor; aynı belgede iki bilgiyi birleştirir: örnek sistem mesajı ('Sadece verilen bağlamı kullanarak cevap ver... bilgi yoksa bilmediğini söyle') ile 'üretim uzunluğunu sınırlamak (örneğin en fazla üç cümle istemek) modelin konudan sapmasını... önlemeye yardımcı olur.'"
+    },
+    {
+      "id": "Q10",
+      "question": "Belgeler parçalara bölünürken parça uzunluğu ne kadar olmalı ve parçalar arasında neden örtüşme bırakılır?",
+      "category": "answerable",
+      "expected_source": "belge_06_chunking_stratejisi.md",
+      "expected_keywords": ["paragraf sınırı", "iki yüz", "dört yüz", "örtüşme"],
+      "notes": "Orta/zor; tek paragrafta iki bilgi: 'belgeleri paragraf sınırlarında bölmek ve her parçayı yaklaşık iki yüz ila dört yüz kelime uzunluğunda tutmaktır' ve 'bir paragraflık bir örtüşme (overlap) bırakmak, bir cümlenin iki parça arasında bölünüp bağlamını kaybetmesini önler.'"
+    },
+    {
+      "id": "Q11",
+      "question": "Vektör benzerliği için cosine similarity yerine Öklid (Euclidean) mesafesi kullanılsa hangisi daha iyi sonuç verir?",
+      "category": "unanswerable",
+      "expected_source": null,
+      "expected_keywords": [],
+      "notes": "Tuzak: retrieval kesinlikle belge_02'yi getirir çünkü cosine similarity orada uzun uzun anlatılıyor. Ancak belgelerde Öklid mesafesi hiç geçmiyor ve iki yöntemin karşılaştırması yapılmıyor. Model 'bilmiyorum' demeli."
+    },
+    {
+      "id": "Q12",
+      "question": "Büyük belge koleksiyonları için Chroma mı yoksa FAISS mi daha hızlı çalışır?",
+      "category": "unanswerable",
+      "expected_source": null,
+      "expected_keywords": [],
+      "notes": "Tuzak: belge_04 'Çok büyük belge koleksiyonlarında ise özel vektör veritabanları veya SQL uzantıları daha uygun olur' diyor, dolayısıyla retrieval alakalı bir parça bulur. Fakat hiçbir ürün adı (Chroma, FAISS, Pinecone) belgelerde geçmiyor ve performans karşılaştırması yok."
+    },
+    {
+      "id": "Q13",
+      "question": "Foundry Local'da bir modeli kendi verilerimle fine-tune etmek için hangi adımları izlemem gerekir?",
+      "category": "unanswerable",
+      "expected_source": null,
+      "expected_keywords": [],
+      "notes": "Tuzak: belge_03 Foundry Local'ı ve model kataloğunu anlatıyor, belge_01 ise 'modeli yeniden eğitmeden' ifadesini içeriyor; retrieval bu parçaları getirir. Ancak fine-tuning adımları belgelerin hiçbirinde yok."
+    },
+    {
+      "id": "Q14",
+      "question": "",
+      "category": "edge_case",
+      "expected_source": null,
+      "expected_keywords": [],
+      "notes": "Boş sorgu. Sistem embedding üretmeye/aramaya kalkışmadan nazikçe bir soru sorulmasını istemeli; asla uydurma bir cevap üretmemeli."
+    },
+    {
+      "id": "Q15",
+      "question": "Bana her şeyi anlat",
+      "category": "edge_case",
+      "expected_source": null,
+      "expected_keywords": [],
+      "notes": "Aşırı genel sorgu; belirli bir belgeye demirlenmiyor. Beklenen davranış: sorunun daraltılmasını istemek veya kapsanan konu başlıklarını kısaca belirtmek; belgelerin tamamını özetlemeye çalışıp bağlamı aşmamak."
+    }
+  ]
+}
