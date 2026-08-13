@@ -13,9 +13,16 @@ APP_NAME = "foundry_local_rag"
 
 EMBEDDING_MODEL = "qwen3-embedding-0.6b"
 
-# Grounded (bağlam verilmiş) kıyas sonucu qwen2.5-7b seçildi. phi-4-mini
-# Türkçe'de tekrar döngüsüne giriyor, bağlamın ilk cümlesinde duran bilgiyi
-# "belgelerde yok" diye reddediyor ve uydurma tanımlar üretiyordu.
+# Model seçimi TAM DEĞERLENDİRME SETİYLE ölçüldü (eval/results.json):
+#   qwen2.5-7b : 15/15  (answerable 10/10, unanswerable 3/3, edge 2/2)
+#   phi-4-mini : 12/15  (answerable 10/10, unanswerable 0/3, edge 2/2)
+#
+# Fark tam da en kritik yerde: phi-4-mini cevaplanamaz soruların ÜÇÜNDE DE
+# reddetmek yerine uydurdu. İki model de retrieval'da 10/10 -- yani sorun
+# arama değil, üretim.
+#
+# Bu ölçümü yeniden üretmek için:
+#   python eval/run_eval.py --model phi-4-mini --json
 CHAT_MODEL = "qwen2.5-7b"
 ALT_CHAT_MODEL = "phi-4-mini"
 
@@ -100,4 +107,16 @@ MAX_ANSWER_TOKENS = 300
 TEMPERATURE = 0.2
 TOP_P = 0.9
 
+# DİKKAT: Bu metin hem system prompt'a gömülüdür hem de modelin reddettiğini
+# ANLAMAK için kullanılır (answer.py: NO_ANSWER_TEXT alt dizesi cevapta var mı).
+# Bu tespit birebir alt dize eşleşmesine dayanır ve KIRILGANDIR: model metni
+# birebir üretmezse reddetme yakalanmaz.
+#
+# Ölçümle görüldü (eval/results.json, phi-4-mini Q13): model "Bu bilgi
+# YÜKLENDİĞİNİZ belgelerde yok" yazdı (doğrusu "yüklediğiniz"), tek harflik
+# fark tespiti kaçırdı ve arkasına uydurma içerik ekledi. qwen2.5-7b metni
+# birebir ürettiği için bu sorun aktif modelde görülmüyor.
+#
+# Model değiştirilirse bu kırılganlık yeniden değerlendirilmeli; daha sağlam
+# bir yol yapılandırılmış çıktı (response_format) olurdu.
 NO_ANSWER_TEXT = "Bu bilgi yüklediğiniz belgelerde yok."

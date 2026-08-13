@@ -29,9 +29,39 @@ def test_metrics_serves_results_file_when_present(client, monkeypatch, tmp_path)
     assert r.json() == payload
 
 
-def test_metrics_real_project_has_no_results_yet(client):
-    """Gerçek proje yolu: eval/results.json henüz üretilmedi (M3/M4 backend-api
-    görevi DEĞİL). Bu, mock kullanmadan üretim davranışını doğrular."""
+def test_metrics_serves_real_results_file_matching_spec_schema(client):
+    """Gerçek `eval/results.json`'ı mock'suz doğrular (docs/FEATURE_SPEC.md §6.2).
+
+    Bu test yazıldığında dosya henüz üretilmemişti ve "gerçek projede 503
+    döner" diye assert ediyordu; M3/M4 ile dosya üretilince kırıldı. Geçici
+    bir dosya sistemi durumuna bağlanmak yerine artık ŞEMAYI doğruluyor --
+    run_eval.py'nin ürettiği yapı ile frontend'in beklediği (web/lib/types.ts)
+    yapı arasındaki sözleşmeyi korur.
+
+    Dosya yoksa test atlanır: üretmek Foundry Local modellerini gerektirir
+    (~100 sn), bu testin sorumluluğu değil.
+    """
+    if not metrics_module.RESULTS_PATH.exists():
+        import pytest
+
+        pytest.skip("eval/results.json üretilmemiş (python eval/run_eval.py --json)")
+
     r = client.get("/api/metrics")
-    assert r.status_code == 503
-    assert r.json()["code"] == "METRICS_NOT_GENERATED"
+    assert r.status_code == 200
+    data = r.json()
+
+    assert set(data) >= {"generated_at", "config", "corpus", "models", "threshold_sweep"}
+    assert {"min_score", "top_k"} <= set(data["config"])
+    assert data["models"], "en az bir model sonucu bulunmalı"
+
+    for model in data["models"]:
+        assert {"alias", "model_id", "is_active", "summary", "questions"} <= set(model)
+        summary = model["summary"]
+        assert {"passed", "total", "by_category", "retrieval_hits", "avg_seconds"} <= set(summary)
+        assert summary["total"] == len(model["questions"])
+
+    # Tam olarak bir model aktif olmalı (rag.config.CHAT_MODEL).
+    assert sum(m["is_active"] for m in data["models"]) == 1
+
+    sweep = data["threshold_sweep"]
+    assert {"answerable_scores", "other_scores", "table"} <= set(sweep)
