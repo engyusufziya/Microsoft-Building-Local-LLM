@@ -12,8 +12,9 @@ modelin kaynak uydurmasına izin verilmez.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Iterator, Literal, Optional, Union
 
 from . import config, models, retrieve
 
@@ -91,3 +92,125 @@ def answer_query(
     # 2. katman: model bağlamda cevap olmadığını söyledi -> kaynak gösterme.
     refused = config.NO_ANSWER_TEXT.rstrip(".").lower() in text.lower()
     return Answer(text or config.NO_ANSWER_TEXT, [] if refused else hits, answered=not refused)
+
+
+# --------------------------------------------------------------------------- streaming
+#
+# Backend (Faz 4.3, docs/FEATURE_SPEC.md §3.1) bu olayları SSE'ye çevirir.
+# rag/ paketi HTTP/SSE'den habersiz kalır; wire format'a çevirme backend'in işi.
+#
+# answer_query'den kasıtlı olarak ayrı bir fonksiyon: mevcut davranış
+# (eval/run_eval.py buna bağlı) hiçbir şekilde değişmemeli.
+
+
+@dataclass
+class RetrievalEvent:
+    """SSE 'retrieval' olayı. ESKİ + YENİ hepsi (eşik altı dahil) döner --
+
+    Inspector'ın eşik çizgisini aynı sohbet akışında çizebilmesi için.
+    passed_threshold hesaplaması BURADA değil, backend'de yapılır (ChunkHit
+    şemasına çevrilirken) -- rag.retrieve.Hit'e alan eklenmez, motor sade kalır.
+    """
+
+    hits: list  # rag.retrieve.Hit listesi, skora göre azalan
+    threshold: float
+    passed_count: int
+    rejected_count: int
+    elapsed_ms: int
+
+
+@dataclass
+class TokenEvent:
+    text: str
+
+
+@dataclass
+class DoneEvent:
+    answered: bool
+    reason: Optional[Literal["below_threshold", "llm_refused"]]
+    sources: list[str]
+    elapsed_ms: int
+    token_count: int
+
+
+StreamEvent = Union[RetrievalEvent, TokenEvent, DoneEvent]
+
+
+def answer_query_stream(
+    question: str,
+    k: Optional[int] = None,
+    min_score: Optional[float] = None,
+    model: Optional[str] = None,
+    conn=None,
+) -> Iterator[StreamEvent]:
+    """answer_query'nin streaming karşılığı. Üç olay sırayla:
+
+    RetrievalEvent -> (below_threshold ise burada biter) -> TokenEvent* -> DoneEvent
+
+    reason değerleri (docs/FEATURE_SPEC.md §3.2):
+      None              -> normal cevap, token'lar aktı
+      "below_threshold" -> hiçbir chunk eşiği geçemedi, LLM hiç çağrılmadı
+      "llm_refused"      -> LLM token akıttı ama bağlamda cevap yok dedi;
+                            frontend akan metni yerelleştirilmiş metinle değiştirir
+    """
+    t0 = time.time()
+    question = (question or "").strip()
+    min_score = config.MIN_SCORE if min_score is None else min_score
+
+    # Eşik altındakiler de gerekli (Inspector eşik çizgisini çizer) -> filtresiz çek.
+    all_hits = retrieve.get_top_chunks(question, k=k, min_score=None, conn=conn)
+    passed = [h for h in all_hits if h.score >= min_score]
+
+    yield RetrievalEvent(
+        hits=all_hits,
+        threshold=min_score,
+        passed_count=len(passed),
+        rejected_count=len(all_hits) - len(passed),
+        elapsed_ms=int((time.time() - t0) * 1000),
+    )
+
+    # 1. katman kısa devresi: hiçbir chunk eşiği geçemedi -> LLM'e hiç gitme.
+    if not passed:
+        yield DoneEvent(
+            answered=False,
+            reason="below_threshold",
+            sources=[],
+            elapsed_ms=int((time.time() - t0) * 1000),
+            token_count=0,
+        )
+        return
+
+    prompt = SYSTEM_PROMPT.format(
+        no_answer=config.NO_ANSWER_TEXT,
+        context=retrieve.build_context(passed),
+    )
+    client = models.get_chat_client(model)
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": question},
+    ]
+
+    parts: list[str] = []
+    token_count = 0
+    for chunk in client.complete_streaming_chat(messages):
+        if not chunk.choices:  # ÖLÇÜLDÜ: akışta boş chunk.choices geliyor
+            continue
+        content = chunk.choices[0].delta.content
+        if content:
+            parts.append(content)
+            token_count += 1
+            yield TokenEvent(text=content)
+
+    text = "".join(parts).strip()
+
+    # 2. katman: model bağlamda cevap olmadığını söyledi -> kaynak gösterme.
+    refused = config.NO_ANSWER_TEXT.rstrip(".").lower() in text.lower()
+    sources = [] if refused else Answer(text, passed).sources
+
+    yield DoneEvent(
+        answered=not refused,
+        reason="llm_refused" if refused else None,
+        sources=sources,
+        elapsed_ms=int((time.time() - t0) * 1000),
+        token_count=token_count,
+    )
