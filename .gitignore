@@ -24,7 +24,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
-.claude/settings.local.json
 
 # Microsoft program planı — üçüncü taraf doküman, depoda dağıtılmıyor.
 # PDF ingest testleri için herhangi bir metin tabanlı PDF kullanılabilir.
