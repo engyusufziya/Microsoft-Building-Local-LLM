@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from rag import config, models, ocr, store
+from rag import answer, config, models, ocr, store
 
 from . import schemas
 from .routes import chat, documents, metrics, retrieve as retrieve_routes
@@ -40,17 +40,52 @@ DB_PATH_ENV = "RAG_BACKEND_DB_PATH"
 
 WEB_OUT_DIR = config.PROJECT_ROOT / "web" / "out"
 
+# Gecikme incelemesinde ÖLÇÜLDÜ: `models.get_chat_client()` yalnızca model
+# ağırlıklarını yükler (~16 sn, bir kereye mahsus). Bunun ayrı olarak,
+# GERÇEK bir çıkarım çağrısının (WebGPU çekirdek/shader derlemesi TAM BU
+# prompt UZUNLUĞU/şekli için ilk kullanımda gerçekleşiyor olabilir) ek bir
+# maliyeti var mı diye bakıldı; ölçüm gürültülüydü ama mekanizma makul ve
+# maliyeti sıfıra yakın (yalnızca startup'a ~birkaç sn ekler, kullanıcı hiç
+# görmez). Bu yüzden warmup, gerçek bir sohbet isteğiyle AYNI ŞEKİLDE (aynı
+# SYSTEM_PROMPT şablonu, gerçekçi uzunlukta bağlam) sessiz bir deneme çağrısı
+# yapıyor -- kullanıcının GERÇEK ilk sorusu artık bu maliyeti hiç ödemiyor.
+_WARMUP_DUMMY_CONTEXT = "\n\n".join(
+    f"[{i}] [Kaynak: warmup.md]\nBu, model çıkarım hattını ısıtmak için kullanılan "
+    "gerçekçi uzunlukta bir dolgu metnidir; herhangi bir gerçek belgeden gelmez "
+    "ve kullanıcıya asla gösterilmez."
+    for i in range(1, config.TOP_K + 1)
+)
+
+
+def _warm_inference_paths() -> None:
+    """Embedding + chat modellerini yükler VE birer gerçek çıkarım çağrısı yapar.
+
+    Senkron/bloklayıcı (Foundry Local SDK) -- çağıran taraf `asyncio.to_thread`
+    ile sarmalı.
+    """
+    models.embed_texts(["isinma sorgusu"], is_query=True)
+    client = models.get_chat_client()
+    client.complete_chat(
+        [
+            {
+                "role": "system",
+                "content": answer.SYSTEM_PROMPT.format(
+                    no_answer=config.NO_ANSWER_TEXT, context=_WARMUP_DUMMY_CONTEXT
+                ),
+            },
+            {"role": "user", "content": "ısınma sorgusu"},
+        ]
+    )
+
 
 async def _run_warmup(app: FastAPI) -> None:
-    """Embedding + chat modellerini yükler, `model_status`'u günceller.
+    """Embedding + chat modellerini yükler ve ısıtır, `model_status`'u günceller.
 
-    Her iki çağrı da senkron/bloklayıcı (Foundry Local SDK), bu yüzden
-    event loop'u kilitlememek için `asyncio.to_thread` ile ayrı bir thread'de
+    Event loop'u kilitlememek için `asyncio.to_thread` ile ayrı bir thread'de
     çalıştırılır.
     """
     try:
-        await asyncio.to_thread(models.get_embedding_client)
-        await asyncio.to_thread(models.get_chat_client)
+        await asyncio.to_thread(_warm_inference_paths)
         app.state.model_status = "ready"
     except Exception as exc:  # pragma: no cover - gerçek Foundry Local hatası
         app.state.model_status = "error"

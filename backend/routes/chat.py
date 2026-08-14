@@ -98,6 +98,10 @@ async def chat_endpoint(body: schemas.ChatRequest, request: Request) -> Streamin
                             "passed_count": event.passed_count,
                             "rejected_count": event.rejected_count,
                             "elapsed_ms": event.elapsed_ms,
+                            # Additive alan (rag/query_router.py). Eski
+                            # istemciler yok sayar; Inspector "summarize"
+                            # modunda skor rozetlerini gizlemek için kullanır.
+                            "mode": event.mode,
                         },
                     )
                 elif isinstance(event, answer.TokenEvent):

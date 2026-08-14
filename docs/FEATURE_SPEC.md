@@ -484,8 +484,10 @@ katmanlı. Örtüşme bölgesi grafikte açıkça işaretlenmeli.
 
 **Kilit:** Tüm model çağrıları (`ingest`, `chat`, `retrieve`) tek bir
 `asyncio.Lock` arkasında serileştirilir. Foundry Local runtime'ının eşzamanlı
-istek davranışı **doğrulanmadı**; kilit güvenli varsayım. Faz 4.7.3'te iki
-paralel istekle gerçek test yapılacak.
+istek davranışı **doğrulandı** (Faz 4.7): iki paralel istek gerçek modelle,
+HTTP üzerinden test edildi ve ikisi de temiz tamamlandı; süreler (5.67 sn ve
+13.31 sn) kilidin serileştirdiğini gösteriyor — paralel çalışsalardı ikisi de
+~6 sn'de biterdi.
 
 **Warmup:** FastAPI `lifespan` içinde `models.get_embedding_client()` ve
 `models.get_chat_client()` çağrılır (~6.4 GB, ilk açılışta uzun). Bu sürede

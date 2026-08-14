@@ -42,22 +42,65 @@ def embed_query(query: str) -> np.ndarray:
     return vector / norm if norm else vector
 
 
+def _rrf_candidate_indices(
+    scores: np.ndarray,
+    meta: list[dict],
+    query: str,
+    k: int,
+    conn,
+    hybrid: bool,
+) -> np.ndarray:
+    """Nihai top-k için ADAY havuzunu seçer (Reciprocal Rank Fusion).
+
+    Yalnızca HANGİ k chunk'ın seçileceğine karar verir -- skor DEĞİL, konum
+    (rank) birleştirilir. Çağıran taraf bu adaylar için skoru HER ZAMAN
+    kendi cosine değerinden okur; RRF skoru hiçbir yere yazılmaz. Bu ayrım
+    kasıtlı: config.HYBRID_RETRIEVAL_ENABLED dokümantasyonuna bkz.
+    """
+    dense_pool = min(len(scores), max(k, config.BM25_CANDIDATE_LIMIT) * 3)
+    dense_order = np.argsort(scores)[::-1][:dense_pool]
+
+    if not hybrid:
+        return dense_order[:k]
+
+    bm25_ids = store.bm25_candidates(conn, query, limit=config.BM25_CANDIDATE_LIMIT)
+    id_to_idx = {m["id"]: i for i, m in enumerate(meta)}
+    bm25_order = [id_to_idx[i] for i in bm25_ids if i in id_to_idx]
+
+    rrf: dict[int, float] = {}
+    for rank, idx in enumerate(dense_order):
+        rrf[int(idx)] = rrf.get(int(idx), 0.0) + 1.0 / (config.RRF_K + rank + 1)
+    for rank, idx in enumerate(bm25_order):
+        rrf[idx] = rrf.get(idx, 0.0) + 1.0 / (config.RRF_K + rank + 1)
+
+    fused_order = sorted(rrf, key=lambda i: rrf[i], reverse=True)
+    return np.array(fused_order[:k], dtype=np.int64)
+
+
 def get_top_chunks(
     query: str,
     k: int = None,
     min_score: Optional[float] = None,
     conn=None,
+    hybrid: Optional[bool] = None,
 ) -> list[Hit]:
     """Sorguya en benzer chunk'ları döndürür.
 
     min_score verilirse eşiğin altındaki sonuçlar elenir. Boş liste dönmesi
     "bu soruya belgelerden cevap yok" anlamına gelir ve çağıran taraf LLM'i
     hiç çağırmadan kısa devre yapabilir.
+
+    hybrid=True (varsayılan: config.HYBRID_RETRIEVAL_ENABLED) iken aday
+    havuzu BM25 (SQLite FTS5) ile genişletilir -- dense'in k=4 sınırının
+    dışında bıraktığı ama sözcüksel olarak güçlü eşleşen chunk'ları kurtarır.
+    DÖNEN Hit.score HER ZAMAN ham cosine'dır; hibrit yalnızca hangi k
+    chunk'ın seçildiğini etkiler, skorun ANLAMINI değil (bkz. rag/config.py).
     """
     k = k or config.TOP_K
     query = (query or "").strip()
     if not query:
         return []
+    hybrid = config.HYBRID_RETRIEVAL_ENABLED if hybrid is None else hybrid
 
     own_conn = conn is None
     conn = conn or store.connect()
@@ -67,13 +110,15 @@ def get_top_chunks(
             return []
 
         scores = matrix @ embed_query(query)
+        candidate_idx = _rrf_candidate_indices(scores, meta, query, k, conn, hybrid)
 
-        # k en büyüğü kısmi sıralamayla al, sonra kendi içinde sırala.
-        top_idx = np.argpartition(scores, -min(k, len(scores)))[-min(k, len(scores)):]
-        top_idx = top_idx[np.argsort(scores[top_idx])[::-1]]
+        # Final sıra HER ZAMAN cosine'a göre azalandır (RRF yalnızca adayları
+        # SEÇTİ) -- RetrievalEvent.hits docstring'i ve Inspector bu sırayı
+        # varsayar.
+        candidate_idx = candidate_idx[np.argsort(scores[candidate_idx])[::-1]]
 
         hits = []
-        for i in top_idx:
+        for i in candidate_idx:
             score = float(scores[i])
             if min_score is not None and score < min_score:
                 continue

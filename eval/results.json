@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-13T17:00:22+03:00",
+  "generated_at": "2026-08-14T04:03:23+03:00",
   "config": {
     "min_score": 0.45,
     "top_k": 4,
@@ -7,205 +7,10 @@
     "chunk_overlap_words": 30
   },
   "corpus": {
-    "chunk_count": 17,
-    "document_count": 6
+    "chunk_count": 20,
+    "document_count": 7
   },
   "models": [
-    {
-      "alias": "qwen2.5-7b",
-      "model_id": "qwen2.5-7b-instruct-generic-gpu:4",
-      "is_active": true,
-      "summary": {
-        "passed": 15,
-        "total": 15,
-        "by_category": {
-          "answerable": [
-            10,
-            10
-          ],
-          "unanswerable": [
-            3,
-            3
-          ],
-          "edge_case": [
-            2,
-            2
-          ]
-        },
-        "retrieval_hits": [
-          10,
-          10
-        ],
-        "avg_seconds": 7.45
-      },
-      "questions": [
-        {
-          "id": "Q01",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 27.61,
-          "expected_source": "belge_01_rag_nedir.md",
-          "source_found": true,
-          "keywords_matched": 3,
-          "keywords_total": 3,
-          "answer": "RAG üç adımdan oluşur: retrieval, augmentation ve generation. İlk adımda kullanıcının sorusuyla ilgili metin parçaları aranır, ikinci adımda bulunan metin parçaları modelin girdisine eklenir ve üçüncü adımda model bir cevap üretir."
-        },
-        {
-          "id": "Q02",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 7.15,
-          "expected_source": "belge_01_rag_nedir.md",
-          "source_found": true,
-          "keywords_matched": 3,
-          "keywords_total": 3,
-          "answer": "RAG, modelin kendi eğitim belleğinden tahmin yapmadan doğrudan verilen kaynaktan bilgi almasına olanak tanır, bu da halüsinasyon riskini azaltır."
-        },
-        {
-          "id": "Q03",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 5.79,
-          "expected_source": "belge_02_embedding_ve_benzerlik.md",
-          "source_found": true,
-          "keywords_matched": 2,
-          "keywords_total": 3,
-          "answer": "Cosine similarity, iki vektör arasındaki açıyı ölçer ve bu değer 1'e yaklaştıkça benzerlik artar, 0'a yaklaştıkça azarlar."
-        },
-        {
-          "id": "Q04",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 10.13,
-          "expected_source": "belge_02_embedding_ve_benzerlik.md",
-          "source_found": true,
-          "keywords_matched": 0,
-          "keywords_total": 4,
-          "answer": "\"Araba\" ve \"otomobil\" kelimelerinin vektörleri birbirine yakın çıkar çünkü anlamları benzerdir. Bu yakınlık RAG'de embedding ve cosign similarity kullanılarak belgenin diğer metin parçalarıyla karşılaştırılmasına yardımcı olur. Bu sayede \"araba\" ile ilgili bilgi \"otomobil\" hakkında sorulara yanıt verebilir."
-        },
-        {
-          "id": "Q05",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 4.92,
-          "expected_source": "belge_03_foundry_local.md",
-          "source_found": true,
-          "keywords_matched": 3,
-          "keywords_total": 3,
-          "answer": "CPU, GPU veya NPU'yı otomatik olarak tespit eder."
-        },
-        {
-          "id": "Q06",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 8.88,
-          "expected_source": "belge_03_foundry_local.md",
-          "source_found": true,
-          "keywords_matched": 2,
-          "keywords_total": 4,
-          "answer": "Apple Silicon işlemcili Mac'te Foundry Local, Metal aracılığıyla GPU hızlandırması sunar ve modelin CPU'ya göre önemli ölçüde daha hızlı çalışmasını sağlar. Yerel bir RAG sistemi kurmak için tek başına yeterlidir çünkü SQLite ile veri saklama yapabilir ve internet bağlantısı olmadan çalışabilir."
-        },
-        {
-          "id": "Q07",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 7.91,
-          "expected_source": "belge_04_sqlite_veri_saklama.md",
-          "source_found": true,
-          "keywords_matched": 2,
-          "keywords_total": 3,
-          "answer": "SQLite'a doğrudan yazılamaz çünkü embedding vektörleri sayısal listelerdir. Bu sorun, vektörleri JSON formatına dönüştürerek ve böylece saklayarak çözülmektedir."
-        },
-        {
-          "id": "Q08",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 8.05,
-          "expected_source": "belge_04_sqlite_veri_saklama.md",
-          "source_found": true,
-          "keywords_matched": 4,
-          "keywords_total": 4,
-          "answer": "Bir RAG sisteminde SQLite tablosundaki her satır genellikle benzersiz bir kimlik (id), kaynak belgenin adı (source), metnin kendisi (content) ve metnin embedding vektörü içerebilir."
-        },
-        {
-          "id": "Q09",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 9.03,
-          "expected_source": "belge_05_prompt_engineering.md",
-          "source_found": true,
-          "keywords_matched": 2,
-          "keywords_total": 4,
-          "answer": "Sistem mesajı, modelin sadece verilen bağlamı kullanarak cevap vereceğini belirtir ve modelin kendi bilgisinden sapmaya çalışmasını engeller. Konudan sapmasını önlemek için, kullanıcının sorularını net bir şekilde belirlemesi ve gerekli belgelerin sistem mesajına eklenmesi gerekmektedir."
-        },
-        {
-          "id": "Q10",
-          "category": "answerable",
-          "passed": true,
-          "seconds": 6.83,
-          "expected_source": "belge_06_chunking_stratejisi.md",
-          "source_found": true,
-          "keywords_matched": 3,
-          "keywords_total": 4,
-          "answer": "Parçaların uzunluğu yaklaşık iki yüz ila dört yüz kelime arasında tutulur. Parçalar arasında bir paragraflık örtüşme bırakılarak, bir cümlenin iki parça arasında bölünüp bağlamını kaybetmesini önlenir."
-        },
-        {
-          "id": "Q11",
-          "category": "unanswerable",
-          "passed": true,
-          "seconds": 5.33,
-          "expected_source": null,
-          "source_found": null,
-          "keywords_matched": null,
-          "keywords_total": null,
-          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
-        },
-        {
-          "id": "Q12",
-          "category": "unanswerable",
-          "passed": true,
-          "seconds": 4.35,
-          "expected_source": null,
-          "source_found": null,
-          "keywords_matched": null,
-          "keywords_total": null,
-          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
-        },
-        {
-          "id": "Q13",
-          "category": "unanswerable",
-          "passed": true,
-          "seconds": 5.14,
-          "expected_source": null,
-          "source_found": null,
-          "keywords_matched": null,
-          "keywords_total": null,
-          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
-        },
-        {
-          "id": "Q14",
-          "category": "edge_case",
-          "passed": true,
-          "seconds": 0.0,
-          "expected_source": null,
-          "source_found": null,
-          "keywords_matched": null,
-          "keywords_total": null,
-          "answer": "Lütfen bir soru yazın."
-        },
-        {
-          "id": "Q15",
-          "category": "edge_case",
-          "passed": true,
-          "seconds": 0.04,
-          "expected_source": null,
-          "source_found": null,
-          "keywords_matched": null,
-          "keywords_total": null,
-          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
-        }
-      ]
-    },
     {
       "alias": "phi-4-mini",
       "model_id": "Phi-4-mini-instruct-generic-gpu:5",
@@ -398,6 +203,301 @@
           "keywords_matched": null,
           "keywords_total": null,
           "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        }
+      ]
+    },
+    {
+      "alias": "qwen2.5-7b",
+      "model_id": "qwen2.5-7b-instruct-generic-gpu:4",
+      "is_active": true,
+      "summary": {
+        "passed": 23,
+        "total": 23,
+        "by_category": {
+          "answerable": [
+            10,
+            10
+          ],
+          "unanswerable": [
+            3,
+            3
+          ],
+          "edge_case": [
+            2,
+            2
+          ],
+          "meta": [
+            3,
+            3
+          ],
+          "corpus": [
+            2,
+            2
+          ],
+          "cross_lingual": [
+            3,
+            3
+          ]
+        },
+        "retrieval_hits": [
+          10,
+          10
+        ],
+        "avg_seconds": 10.36
+      },
+      "questions": [
+        {
+          "id": "Q01",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 35.2,
+          "expected_source": "belge_01_rag_nedir.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "RAG üç adımdan oluşur: retrieval, augmentation ve generation. İlk adımda kullanıcının sorusuyla ilgili metin parçaları aranır, ikinci adımda bulunan metin parçaları modelin girdisine eklenir ve üçüncü adımda model bir cevap üretir."
+        },
+        {
+          "id": "Q02",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 8.07,
+          "expected_source": "belge_01_rag_nedir.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "RAG, modelin kendi eğitim belleğinden tahmin yapmadan doğrudan verilen kaynaktan bilgi almasına olanak tanır, bu da halüsinasyon riskini azaltır."
+        },
+        {
+          "id": "Q03",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 6.59,
+          "expected_source": "belge_02_embedding_ve_benzerlik.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 3,
+          "answer": "Cosine similarity, iki vektör arasındaki açıyı ölçer ve bu değer 1'e yaklaştıkça benzerlik artar, 0'a yaklaştıkça azarlar."
+        },
+        {
+          "id": "Q04",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 11.27,
+          "expected_source": "belge_02_embedding_ve_benzerlik.md",
+          "source_found": true,
+          "keywords_matched": 0,
+          "keywords_total": 4,
+          "answer": "\"Araba\" ve \"otomobil\" kelimelerinin vektörleri birbirine yakın çıkar çünkü anlamları benzerdir. Bu yakınlık RAG'de embedding ve cosign similarity kullanılarak belgenin diğer metin parçalarıyla karşılaştırılmasına yardımcı olur. Bu sayede \"araba\" ile ilgili bilgi \"otomobil\" hakkında sorulara yanıt verebilir."
+        },
+        {
+          "id": "Q05",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 6.54,
+          "expected_source": "belge_03_foundry_local.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 3,
+          "answer": "CPU, GPU veya NPU'yı otomatik olarak tespit eder."
+        },
+        {
+          "id": "Q06",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 10.19,
+          "expected_source": "belge_03_foundry_local.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 4,
+          "answer": "Apple Silicon işlemcili Mac'te Foundry Local, Metal aracılığıyla GPU hızlandırması sunar ve modelin CPU'ya göre önemli ölçüde daha hızlı çalışmasını sağlar. Yerel bir RAG sistemi kurmak için tek başına yeterlidir çünkü SQLite ile veri saklama yapabilir ve internet bağlantısı olmadan çalışabilir."
+        },
+        {
+          "id": "Q07",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 10.26,
+          "expected_source": "belge_04_sqlite_veri_saklama.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 3,
+          "answer": "SQLite'a doğrudan yazılamaz çünkü embedding vektörleri sayısal listelerdir. Bu sorun, vektörleri JSON formatına dönüştürerek ve böylece saklayarak çözülmektedir."
+        },
+        {
+          "id": "Q08",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 13.24,
+          "expected_source": "belge_04_sqlite_veri_saklama.md",
+          "source_found": true,
+          "keywords_matched": 4,
+          "keywords_total": 4,
+          "answer": "Bir RAG sisteminde SQLite tablosundaki her satır genellikle benzersiz bir kimlik (id), kaynak belgenin adı (source), metnin kendisi (content) ve metnin embedding vektörü içerebilir."
+        },
+        {
+          "id": "Q09",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 20.56,
+          "expected_source": "belge_05_prompt_engineering.md",
+          "source_found": true,
+          "keywords_matched": 2,
+          "keywords_total": 4,
+          "answer": "Sistem mesajı, modelin sadece verilen bağlamı kullanarak cevap vereceğini belirtir ve modelin kendi bilgisinden sapmaya çalışmasını engeller. Konudan sapmasını önlemek için, kullanıcının sorularını net bir şekilde belirlemesi ve gerekli belgelerin sistem mesajına eklenmesi gerekmektedir."
+        },
+        {
+          "id": "Q10",
+          "category": "answerable",
+          "passed": true,
+          "seconds": 8.79,
+          "expected_source": "belge_06_chunking_stratejisi.md",
+          "source_found": true,
+          "keywords_matched": 3,
+          "keywords_total": 4,
+          "answer": "Parçaların uzunluğu yaklaşık iki yüz ila dört yüz kelime arasında tutulur. Parçalar arasında bir paragraflık örtüşme bırakılarak, bir cümlenin iki parça arasında bölünüp bağlamını kaybetmesini önlenir."
+        },
+        {
+          "id": "Q11",
+          "category": "unanswerable",
+          "passed": true,
+          "seconds": 8.12,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q12",
+          "category": "unanswerable",
+          "passed": true,
+          "seconds": 7.86,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q13",
+          "category": "unanswerable",
+          "passed": true,
+          "seconds": 7.87,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q14",
+          "category": "edge_case",
+          "passed": true,
+          "seconds": 0.0,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Lütfen bir soru yazın."
+        },
+        {
+          "id": "Q15",
+          "category": "edge_case",
+          "passed": true,
+          "seconds": 0.16,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu bilgi yüklediğiniz belgelerde yok."
+        },
+        {
+          "id": "Q16",
+          "category": "meta",
+          "passed": true,
+          "seconds": 13.9,
+          "expected_source": "belge_06_chunking_stratejisi.md",
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Belge parçaları (chunking), belgenin doğrudan kullanımını azaltarak retrieval kalitesini artırır. Genellikle paragraflar olarak bölünmüş parçalar, her biri yaklaşık iki yüz ila dört yüz kelime arasında kalır ve bir paragraflık örtüşme bırakılarak oluşturulur. Chunking stratejisi, kullanılan embedding modelinin ve dil modelinin kapasitesine göre ayarlanmalıdır; küçük dil modelleri daha kısa ve daha az sayıda parçaya daha iyi sonuçlar verir."
+        },
+        {
+          "id": "Q17",
+          "category": "meta",
+          "passed": true,
+          "seconds": 17.15,
+          "expected_source": "belge_07_ann_search_en.md",
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Vector veritabanlarında sorguların her depolanan embedding ile tek tek karşılaştırılmasının büyük ölçeklerde çok yavaşlaşması nedeniyle, çoğu sistem doğrusal arama yerine yaklaşık en yakın komşu (ANN) arama kullanır. HNSW gibi teknikler, vektörleri katmanlı grafikler içine düzenler ve arama en üst katmanlardan başlar, daha sonra daha fazla ayrıntıya ulasarak en yakındaki vektörleri bulmaya çalışır. Bu projenin küçük ve tek makine tabanlı veri kütüphanesinde doğrusal arama hala hızda yeterli kalıyor, ancak veri kütüphanesi yüz bin den fazla vektöre çıkınca ANN'nin kullanılması gerekecektir."
+        },
+        {
+          "id": "Q18",
+          "category": "meta",
+          "passed": true,
+          "seconds": 0.0,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Hangi belgeyi özetlememi istersiniz? Yüklü belgeler: belge_05_prompt_engineering.md, belge_06_chunking_stratejisi.md, belge_07_ann_search_en.md, belge_02_embedding_ve_benzerlik.md, belge_03_foundry_local.md, belge_04_sqlite_veri_saklama.md, belge_01_rag_nedir.md"
+        },
+        {
+          "id": "Q19",
+          "category": "corpus",
+          "passed": true,
+          "seconds": 0.0,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": 1,
+          "keywords_total": 1,
+          "answer": "7 belge yüklü (7 sayfa, 20 bölüm):\n- belge_05_prompt_engineering.md — 1 sayfa, 3 bölüm\n- belge_06_chunking_stratejisi.md — 1 sayfa, 3 bölüm\n- belge_07_ann_search_en.md — 1 sayfa, 3 bölüm\n- belge_02_embedding_ve_benzerlik.md — 1 sayfa, 2 bölüm\n- belge_03_foundry_local.md — 1 sayfa, 3 bölüm\n- belge_04_sqlite_veri_saklama.md — 1 sayfa, 3 bölüm\n- belge_01_rag_nedir.md — 1 sayfa, 3 bölüm"
+        },
+        {
+          "id": "Q20",
+          "category": "corpus",
+          "passed": true,
+          "seconds": 0.0,
+          "expected_source": null,
+          "source_found": null,
+          "keywords_matched": 0,
+          "keywords_total": 0,
+          "answer": "7 belge yüklü (7 sayfa, 20 bölüm):\n- belge_05_prompt_engineering.md — 1 sayfa, 3 bölüm\n- belge_06_chunking_stratejisi.md — 1 sayfa, 3 bölüm\n- belge_07_ann_search_en.md — 1 sayfa, 3 bölüm\n- belge_02_embedding_ve_benzerlik.md — 1 sayfa, 2 bölüm\n- belge_03_foundry_local.md — 1 sayfa, 3 bölüm\n- belge_04_sqlite_veri_saklama.md — 1 sayfa, 3 bölüm\n- belge_01_rag_nedir.md — 1 sayfa, 3 bölüm"
+        },
+        {
+          "id": "Q21",
+          "category": "cross_lingual",
+          "passed": true,
+          "seconds": 6.2,
+          "expected_source": "belge_07_ann_search_en.md",
+          "source_found": true,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "HNSW, vektörleri层级导航小世界图组织成多层结构。搜索从顶层开始，逐层向下，快速缩小到最近的向量。"
+        },
+        {
+          "id": "Q22",
+          "category": "cross_lingual",
+          "passed": true,
+          "seconds": 21.77,
+          "expected_source": "belge_07_ann_search_en.md",
+          "source_found": true,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "ANN arama, doğruluğun bir miktarını ödelerken sorgulamanın hızını büyük ölçüde artırır. Bu tradeoff, veri kümesinin boyutu arttıkça daha明显地，这段话在讨论近似最近邻搜索（Approximate Nearest Neighbor Search，ANN）时提到，通过牺牲一定的准确性来换取速度的提升。具体来说，在小型单机数据集上，如本项目中的SQLite支持存储，使用暴力法计算余弦相似度仍然可以在毫秒内完成，因此不需要考虑准确性和速度之间的权衡。当数据集增长到大约十万个向量时，线性扫描会显著减慢查询速度，这时采用近似最近邻搜索变得值得。因此，ANN搜索在处理大规模数据集时提供了一个合理的默认选择。\n\n所以，ANN搜索在牺牲一些准确性的同时极大地提高了搜索速度，特别是在数据集非常大时。"
+        },
+        {
+          "id": "Q23",
+          "category": "cross_lingual",
+          "passed": true,
+          "seconds": 14.15,
+          "expected_source": "belge_07_ann_search_en.md",
+          "source_found": true,
+          "keywords_matched": null,
+          "keywords_total": null,
+          "answer": "Bu projenin SQLite tabanlı deposu için yaklaşık en yakın komşu araması gerekmemektedir. Brute-force cosines benzerliği birkaç bin parçaya uygulanırken hala milisaniye içinde tamamlanır. Bu sebeple, corpus'in bir yüz bin den fazlasına ulaştığına kadar ANN'nin performans avantajını elde etmek zor olmaktadır."
         }
       ]
     }
