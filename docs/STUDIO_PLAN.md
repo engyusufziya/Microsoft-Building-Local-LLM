@@ -326,9 +326,18 @@ işaretliyor · eval 23/23 ve backend 91/91 bozulmadı · offline kanıtı 0 sok
 
 ### Faz 2 — Report Generator
 
-**Başarı:** raporun her cümlesi bir chunk'a bağlı · sadakat skoru ≥0.90 ·
+**Başarı:** raporun her cümlesi bir chunk'a bağlı · sadakat skoru ≥0.90
+(oran: grounded/toplam — ortalama cosine değil, bkz. FEATURE_SPEC §9.11) ·
 bağlanamayan iddia rapordan çıkarılmış ve sayısı gösteriliyor · Markdown ve
 yazdırma çıktısı harici kaynak içermiyor.
+
+**Ek kapanma koşulu — entailment boşluğu.** Faz 1'in bıraktığı bilinen sınır:
+sadakat kapısı *grounding* ölçüyor, *entailment* değil; ürünle çelişen ama
+konuya yakın bir iddia 0.5487 ile `grounded` geçiyor
+(`eval/fidelity_trap.py`, PROJE_DURUMU.md "Bilinen sınır"). Faz 2, bu iddianın
+üretilen rapordan **düşürüldüğü** ve düşürülen iddia sayısının kullanıcıya
+gösterildiği ölçümle kanıtlanmadan kapanmaz. Telafi ikinci bir katmandır —
+`FIDELITY_MIN_SCORE` yükseltilerek değil (o alternatif reddedildi, §9.6).
 
 ### Faz 3 — Mind Map
 
