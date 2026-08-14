@@ -15,6 +15,9 @@ export const CATEGORY_ORDER = [
   "answerable",
   "unanswerable",
   "edge_case",
+  "meta",
+  "corpus",
+  "cross_lingual",
 ] as const satisfies readonly MetricsQuestionResult["category"][]
 
 export type Category = (typeof CATEGORY_ORDER)[number]
@@ -26,5 +29,8 @@ export function useCategoryLabels(): Record<Category, string> {
     answerable: t.categoryAnswerable,
     unanswerable: t.categoryUnanswerable,
     edge_case: t.categoryEdgeCase,
+    meta: t.categoryMeta,
+    corpus: t.categoryCorpus,
+    cross_lingual: t.categoryCrossLingual,
   }
 }

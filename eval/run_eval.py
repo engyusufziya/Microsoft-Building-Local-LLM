@@ -116,7 +116,11 @@ def keyword_hit(text: str, keywords: list[str]) -> tuple[int, list[str]]:
 
 
 def refused(text: str) -> bool:
-    return config.NO_ANSWER_TEXT.rstrip(".").lower() in text.lower()
+    # Tek kaynak: rag/answer.py::is_refusal. Reddetme tespiti (bulanık
+    # eşleşme, kırılganlık gerekçesi orada) burada TEKRAR EDİLMEZ -- eval
+    # harness'i production'ın kullandığı AYNI mantıkla ölçmeli, aksi halde
+    # burada geçen bir soru production'da sessizce reddedilmeyebilir.
+    return answer.is_refusal(text)
 
 
 def run(model: str | None, conn, min_score: float | None) -> tuple[int, dict]:
@@ -157,9 +161,36 @@ def run(model: str | None, conn, min_score: float | None) -> tuple[int, dict]:
         elif cat == "unanswerable":
             ok = refused(result.text)
             detail = "reddetti" if ok else "REDDETMEDİ"
-        else:  # edge_case
+        elif cat == "edge_case":
             ok = refused(result.text) or len(result.text.split()) < 60
             detail = f"{len(result.text.split())} kelime"
+        elif cat == "meta":
+            # rag/query_router.py özetleme yolu. Ölçülen üretim hatasının
+            # (bkz. eval_set.json Q16 notu) regresyon testi.
+            if q.get("expects_clarification"):
+                ok = (not result.answered) and "hangi belgeyi" in result.text.lower()
+                detail = "netleştirdi" if ok else "netleştirmedi"
+            else:
+                ok = result.answered and not refused(result.text)
+                detail = "özetlendi" if ok else "özetlenmedi/reddetti"
+        elif cat == "corpus":
+            # query_router 'corpus' yolu -- LLM çağrılmaz, cevap store'dan gelir.
+            ok = result.answered and not refused(result.text)
+            n_kw, missing = keyword_hit(result.text, q.get("expected_keywords", []))
+            kw_total = len(q.get("expected_keywords", []))
+            if kw_total:
+                ok = ok and n_kw == kw_total
+            detail = f"cevaplandı kelime={n_kw}/{kw_total}" if kw_total else \
+                     ("cevaplandı" if ok else "cevaplanmadı")
+        else:  # cross_lingual
+            # answerable ile aynı retrieval-isabet testi; ayrı sayaçlarda
+            # tutulur (retrieval_hits alanı yalnızca orijinal 10 answerable
+            # soruyu ölçer -- FEATURE_SPEC §6.2, dondurulmuş anlam).
+            hits = retrieve.get_top_chunks(q["question"], min_score=min_score, conn=conn)
+            sources = {h.source for h in hits}
+            found = q["expected_source"] in sources
+            ok = found and not refused(result.text)
+            detail = f"kaynak={'+' if found else '-'} (diller arası)"
 
         rows.append((q["id"], cat, ok, dt, detail))
         records.append({
@@ -219,18 +250,28 @@ def sweep_threshold(conn) -> tuple[int, dict]:
     Amaç, cevabı olan sorularla olmayanların skor aralıklarını görüp eşiği
     aradaki boşluğa koymak. (çıkış_kodu, sweep_dict) döndürür.
     """
-    questions = load_questions()
+    # 'meta' ve 'corpus' bu taramanın DIŞINDA tutulur: query_router.py onları
+    # benzerlik aramasına hiç göndermiyor artık, bu yüzden bir "skor"ları
+    # ölçmek yanıltıcı olur (meta sorguların skoru yapısal olarak düşüktür --
+    # bkz. rag/config.py -- ve 'other' grubunu anlamsızca kirletir).
+    #
+    # 'cross_lingual' 'answerable' kovasına eklenir: ikisi de gerçekten
+    # cevaplanabilir, retrieval'a giren sorulardır; ayrı tutulsaydı diller
+    # arası cezanın (ölçüldü: -0.077) eşik kalibrasyonunda hiç görünmemesi
+    # riski doğardı.
+    questions = [q for q in load_questions() if q["category"] not in ("meta", "corpus")]
     answerable, other = [], []
+    retrievable = {"answerable", "cross_lingual"}
 
     for q in questions:
         if not q["question"].strip():
             continue
         hits = retrieve.get_top_chunks(q["question"], min_score=None, conn=conn)
         top = hits[0].score if hits else 0.0
-        correct = (q["category"] == "answerable"
-                   and any(h.source == q["expected_source"] for h in hits))
-        (answerable if q["category"] == "answerable" else other).append((q["id"], top, correct))
-        mark = "+" if q["category"] == "answerable" else "-"
+        is_answerable = q["category"] in retrievable
+        correct = is_answerable and any(h.source == q["expected_source"] for h in hits)
+        (answerable if is_answerable else other).append((q["id"], top, correct))
+        mark = "+" if is_answerable else "-"
         print(f"  [{mark}] {q['id']}  en yüksek={top:.4f}  "
               f"{'kaynak bulundu' if correct else ''}")
 

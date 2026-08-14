@@ -102,6 +102,24 @@ export const chat = {
     tr: "İlgili bölümler bulundu ama cevabı içermiyorlardı.",
     en: "Relevant passages were found, but none of them contained the answer.",
   },
+  /**
+   * Kurtarma eylemi: yalnızca `below_threshold` dalında gösterilir (§5
+   * planında "eşik altı durumunu kurtarma yoluna çevir"). Buton, rag/
+   * query_router.py'nin ÖZETLEME yoluyla eşleşecek SABİT bir soru gönderir
+   * (chatActions.ask ile normal sohbet akışından) -- kullanıcının sorusu
+   * konu dışıydıysa bile belgenin kendisi hakkında bir şey öğrenebilsin.
+   * Buton metni ile gönderilen soru KASITLI OLARAK AYNI: ikisi ayrışırsa
+   * buton "özetle" yazıp farklı bir şey gönderebilir, sessizce yanıltıcı
+   * olur.
+   */
+  belowThresholdRecoveryHint: {
+    tr: "Bunun yerine belgenin ne hakkında olduğunu öğrenmek ister misiniz?",
+    en: "Would you like to know what the document is about instead?",
+  },
+  belowThresholdRecoveryAction: {
+    tr: "Yüklü belgeyi özetle",
+    en: "Summarize the uploaded document",
+  },
 
   sourcesLabel: { tr: "Kaynaklar", en: "Sources" },
   sourceChipHint: {

@@ -1,5 +1,5 @@
 {
-  "description": "Türkçe belge Q&A asistanı (Foundry Local + RAG) için değerlendirme seti. 15 soru: 10 answerable (data/ altındaki 6 belgeden türetilmiş, retrieval isabetini ölçer), 3 unanswerable (konu alanına yakın ama belgelerde cevabı olmayan — 'bilmiyorum' davranışını ölçer), 2 edge_case (boş sorgu ve aşırı genel sorgu). Tüm answerable sorular kaynak belgedeki ilgili cümleyle doğrulanmıştır.",
+  "description": "Türkçe belge Q&A asistanı (Foundry Local + RAG) için değerlendirme seti. 23 soru: 10 answerable (data/ altındaki belgelerden türetilmiş, retrieval isabetini ölçer), 3 unanswerable ('bilmiyorum' davranışını ölçer), 2 edge_case (boş/aşırı genel sorgu), 3 meta (rag/query_router.py özetleme yolu), 2 corpus (query_router korpus yolu, LLM'siz), 3 cross_lingual (TR soru -> belge_07 EN belge; üretimde ölçülen diller arası retrieval boşluğunu izler, bkz. rag/config.py). Tüm answerable/cross_lingual sorular kaynak belgedeki ilgili cümleyle doğrulanmıştır.",
   "questions": [
     {
       "id": "Q01",
@@ -120,6 +120,73 @@
       "expected_source": null,
       "expected_keywords": [],
       "notes": "Aşırı genel sorgu; belirli bir belgeye demirlenmiyor. Beklenen davranış: sorunun daraltılmasını istemek veya kapsanan konu başlıklarını kısaca belirtmek; belgelerin tamamını özetlemeye çalışıp bağlamı aşmamak."
+    },
+    {
+      "id": "Q16",
+      "question": "Chunking stratejisi belgesini özetler misin?",
+      "category": "meta",
+      "expected_source": "belge_06_chunking_stratejisi.md",
+      "expected_keywords": [],
+      "expects_clarification": false,
+      "notes": "ÜRETİMDE ÖLÇÜLEN HATANIN regresyon testi: bu tür sorgular eskiden benzerlik aramasına gidip eşiğin (0.45) çok altında skor alıyordu (ölçüldü: 0.322 TR pasajda, 0.273 EN pasajda) ve 'bilgi belgelerde yok' dönüyordu. rag/query_router.py bunu retrieval'a hiç göndermeden özetleme yoluna çeker; hedef dosya adı sorgudaki 'chunking'/'stratejisi' sözcüklerinden çözülür."
+    },
+    {
+      "id": "Q17",
+      "question": "ANN search belgesini özetle",
+      "category": "meta",
+      "expected_source": "belge_07_ann_search_en.md",
+      "expected_keywords": [],
+      "expects_clarification": false,
+      "notes": "Hedef belge İngilizce (belge_07); özetleme yolu chunk'ları benzerlikle değil doğrudan belge kimliğinden aldığı için hedef doğru çözülüyorsa diller arası ceza (ölçüldü: -0.077) burada devreye hiç girmiyor -- bu da meta/summarize ayrımının ikinci faydası."
+    },
+    {
+      "id": "Q18",
+      "question": "Yüklü belgelerin tamamını kısaca özetle",
+      "category": "meta",
+      "expected_source": null,
+      "expected_keywords": [],
+      "expects_clarification": true,
+      "notes": "Sorguda hiçbir belgeye özgü sözcük yok (7 belge yüklü) -> hedef çözülemez. Beklenen davranış TAHMİN ETMEK değil, hangi belgenin kastedildiğini sormaktır (rag/answer.py::_resolve_summary_target)."
+    },
+    {
+      "id": "Q19",
+      "question": "Kaç belge yüklü?",
+      "category": "corpus",
+      "expected_source": null,
+      "expected_keywords": ["belge"],
+      "notes": "query_router 'corpus' yoluna gider, LLM hiç çağrılmaz (rag/answer.py::_corpus_answer) -- kesin sayı store'dan gelir, uydurulamaz. Beklenen sayı data/*.md dosya sayısıyla eşleşmeli (bkz. run_eval.py: dinamik doğrulanır, sabit kodlanmaz)."
+    },
+    {
+      "id": "Q20",
+      "question": "Hangi belgeler yüklü?",
+      "category": "corpus",
+      "expected_source": null,
+      "expected_keywords": [],
+      "notes": "corpus yolu; cevapta yüklü belgelerin TAMAMININ adı geçmeli (run_eval.py bunu store.list_documents ile karşılaştırır)."
+    },
+    {
+      "id": "Q21",
+      "question": "HNSW nedir ve vektörleri nasıl organize eder?",
+      "category": "cross_lingual",
+      "expected_source": "belge_07_ann_search_en.md",
+      "expected_keywords": [],
+      "notes": "TR soru -> EN belge. 'HNSW' teknik terimi sorguda birebir geçiyor (dilden bağımsız token) -- diller arası retrieval'ın EN KOLAY vakası, çünkü embedding'in anlam çıkarmasına gerek kalmadan da örtüşme sağlar."
+    },
+    {
+      "id": "Q22",
+      "question": "Yaklaşık en yakın komşu aramasının doğruluk ile hız arasında nasıl bir değiş tokuşu vardır?",
+      "category": "cross_lingual",
+      "expected_source": "belge_07_ann_search_en.md",
+      "expected_keywords": [],
+      "notes": "TR soru -> EN belge, HİÇBİR İngilizce terim ödünç alınmadan tam Türkçe parafraz. Diller arası retrieval'ın ASIL stres testi: rag/config.py'de ölçülen -0.077 skorluk cezanın somut, saf hali. BM25 (Görev 3) eklenmeden önce bu soru düşebilir -- bu, hibrit retrieval'ın çözdüğü boşluğu ölçüm setine kaydeder."
+    },
+    {
+      "id": "Q23",
+      "question": "Bu projenin SQLite tabanlı deposu için yaklaşık en yakın komşu araması gerekli mi?",
+      "category": "cross_lingual",
+      "expected_source": "belge_07_ann_search_en.md",
+      "expected_keywords": [],
+      "notes": "TR soru -> EN belge, projeye özgü bir ayrıntı sorar (belge_07: '...this project's SQLite-backed store... not yet necessary'). ÖLÇÜLDÜ (Görev 3): dense-only'de (hybrid=False, varsayılan) GEÇER -- belge_07 k=4'e zar zor sığar (4. sıra, 0.551). HYBRID_RETRIEVAL_ENABLED=True ile DÜŞER: BM25 'SQLite'/'tabanlı'/'deposu' üzerinden belge_04'ü (aynı konuda, gerçekten güçlü bir eşleşme) daha da güçlendirip belge_07'nin kırılgan 4. sıradaki yerini alır. Bu bilinen, açıklanmış bir denge -- bkz. rag/config.py::HYBRID_RETRIEVAL_ENABLED. Hibrit özellik hâlâ doğru çalışıyor (bkz. backend/tests/test_hybrid_retrieval.py); bu soru iki gerçek konunun kesiştiği kasıtlı olarak belirsiz bir örnek."
     }
   ]
 }

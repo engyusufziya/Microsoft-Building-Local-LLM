@@ -102,7 +102,16 @@ export interface UploadCompleteEvent {
 
 export interface MetricsQuestionResult {
   id: string
-  category: "answerable" | "unanswerable" | "edge_case"
+  // "meta"/"corpus"/"cross_lingual": rag/query_router.py yönlendirmesini
+  // ölçen kategoriler (özetleme, korpus sorgusu, diller arası retrieval).
+  // Additive -- eski üç kategori davranışı değişmedi.
+  category:
+    | "answerable"
+    | "unanswerable"
+    | "edge_case"
+    | "meta"
+    | "corpus"
+    | "cross_lingual"
   passed: boolean
   seconds: number
   expected_source: string | null

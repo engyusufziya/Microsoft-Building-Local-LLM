@@ -102,9 +102,28 @@ function AssistantBody({
         </div>
       )
 
-    // Kısa devre: LLM hiç çağrılmadı, hiç token akmadı (~0.1 sn).
+    // Kısa devre: LLM hiç çağrılmadı, hiç token akmadı (~0.1 sn). Ölü bir
+    // duvar yerine kurtarma eylemi sunulur: rag/query_router.py'nin özetleme
+    // yoluna (Görev 1) giden sabit bir soru, aynı sohbet akışından gönderilir.
     case "below_threshold":
-      return <NoAnswerBody explanation={t.noAnswerBelowThreshold} />
+      return (
+        <div className="flex flex-col gap-3">
+          <NoAnswerBody explanation={t.noAnswerBelowThreshold} />
+          <div className="flex flex-col items-start gap-1.5">
+            <p className="text-body-sm text-text-secondary">
+              {t.belowThresholdRecoveryHint}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => chatActions.ask(t.belowThresholdRecoveryAction)}
+            >
+              {t.belowThresholdRecoveryAction}
+            </Button>
+          </div>
+        </div>
+      )
 
     // Token AKTI ama modelin ham Türkçe ret metni yerelleştirilmişle
     // DEĞİŞTİRİLİR (FEATURE_SPEC §3.2 [!warning]); kaynak gösterilmez.

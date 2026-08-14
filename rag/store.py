@@ -15,6 +15,7 @@ arasında bağımlılık oluşmaz.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from datetime import datetime
@@ -47,6 +48,40 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(document_id);
+
+-- Hibrit retrieval (rag/retrieve.py) için BM25 tam metin indeksi.
+--
+-- KASITLI OLARAK "external content" (content='chunks') DEĞİL, BAĞIMSIZ bir
+-- FTS5 tablosu: content bilgisi burada bir kez daha tutulur (bu projenin
+-- ölçeğinde -- birkaç MB metin -- önemsiz bir kopya maliyeti). ÖLÇÜLDÜ:
+-- external-content modunda `SELECT COUNT(*) FROM chunks_fts`, FTS indeksi
+-- HİÇ doldurulmamış olsa bile `chunks` tablosunun satır sayısını döner --
+-- çünkü sorgu doğrudan dış tabloya devrediliyor, indekse hiç bakmıyor. Bu
+-- da aşağıdaki _backfill_fts'in "boş mu?" kontrolünü SESSİZCE anlamsız
+-- kılıyordu: var olan bir veritabanında (bu şema değişikliğinden önce
+-- doldurulmuş) rowid eşleşse bile MATCH sonuç döndürmüyordu, hibrit
+-- retrieval fark edilmeden dense-only'ye düşüyordu. Bağımsız modda
+-- COUNT(*) gerçek indekslenmiş satır sayısını verir; kontrol güvenilir.
+--
+-- Senkronu yine TRIGGER'lar sağlar; upsert_document/delete_document bu
+-- tabloya hiç dokunmaz, düz INSERT/DELETE'ler tetikleyicileri otomatik
+-- çalıştırır.
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+    content, tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+    INSERT INTO chunks_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+    DELETE FROM chunks_fts WHERE rowid = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+    DELETE FROM chunks_fts WHERE rowid = old.id;
+    INSERT INTO chunks_fts(rowid, content) VALUES (new.id, new.content);
+END;
 """
 
 # --------------------------------------------------------------------------- önbellek
@@ -128,7 +163,31 @@ def connect(db_path: Optional[str | Path] = None) -> sqlite3.Connection:
 
     conn.executescript(_SCHEMA)
     conn.commit()
+    _backfill_fts(conn)
     return conn
+
+
+def _backfill_fts(conn: sqlite3.Connection) -> None:
+    """chunks_fts'i chunks'la senkronlar -- yalnızca GERİYE DÖNÜK boşluk varsa.
+
+    chunks_ai/au/ad trigger'ları yalnızca BUNDAN SONRAKİ yazmaları senkronlar.
+    Bu şema değişikliğinden ÖNCE doldurulmuş bir veritabanı (kullanıcının
+    mevcut rag.db'si dahil) chunks_fts'te hiç satır bulundurmaz; bu fonksiyon
+    olmadan hibrit retrieval o veritabanında sessizce dense-only'ye düşerdi.
+
+    Her connect()'te iki ucuz COUNT(*) çalıştırır; yalnızca chunks doluyken
+    chunks_fts boşsa (gerçek bir geriye dönük boşluk -- bkz. _SCHEMA'daki
+    external-content notu, bu kontrolün NEDEN bağımsız bir FTS5 tablosu
+    gerektirdiğini açıklıyor) toplu INSERT ile doldurur.
+    """
+    chunks_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    if chunks_count == 0:
+        return
+    fts_count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
+    if fts_count > 0:
+        return
+    conn.execute("INSERT INTO chunks_fts(rowid, content) SELECT id, content FROM chunks")
+    conn.commit()
 
 
 # --------------------------------------------------------------------------- yazma
@@ -258,6 +317,165 @@ def list_documents(conn: sqlite3.Connection) -> list[dict]:
         }
         for r in cur.fetchall()
     ]
+
+
+_FTS_TOKEN = re.compile(r"\w+", re.UNICODE)
+
+# ÖLÇÜLDÜ (eval/eval_set.json Q22 regresyonu): filtresiz OR-of-all-terms bir
+# doğal dil sorgusunda ("Yaklaşık en yakın komşu aramasının doğruluk ile hız
+# arasında nasıl bir değiş tokuşu vardır?") bağlaç/işlev sözcükleri ("ile",
+# "nasıl", "bir", "vardır", "arasında"...) neredeyse HER chunk'la eşleşiyor
+# -- bm25() bunları zayıf ama sıfır olmayan skorlarla sıralıyor, RRF'ye
+# gürültü olarak karışıyor ve doğru (ama saf semantik) sonucu top-k'den
+# İTİYOR. Bu, dense-only'de 3/3 geçen diller arası testi 1/3'e düşürdü.
+#
+# Bu liste kapsamlı bir NLP stopword listesi DEĞİLDİR; yalnızca en sık geçen,
+# en az ayırt edici bağlaç ve işlev sözcüklerini kapsar. Amaç mükemmel
+# temizlik değil, RRF'yi kirleten en kaba gürültüyü kesmek -- BM25 hâlâ yalnızca
+# ADAY havuzunu genişletiyor (rag/config.py), bu yüzden aşırı temizlik riski
+# önemsiz: gerçek bir lexical eşleşme kaybolursa dense zaten aynı chunk'ı
+# kendi yolundan bulur.
+_FTS_STOPWORDS = frozenset(
+    """
+    ve veya ile bir bu şu o da de ki mi mı mu mü ne nedir neydi nasıl neden
+    niçin niye gibi kadar göre için çok az en daha ama fakat ancak çünkü
+    eğer ise olan olarak var yok vardır yoktur değil hem ya yani tüm bütün
+    her hiç bazı diğer kendi sonra önce arasında altında üstünde içinde
+    dışında olur oldu olacak eder edilir yapar yapılır hangi kaç nerede kim
+    benim senin onun bizim sizin onların bunun şunun ona buna şuna
+    a an the is are was were be been of to in on at for with and or but
+    not this that these those it its as by from what which who how why
+    when where do does did will would can could should
+    """.split()
+)
+
+
+def bm25_candidates(conn: sqlite3.Connection, query: str, limit: int) -> list[int]:
+    """Sorguyla sözcüksel olarak en alakalı chunk id'lerini alaka sırasıyla döndürür.
+
+    rag/retrieve.py'deki hibrit retrieval için: dense (cosine) aramanın
+    kaçırdığı BİREBİR terim eşleşmelerini (özel adlar, model kimlikleri,
+    sayılar, diller arası teknik terimler) yakalar. Skoru DÖNDÜRMEZ, yalnızca
+    sırayı -- final Hit.score her zaman cosine kalır (MIN_SCORE eşiği,
+    Inspector renk bantları ve DESIGN_SYSTEM §1.2 semantiği bu alana bağlı;
+    bir BM25/RRF skoru buraya karışırsa hepsi sessizce anlamını yitirir).
+
+    Sorgu FTS5'in ÖZEL SÖZDİZİMİNE (", *, ^, AND/OR/NOT) ham haliyle
+    geçirilmez -- kullanıcı girdisi güvenilmez. Yalnızca \\w+ ile ayrıştırılan
+    sözcükler (bağlaç/işlev sözcükleri elenmiş -- yukarı bkz.), her biri ayrı
+    tırnaklanıp OR ile birleştirilerek aranır.
+
+    _FTS_STOPWORDS sabit bir liste ve TAMAMLANAMAZ -- Türkçe eklemeli bir dil,
+    "nedir" gibi listeye alınmamış bir sözcük bu KORPUSA özgü gürültü
+    üretebilir (ÖLÇÜLDÜ: bu projenin data/ fixture'larının hepsi "... Nedir"
+    başlığıyla başlıyor, "nedir" sözcüğü neredeyse HER chunk'la eşleşiyordu).
+    Bu yüzden ikinci, KORPUSA UYARLANAN bir süzgeç var: bir terim chunk'ların
+    %40'ından FAZLASINDA geçiyorsa (df -- document frequency), ayırt edici
+    değildir ve elenir. Sabit listeyi büyütmeye çalışmak yerine bu, hangi
+    korpus yüklenirse yüklensin kendiliğinden doğru sözcükleri eler.
+    """
+    terms = [
+        t for t in _FTS_TOKEN.findall(query or "")
+        if len(t) >= 2 and t.lower() not in _FTS_STOPWORDS
+    ]
+    if not terms:
+        return []
+
+    total = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
+    if total == 0:
+        return []
+    max_df = max(1, int(total * 0.4))
+    discriminating = []
+    for t in terms:
+        try:
+            df = conn.execute(
+                'SELECT COUNT(*) FROM chunks_fts WHERE chunks_fts MATCH ?', (f'"{t}"',)
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            return []
+        if 0 < df <= max_df:
+            discriminating.append(t)
+    if not discriminating:
+        return []
+
+    match_expr = " OR ".join(f'"{t}"' for t in discriminating)
+    try:
+        cur = conn.execute(
+            """
+            SELECT rowid FROM chunks_fts
+            WHERE chunks_fts MATCH ?
+            ORDER BY bm25(chunks_fts)
+            LIMIT ?
+            """,
+            (match_expr, limit),
+        )
+        return [int(r[0]) for r in cur.fetchall()]
+    except sqlite3.OperationalError:
+        # FTS5 derlenmemiş bir SQLite ile karşılaşılırsa (nadiren): hibrit
+        # retrieval sessizce dense-only'ye düşer, hata fırlatıp kullanıcıyı
+        # engellemez. rag/retrieve.py bu boş listeyi normal karşılar.
+        return []
+
+
+def get_document_chunks(
+    conn: sqlite3.Connection,
+    filename: str,
+    limit: Optional[int] = None,
+) -> list[dict]:
+    """Bir belgenin chunk'larını belge sırasıyla döndürür (benzerlik YOK).
+
+    Özetleme yolu için (rag/query_router.py): "belgeyi özetle" sorgusunun
+    eşleşecek bir konusu olmadığı için chunk'lar benzerlikle değil, doğrudan
+    belge kimliğinden çekilir.
+
+    limit verilirse chunk'lar belge boyunca EŞİT ARALIKLI örneklenir. İlk N
+    tanesi alınsaydı özet yalnızca belgenin başını görür, sonuç sistematik
+    olarak eksik olurdu. İlk ve son chunk her zaman korunur.
+    """
+    cur = conn.execute(
+        """
+        SELECT c.source, c.page, c.content, c.via_ocr
+        FROM chunks c
+        JOIN documents d ON d.id = c.document_id
+        WHERE d.filename = ?
+        ORDER BY c.id
+        """,
+        (filename,),
+    )
+    rows = [
+        {
+            "source": r["source"],
+            "page": r["page"],
+            "content": r["content"],
+            "via_ocr": bool(r["via_ocr"]),
+        }
+        for r in cur.fetchall()
+    ]
+
+    if limit is None or len(rows) <= limit or limit <= 0:
+        return rows
+
+    # Eşit aralıklı örnekleme: son indeks limit-1'e bölünerek uçlar korunur.
+    step = (len(rows) - 1) / (limit - 1) if limit > 1 else 0
+    picked = sorted({int(round(i * step)) for i in range(limit)})
+    return [rows[i] for i in picked]
+
+
+def corpus_stats(conn: sqlite3.Connection) -> dict:
+    """Korpusun toplam sayıları. Korpus sorularında LLM'e hiç gidilmez."""
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS documents,
+               COALESCE(SUM(page_count), 0) AS pages,
+               COALESCE(SUM(chunk_count), 0) AS chunks
+        FROM documents
+        """
+    ).fetchone()
+    return {
+        "documents": int(row["documents"]),
+        "pages": int(row["pages"]),
+        "chunks": int(row["chunks"]),
+    }
 
 
 def load_matrix(conn: sqlite3.Connection) -> tuple[np.ndarray, list[dict]]:

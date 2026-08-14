@@ -82,6 +82,51 @@ TOP_K = 4
 # (İstanbul nüfusu: 0.274) ve gecikmeden tasarruf etmek.
 MIN_SCORE = 0.45
 
+# --- Hibrit retrieval (BM25 + dense) ----------------------------------------
+#
+# Yalnızca ADAY HAVUZUNU genişletir: dense (cosine) top-k'nin dışında kalan
+# ama BM25'e göre güçlü sözcüksel eşleşmesi olan chunk'lar havuza eklenir.
+# Hit.score HER ZAMAN ham cosine'dır -- MIN_SCORE, Inspector renk bantları ve
+# DESIGN_SYSTEM §1.2 semantiği bu alana bağlı; RRF/BM25 skoru asla Hit.score
+# alanına yazılmaz (bkz. rag/retrieve.py). Yani bu, eşiği DEĞİL, k=4 sınırının
+# dışarıda bıraktığı sözcüksel isabetleri (özel adlar, model kimlikleri,
+# diller arası teknik terimler) kurtarır.
+#
+# 23 soruluk değerlendirme setiyle ÖLÇÜLDÜ (python eval/run_eval.py --json):
+#   hibrit KAPALI : 23/23
+#   hibrit AÇIK   : 22/23  (Q23 düşüyor)
+#
+# Q23 ("Bu projenin SQLite tabanlı deposu için ANN gerekli mi?") hem konu
+# hem lexical olarak belge_04'e (SQLite) ve belge_07'ye (ANN) birden
+# yakın. Dense-only'de belge_07 k=4'e ZAR ZOR sığıyordu (4. sırada, 0.551).
+# Hibritte BM25 "SQLite"/"tabanlı"/"deposu" üzerinden belge_04'ü DAHA DA
+# güçlendiriyor (hem dense hem BM25 aynı yönde -- bu YANLIŞ bir sinyal
+# değil, gerçek bir çok-konulu belirsizlik) ve belge_07'nin zaten kırılgan
+# olan 4. sıradaki yerini alıyor.
+#
+# Bu, hibritin YANLIŞ olduğu anlamına gelmez -- store.bm25_candidates'in
+# birim testleri (backend/tests/test_hybrid_retrieval.py) k sınırının
+# dışında kalan BİREBİR terim eşleşmelerini gerçekten kurtardığını
+# gösteriyor. Ama BU KORPUSTA (20-40 chunk) rekabet o kadar düşük ki dense
+# zaten neredeyse her şeyi buluyor; hibritin getirisi bu ölçekte henüz
+# maliyetini karşılamıyor. Korpus büyüdükçe (k=4 için rekabet arttıkça)
+# faydasının artması beklenir -- ama bu bir TAHMİN, "23 soruyla 22/23"
+# ölçümünün üzerine iddia eklemek bu projenin MIN_SCORE'da kaçındığı hatanın
+# aynısı olurdu (küçük örnek setine aşırı güvenmek). Bu yüzden varsayılan
+# KAPALI; özellik tam çalışır ve test edilmiş durumda, bir bayrakla açılır.
+HYBRID_RETRIEVAL_ENABLED = False
+
+# BM25 aday havuzu bu kadar sonuç getirir (dense'in üstüne EKLENİR, yerini
+# almaz). Yüksek tutmanın maliyeti yok -- FTS5 sorgusu SQLite içi, milisaniye
+# altı; k=4'e indirgeme yine RRF ile yapılır.
+BM25_CANDIDATE_LIMIT = 20
+
+# Reciprocal Rank Fusion sabiti. Cormack ve ark. (2009) tarafından önerilen
+# standart değer; sıralamaları KONUMLARINA göre birleştirir (ham skora göre
+# değil), böylece cosine [0,1] ile BM25 [0,∞) ölçek uyuşmazlığı hiç sorun
+# olmaz. Değiştirilmesi gereken bir kalibrasyon parametresi değildir.
+RRF_K = 60
+
 # Qwen3 embedding modelleri retrieval'da asimetrik çalışır: sorguya talimat
 # öneki eklenir, pasajlara eklenmez. Faz 5'te eval setiyle A/B test edilecek.
 USE_QUERY_INSTRUCTION = True
@@ -95,7 +140,18 @@ EMBED_BATCH_SIZE = 32
 
 # --- Cevap üretimi ---------------------------------------------------------
 
-MAX_ANSWER_TOKENS = 300
+# ÖLÇÜLDÜ (gecikme incelemesi): asıl gecikme kaynağı PREFILL (bağlam işleme,
+# ~5-9 sn, TOP_K=4 chunk için), decode DEĞİL -- 8-79 kelimelik gerçek eval
+# cevapları arasında süre ile kelime sayısı arasında korelasyon yok (örn. 5
+# kelimelik bir ret 16 sn sürerken 79 kelimelik bir özet 27 sn sürebiliyor).
+# Yani bu değeri düşürmek TİPİK cevapları hızlandırmaz -- asıl gecikme
+# çözümü warmup'ın gerçek bir çıkarım çağrısı içermesidir (bkz.
+# backend/main.py::_warm_inference_paths). Yine de 300, "en fazla 3 cümle"
+# talimatını modelin bazen görmezden gelmesi ihtimaline karşı bir ÜST SINIR
+# olarak gereğinden geniş; 220'ye indirildi -- tipik cevaplar için hâlâ bol
+# pay bırakıyor (ölçülen tipik cevaplar 10-80 kelime ~15-110 token), yalnızca
+# UÇ (runaway/tekrar döngüsü) durumda tavanı erken keser.
+MAX_ANSWER_TOKENS = 220
 
 # DİKKAT: Bu iki değeri ayarlayarak çıktıyı değiştirmeye çalışmayın.
 # Ölçtük: SDK bunları istek gövdesine koyuyor (ChatClientSettings._serialize()
@@ -107,16 +163,43 @@ MAX_ANSWER_TOKENS = 300
 TEMPERATURE = 0.2
 TOP_P = 0.9
 
+# --- Sorgu yönlendirme (query routing) -------------------------------------
+
+# ÖLÇÜLDÜ: dense retrieval "İlgili dökümanı bana özetle" gibi META sorguları
+# yapısal olarak karşılayamaz. Aynı Türkçe pasaja karşı:
+#   "RAG kaç adımdan oluşur?"      -> 0.766   (içerik sorusu)
+#   "İlgili dökümanı bana özetle"  -> 0.322   (meta sorgu, -0.445)
+# Meta sorgu hiçbir İÇERİK terimi taşımaz; benzerlik araması eşleşecek bir şey
+# bulamaz. Belge İngilizce olduğunda üstüne diller arası ceza da binip 0.273'e
+# iner (aşağıya bkz.) ve eşiğin çok altında kalır.
+#
+# Çözüm eşiği düşürmek DEĞİLDİR -- eşik tam da tasarlandığı gibi çalışıyor ve
+# "bilmiyorum" garantisi ona dayanıyor (bkz. MIN_SCORE yorumu; phi-4-mini
+# cevaplanamaz soruların 3'ünü de bu yüzden kaybetti). Çözüm, bu sorgu sınıfını
+# retrieval'a hiç göndermeden AYRI BİR YOLA yönlendirmektir (rag/query_router.py).
+
+# Özetleme yolunda modele gönderilecek en fazla chunk sayısı. Belge boyunca
+# EŞİT ARALIKLI örneklenir; ilk N chunk alınsa özet yalnızca belgenin başını
+# görürdü. Üst sınır gerekli: 41 chunk'lık bir belgenin tamamı ~5300 kelime
+# eder ve prefill zaten baskın olan gecikmeyi (bkz. PROJE_DURUMU) katlar.
+SUMMARY_MAX_CHUNKS = 12
+
+# ÖLÇÜLDÜ: diller arası ceza. Aynı içeriğin TR ve EN hali, TR içerik sorusuyla:
+#   TR pasaj -> 0.766 | EN pasaj -> 0.690   (fark -0.077)
+# MIN_SCORE yalnızca TR soru -> TR belge ile kalibre edildi (15 eval sorusunun
+# tamamı öyle). Gerçek kullanımda teknik PDF'ler çoğunlukla İngilizce. Bu fark
+# eşiği düşürerek değil, hibrit retrieval (BM25 + dense) ile telafi edilir --
+# özel adlar ve teknik terimler dilden bağımsız olarak birebir eşleşir.
+
 # DİKKAT: Bu metin hem system prompt'a gömülüdür hem de modelin reddettiğini
-# ANLAMAK için kullanılır (answer.py: NO_ANSWER_TEXT alt dizesi cevapta var mı).
-# Bu tespit birebir alt dize eşleşmesine dayanır ve KIRILGANDIR: model metni
-# birebir üretmezse reddetme yakalanmaz.
+# ANLAMAK için kullanılır (rag/answer.py::is_refusal).
 #
-# Ölçümle görüldü (eval/results.json, phi-4-mini Q13): model "Bu bilgi
-# YÜKLENDİĞİNİZ belgelerde yok" yazdı (doğrusu "yüklediğiniz"), tek harflik
-# fark tespiti kaçırdı ve arkasına uydurma içerik ekledi. qwen2.5-7b metni
-# birebir ürettiği için bu sorun aktif modelde görülmüyor.
-#
-# Model değiştirilirse bu kırılganlık yeniden değerlendirilmeli; daha sağlam
-# bir yol yapılandırılmış çıktı (response_format) olurdu.
+# ESKİDEN birebir alt dize eşleşmesiydi ve KIRILGANDI: ÖLÇÜLDÜ (eval/results.json,
+# phi-4-mini Q13) -- model "Bu bilgi YÜKLENDİĞİNİZ belgelerde yok" yazdı
+# (doğrusu "yüklediğiniz"), tek harflik çekim farkı tespiti kaçırdı ve
+# arkasına uydurma içerik ekledi. Görev 4'te düzeltildi: is_refusal artık
+# difflib.SequenceMatcher ile bulanık (fuzzy) eşleşme kullanıyor -- kalibrasyon
+# ve eşik gerekçesi orada. qwen2.5-7b metni birebir ürettiği için bu sorun
+# aktif modelde hiç görülmedi, ama başka bir modele geçilirse artık
+# yeniden değerlendirmeye gerek yok; savunma zaten dayanıklı.
 NO_ANSWER_TEXT = "Bu bilgi yüklediğiniz belgelerde yok."
