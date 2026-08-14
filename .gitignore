@@ -28,3 +28,14 @@ dist/
 # Microsoft program planı — üçüncü taraf doküman, depoda dağıtılmıyor.
 # PDF ingest testleri için herhangi bir metin tabanlı PDF kullanılabilir.
 Foundry_Local_Plan.pdf
+
+# Üretilen bilgi grafiği çıktısı — korpustan yeniden üretilebilir.
+graphify-out/
+
+# Yerel ajan ayarları ve çalışma anı kilidi (makineye özgü yollar, PID).
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Diğer yerel ajan araçlarının çalışma durumu (mutlak makine yolları içerir).
+.codex/
+.loopx/
