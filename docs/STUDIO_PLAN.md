@@ -322,7 +322,8 @@ iskelet · config sabitleri · 4 hata kodu · `studio-panel` boş durumu.
 
 **Başarı:** kümeleme 7 belgelik korpusta anlamlı konu veriyor (elle
 doğrulanır) · sadakat kapısı bilinçli bozuk bir iddiayı `unsupported`
-işaretliyor · eval 23/23 ve backend 91/91 bozulmadı · offline kanıtı 0 soket.
+işaretliyor · eval 23/23 ve backend testleri sıfır başarısızlıkla geçiyor ·
+offline kanıtı 0 soket.
 
 ### Faz 2 — Report Generator
 
@@ -357,6 +358,6 @@ Hiçbir faz şunlar korunmadan kapanmaz:
 
 ```bash
 .venv/bin/python eval/run_eval.py                 # 23/23
-.venv/bin/python -m pytest backend/tests -q       # 124/124 (Faz 1 sonrası)
+.venv/bin/python -m pytest backend/tests -q       # sıfır başarısızlık
 .venv/bin/python eval/offline_proof.py            # 0 soket
 ```
