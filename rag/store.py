@@ -145,6 +145,25 @@ class _Connection(sqlite3.Connection):
 
     cache_key: str = ""
 
+    def close(self) -> None:
+        """Kapanmadan önce, varsa, bellek-içi önbellek girdisini düşürür.
+
+        Yalnızca `:memory:` anahtarları (`memory:{id(conn)}`) için gerekli:
+        CPython serbest kalan bir nesnenin bellek adresini hemen yeniden
+        kullanabilir, kapanışta düşürülmezse kapanmış bir bağlantının bayat
+        matrisi yeni açılan bir bağlantıya çarpar (bkz.
+        backend/tests/test_store_cache.py -- id() çakışması orada
+        deterministik olarak kurulup kanıtlanıyor).
+        Dosya tabanlı anahtar (yol) KASITLI OLARAK dokunulmaz: aynı yola
+        tekrar connect() edildiğinde önbellek üretim yolunda hâlâ geçerlidir
+        (kapanmış bir bağlantı dosyanın içeriğini değiştirmemiştir) -- bu
+        davranış ve load_matrix'in önbellekleme kazancı korunuyor.
+        """
+        if self.cache_key.startswith("memory:"):
+            with _cache_lock:
+                _matrix_cache.pop(self.cache_key, None)
+        super().close()
+
 
 def _cache_key(conn: sqlite3.Connection) -> str:
     """Bağlantıya karşılık gelen önbellek anahtarını üretir."""
