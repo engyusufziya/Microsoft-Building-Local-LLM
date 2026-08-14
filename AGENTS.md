@@ -170,3 +170,10 @@ Eight agents are defined under `.claude/agents/`. The front door is
 approve their own work — the verifiers (`prompt-eval-muhendisi`,
 `kalite-muhafizi`) report directly to the architect. Each agent's tool
 permissions and escalation boundaries are written in its own file.
+
+**Model split:** `urun-mimari` runs on `opus` — it writes specs, arbitrates
+conflicts, and decides what gets built, which is the judgment-heavy work. The
+other seven run on `sonnet`, where the task is bounded by a spec and a
+contract. Set per agent via the `model` frontmatter field. Note that the
+`AGENT_SUBAGENT_MODEL` environment variable, if set, overrides every
+one of these.
