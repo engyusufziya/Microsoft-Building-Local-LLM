@@ -55,6 +55,11 @@ export interface ApiErrorBody {
     | "MODEL_WARMING"
     | "METRICS_NOT_GENERATED"
     | "INTERNAL"
+    // Studio katmanı (§2.2) -- additive, yukarıdaki dokuzu değiştirmez.
+    | "ARTIFACT_NOT_FOUND"
+    | "ARTIFACT_STALE"
+    | "INSUFFICIENT_CORPUS"
+    | "GENERATION_FAILED"
   message: string
 }
 
@@ -92,6 +97,85 @@ export interface UploadCompleteEvent {
   page_count: number
   chunk_count: number
   skipped_pages: number[]
+}
+
+// --------------------------------------------------------------------------- Studio (Faz 1)
+//
+// backend/schemas.py ile birebir eşleşir (docs/FEATURE_SPEC.md §9.8). Faz
+// 1'de yalnızca iskelet: `studio-panel` bu tiplere karşı istek atmıyor
+// (§9.9.4), ama backend'i geliştiren agentla sözleşme burada kilitleniyor.
+
+export interface ArtifactClaim {
+  node_path: string
+  claim_text: string
+  chunk_id: number | null
+  /** HAM COSINE -- Hit.score ile aynı ölçek, dokunulmaz (CLAUDE.md §1.1). */
+  score: number | null
+  verdict: "grounded" | "weak" | "unsupported"
+  /** chunk'ın belgesi. */
+  source: string | null
+  /** 0 = markdown fixture (sayfa yok). */
+  page: number | null
+  citation: string | null
+}
+
+export interface ArtifactSummary {
+  id: number
+  kind: "mindmap" | "report" | "quiz"
+  scope: "corpus" | "document"
+  document_id: number | null
+  title: string
+  /** ORAN (grounded / toplam iddia), benzerlik skoru DEĞİL (§9.1). */
+  fidelity_score: number | null
+  generation_ms: number | null
+  /** ISO 8601. */
+  created_at: string
+  /** TÜRETİLİR: backend `corpus_fingerprint`'i karşılaştırıp üretir. */
+  is_stale: boolean
+}
+
+export interface ArtifactDetail extends ArtifactSummary {
+  params: Record<string, unknown>
+  payload: Record<string, unknown>
+  claims: ArtifactClaim[]
+  /** TÜRETİLİR: verdict === 'unsupported' sayısı. */
+  unsupported_count: number
+}
+
+export interface ArtifactCreateRequest {
+  kind: "mindmap" | "report" | "quiz"
+  /** Backend varsayılanı "corpus". */
+  scope?: "corpus" | "document"
+  document_id?: number | null
+  params?: Record<string, unknown>
+}
+
+// --------------------------------------------------------------------------- Studio SSE olayları
+//
+// POST /api/artifacts akışı (§9.8). Sıralama garantisi: `stage` her zaman
+// ilk olay; `progress` yalnızca iki `stage` arasında gelir; `complete`
+// veya `error` (ApiErrorBody) her zaman son olaydır.
+
+export interface ArtifactStageEvent {
+  stage: "selection" | "clustering" | "generation" | "fidelity"
+  label: string
+}
+
+/**
+ * DİKKAT: bu `pct` /api/documents'ınkiyle AYNI ÖLÇEKTE DEĞİL -- burada
+ * 0-100 tam sayı, yükleme akışında 0.0-1.0 kesirli (§9.5 [!warning]).
+ * Bu yüzden iki akış arasında paylaşılan bir ilerleme yardımcısı yazılmaz.
+ */
+export interface ArtifactProgressEvent {
+  pct: number
+  detail: string
+}
+
+export interface ArtifactCompleteEvent {
+  artifact_id: number
+  fidelity_score: number
+  generation_ms: number
+  unsupported_count: number
 }
 
 // --------------------------------------------------------------------------- Metrics

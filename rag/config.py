@@ -203,3 +203,40 @@ SUMMARY_MAX_CHUNKS = 12
 # aktif modelde hiç görülmedi, ama başka bir modele geçilirse artık
 # yeniden değerlendirmeye gerek yok; savunma zaten dayanıklı.
 NO_ANSWER_TEXT = "Bu bilgi yüklediğiniz belgelerde yok."
+
+# --- Studio artefaktları -----------------------------------------------------
+#
+# rag/artifacts/ (mind map, rapor, quiz) ve rag/topics.py (kümeleme) için.
+# Faz 1'de yalnızca TOPIC_* ve FIDELITY_MIN_SCORE okunur; üç token bütçesi
+# Faz 2-4'te tüketilir. Şimdiden yazılmalarının tek sebebi config'in tek
+# seferde ve tek yerde büyümesi (CLAUDE.md §1.3).
+
+# MAX_ANSWER_TOKENS = 220 sohbet cevabı için KASITLI ve doğru (bkz. o sabitin
+# yorumu) -- rapor bölümü için yetersiz, düğüm etiketi için fazlasıyla geniş.
+# Tek sabiti büyütmek sohbetin runaway kesicisini kaybettirirdi, bu yüzden üç
+# ayrı bütçe var; her biri kendi artefaktının gerçek boyutuna göre seçildi:
+ARTIFACT_SECTION_MAX_TOKENS = 700    # rapor bölümü: birkaç paragraf
+ARTIFACT_LABEL_MAX_TOKENS = 40       # mind map düğüm etiketi: birkaç kelime
+ARTIFACT_QUESTION_MAX_TOKENS = 200   # quiz sorusu + çeldiriciler
+
+# rag/topics.py::cluster_corpus. 20-40 chunk'lık korpus ölçeğinde 2 doğru
+# taban: tek chunk'lık bir "küme" bir konu değil, gürültüdür.
+TOPIC_MIN_CLUSTER_SIZE = 2
+
+# Üstü okunamaz bir harita üretir (mind map/quiz kapsamı için anlamsız kadar
+# çok küme).
+#
+# UYARI: Bu korpusta (~17-20 chunk) TOPIC_MAX_CLUSTERS ile
+# TOPIC_MIN_CLUSTER_SIZE AYNI ANDA sağlanamaz -- 12 küme x en az 2 chunk = en
+# az 24 chunk gerekir. Çözüm bir eşiği değiştirmek değil, ÖNCELİK tanımlamak:
+# TOPIC_MIN_CLUSTER_SIZE sert kısıt, TOPIC_MAX_CLUSTERS tavandır. Etkin küme
+# sayısı rag/topics.py'de min(TOPIC_MAX_CLUSTERS, N // TOPIC_MIN_CLUSTER_SIZE)
+# olarak hesaplanır.
+TOPIC_MAX_CLUSTERS = 12
+
+# rag/artifacts/fidelity.py::verdict_for. MIN_SCORE ile AYNI DEĞER, bilinçli:
+# iki ayrı eşik iki ayrı kalibrasyon hikayesi demek olurdu -- bu projede
+# eşiklerin hikayesi (MIN_SCORE'un 0.55'ten 0.45'e inişi, yukarı bkz.) değerin
+# kendisi kadar önemli. Ayrılmaları ancak bir ÖLÇÜMLE gerekçelendirilebilir
+# (CLAUDE.md §1.4); Faz 1'de böyle bir ölçüm yok.
+FIDELITY_MIN_SCORE = 0.45

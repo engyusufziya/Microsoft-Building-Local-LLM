@@ -244,9 +244,97 @@ hiç girmiyor. Kayıt: `eval/OFFLINE_PROOF.md` (23/23, otomatik üretilir).
 
 Regresyon: backend 91/91 test, frontend build/lint temiz, eval 23/23.
 
+## Studio Katmanı — Faz 1
+
+`docs/STUDIO_PLAN.md`'de tasarlanan üç modüllü artefakt hattının (Mind Map /
+Rapor / Quiz) ortak temeli kuruldu — spec `docs/FEATURE_SPEC.md` §9. Üç
+implementer paralel çalıştı: `rag/`'a `topics.py` (saf numpy agglomerative
+kümeleme) ve `artifacts/{__init__,base,fidelity,store}.py`, `store.py`'ye 3
+tablo (`artifacts`, `artifact_claims`, `quiz_attempts`) + `corpus_fingerprint()`,
+`config.py`'ye 6 sabit; `backend/`'e `routes/artifacts.py` (4 endpoint) ve
+`schemas.py`'ye 4 şema; `web/`'e `components/studio/{studio-panel,
+right-panel-tabs}.tsx`, `lib/i18n/studio.ts`, 4 yeni hata kodu ve artefakt
+tipleri. Yeni kod ~1730 satır. Motor yolu — `answer.py`, `retrieve.py`,
+`models.py`, `query_router.py`, `chunking.py`, `ingest.py` — **byte-identical
+değişmedi**, doğrulandı.
+
+**Kapı sayıları (Faz 1 sonrası):** eval **23/23** (212 sn, ortalama 9.2
+sn/soru) · backend **123 passed** (93 taban + Faz 1'in 30 yeni testi) ·
+offline kanıtı **23/23, 0 soket** · `web` build + lint temiz (5/5 statik
+sayfa).
+
+**Başarı kriteri 1 — kümeleme.** 7 belgelik / 20 chunk'lık korpusta
+(`data/*.md`, atılık bir kopya üzerinde ölçüldü — üretim `rag.db`'sine
+dokunulmadı) `cluster_corpus()` **7 küme** üretti ve her küme **tam olarak
+bir kaynak belgeye** karşılık geldi, belgeler arası karışma yok
+(belge_01/03/04/05/06/07 → 3'er chunk, belge_02 → 2 chunk). Etkin tavan
+`min(TOPIC_MAX_CLUSTERS=12, N//TOPIC_MIN_CLUSTER_SIZE=10)=10`; emilim adımı
+bunu 7'ye indirdi. İki ardışık çağrı birebir aynı sonucu verdi
+(determinizm).
+
+**Başarı kriteri 2 — sadakat kapısı.** `FIDELITY_MIN_SCORE=0.45`:
+korpustan birebir alınmış bir cümle `grounded` işaretlendi, ham cosine
+**0.9240**; bilinçli bozuk bir iddia ("İstanbul'un nüfusu 16 milyondur…")
+`unsupported` işaretlendi, ham cosine **0.3293**.
+
+**Bilinen sınır (yeni, gizlenmiyor).** Üçüncü bir iddia denendi: "Bu sistem
+varsayılan olarak GPT-4 kullanır ve verileri OpenAI sunucularına gönderir."
+— bu ürün için **yanlış** bir iddia (ürün tamamen offline) ama konuya yakın
+metinle örtüştüğü için **0.5487** aldı ve `grounded` işaretlendi. Kapı
+*grounding* ölçüyor, *entailment* değil: ham cosine "bu konuda chunk var mı"
+sorusunu cevaplar, "bu chunk bu iddiayı destekliyor mu" sorusunu değil. Bu,
+`MIN_SCORE` kalibrasyonundaki örtüşme probleminin (yukarıda, "Retrieval
+eşiği" bölümü) birebir aynısı. **Eşik değiştirilmedi**: 0.5487'yi elemek için
+`FIDELITY_MIN_SCORE`'u 0.55'e çekmek, `MIN_SCORE`'un 0.55→0.45 indirilme
+gerekçesini (gerçek bir sorunun 0.494 alıp reddedilmesi) tersine çevirir ve
+`FIDELITY_MIN_SCORE == MIN_SCORE` kararını bozardı. Telafi Faz 2'ye
+bırakıldı ve Faz 2'nin kapanma koşuluna yazıldı (eval'e trap girişi + bu
+iddianın rapordan çıkarılması).
+
+**Reddedilen alternatifler.**
+- `scipy`/`scikit-learn` ile kümeleme → **reddedildi**: ikisi de kurulu
+  değil; 20–40 chunk ölçeğinde naive agglomerative saf numpy ile birkaç
+  düzine satır. İki büyük paketi offline garantinin içine sokmanın gerekçesi
+  yok.
+- `d3-hierarchy`'yi Faz 1'de kurmak → **reddedildi**: Faz 1'de çizilecek
+  düğüm yok, saf spekülasyon. Faz 3'e bırakıldı; `package.json` Faz 1'de
+  dondurulmuş kaldı.
+- `web/components/ui/tabs.tsx` primitifi → **reddedildi**: iki sekme için
+  tek kullanımlık soyutlama. Mevcut `Button` ile elle segment kontrolü
+  (`role="tablist"`, ok tuşu gezinmesi).
+- `studio-panel`'e "Üret" düğmesi → **reddedildi**: arkasında çalışan
+  üretici yokken basılamayan düğme, "sahte sayı göstermeme" ilkesinin aynı
+  ihlali.
+- `fidelity_score`'u ortalama cosine olarak yorumlamak → **reddedildi ve
+  ölçümle çürütüldü**: `STUDIO_PLAN.md`'deki `0.91` örneği ve Faz 2'nin
+  `≥0.90` kriteri, ortalama cosine olarak bu korpusta **imkânsız** (skorlar
+  0.84 tavanında kalıyor). `fidelity_score` bunun yerine **oran** olarak
+  tanımlandı (grounded / toplam iddia); `DESIGN_SYSTEM.md §1.2`'nin güven
+  bantlarıyla renklendirilmesi açıkça yasaklandı — o bantlar ham cosine için
+  kalibre edildi, bir oran için değil.
+- Sadakat eşiğini yükselterek yanlış-ama-yakın iddiayı elemek →
+  **reddedildi** (yukarıda, "Bilinen sınır").
+
+**Doküman kayması düzeltildi.** `CLAUDE.md §3` ve `docs/STUDIO_PLAN.md §10`
+"backend 91/91" diyordu; Faz 1 öncesi ölçülen gerçek taban **93**'tü (aradaki
+2 test, sağlamlaştırma turunda eklenmiş ama hızlı komut listelerine
+yansımamıştı). `docs/STUDIO_PLAN.md §10` **93/93**'e düzeltildi.
+
 ## Açık işler
 
-Yok.
+`rag/store.py`'de latent bir hata **iki implementer tarafından bağımsız
+olarak** Faz 1 sırasında yakalandı: `:memory:` bağlantıları için matris
+önbelleği anahtarı `f"memory:{id(conn)}"` ve `_matrix_cache`, `conn.close()`
+sırasında hiç geçersiz kılınmıyor (yalnızca yazmada veya `clear_cache()`'te
+temizleniyor). CPython serbest kalan nesne adresini yeniden kullanabildiği
+için, kapanmış bir bağlantının bayat önbellek girdisi yeni açılan bir
+bağlantıya **çarpabiliyor**. ~29 tam test koşumunda 1 kez üretildi (boş
+beklenen yerde `(5,2)` boyutlu bir matris sızdı). **Üretim yolu
+etkilenmiyor** — dosya tabanlı DB kararlı bir yol anahtarı kullanıyor; risk
+yalnızca `:memory:` kullanan test paketinde. Faz 1'e kasıtlı olarak
+**dahil edilmedi** (CLAUDE.md §2.3, cerrahi değişiklik ilkesi); ayrı ve
+ölçümle desteklenmiş bir değişiklik olarak ele alınacak. Şu an testler kendi
+fixture'larında `store.clear_cache()` çağırarak korunuyor.
 
 ## Hızlı komutlar
 

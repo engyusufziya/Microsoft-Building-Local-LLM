@@ -15,6 +15,7 @@ arasında bağımlılık oluşmaz.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sqlite3
 import threading
@@ -82,6 +83,50 @@ CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
     DELETE FROM chunks_fts WHERE rowid = old.id;
     INSERT INTO chunks_fts(rowid, content) VALUES (new.id, new.content);
 END;
+
+-- Studio artefakt hattı (Faz 1, FEATURE_SPEC.md §9.1). Üç yeni tablo mevcut
+-- şemanın SONUNA eklenir; connect() zaten executescript çağırdığı için var
+-- olan bir rag.db (kullanıcının veritabanı dahil) ilk açılışta kendiliğinden
+-- yükselir, yeniden ingest gerekmez.
+CREATE TABLE IF NOT EXISTS artifacts (
+    id                 INTEGER PRIMARY KEY,
+    kind               TEXT NOT NULL,        -- 'mindmap' | 'report' | 'quiz'
+    scope              TEXT NOT NULL,        -- 'corpus' | 'document'
+    document_id        INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+    title              TEXT NOT NULL,
+    params_json        TEXT NOT NULL,
+    payload_json       TEXT NOT NULL,        -- ara temsil; render'ın TEK girdisi
+    corpus_fingerprint TEXT NOT NULL,
+    fidelity_score     REAL,
+    generation_ms      INTEGER,
+    created_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_artifacts_kind ON artifacts(kind, scope);
+
+-- score HAM COSINE'dır, Hit.score ile AYNI ölçek (CLAUDE.md §1.1) --
+-- normalize edilmez, [0,1]'e gerilmez, verdict'ten geri türetilmez.
+CREATE TABLE IF NOT EXISTS artifact_claims (
+    id          INTEGER PRIMARY KEY,
+    artifact_id INTEGER NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    node_path   TEXT NOT NULL,   -- payload_json'a JSON pointer: /nodes/3
+    claim_text  TEXT NOT NULL,
+    chunk_id    INTEGER REFERENCES chunks(id) ON DELETE SET NULL,
+    score       REAL,            -- HAM COSINE, Hit.score ile AYNI ölçek
+    verdict     TEXT NOT NULL    -- 'grounded' | 'weak' | 'unsupported'
+);
+CREATE INDEX IF NOT EXISTS idx_claims_artifact ON artifact_claims(artifact_id);
+
+-- Faz 1'de yalnızca OLUŞTURULUR; okuyan/yazan kod Faz 4'te gelir. Şimdi
+-- eklenmesinin tek sebebi: şema göçü tek seferde ve tek yerde olsun.
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id           INTEGER PRIMARY KEY,
+    artifact_id  INTEGER NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    started_at   TEXT NOT NULL,
+    completed_at TEXT,
+    score        REAL,
+    answers_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attempts_artifact ON quiz_attempts(artifact_id);
 """
 
 # --------------------------------------------------------------------------- önbellek
@@ -476,6 +521,38 @@ def corpus_stats(conn: sqlite3.Connection) -> dict:
         "pages": int(row["pages"]),
         "chunks": int(row["chunks"]),
     }
+
+
+def corpus_fingerprint(conn: sqlite3.Connection) -> str:
+    """Korpusun sha256 parmak izi -- artefakt bayatlığını (staleness) saptamak için.
+
+    Studio artefaktları (rag/artifacts/) bu dizeyi kayıt anında saklar; okuma
+    anında güncel değerle karşılaştırılır, farklıysa artefakt "bayat" sayılır
+    (silinmez, otomatik yeniden üretilmez -- FEATURE_SPEC.md §9.2).
+
+    Türetme, ölçülebilir olsun diye TAM tanımlıdır:
+        satırlar = [f"{id}:{chunk_count}:{ingested_at}" için her documents satırı]
+        girdi    = "\\n".join(sorted(satırlar))     -- sıralama SATIRLARIN TAMAMINA
+                                                        uygulanır, id'ye değil
+        sonuç    = sha256(girdi.encode("utf-8")).hexdigest()
+    id zaten satırın başında olduğu için sonuç deterministiktir ve SQL'in
+    döndürdüğü sıraya bağımlı kalmaz.
+
+    Boş korpus da geçerli bir parmak izi üretir (boş dizenin sha256'sı) --
+    çağıran taraf ayrıca None kontrolü yapmak zorunda kalmaz.
+
+    BİLİNEN SINIR: ingested_at saniye çözünürlüklü (upsert_document
+    timespec="seconds" kullanıyor). Aynı belgenin AYNI SANİYE içinde aynı
+    chunk sayısıyla yeniden yüklenmesi aynı parmak izini üretir -- bir
+    bayatlık sinyali kaçırabilir. Gerçek bir yeniden yüklemede içerik
+    değiştiyse chunk_count de neredeyse her zaman değişir ve bu yol insan
+    hızında bir işlemdir; bu sınır documents/eval sözleşmesini bozmamak
+    (zaman damgası çözünürlüğünü değiştirmemek) için bilerek kabul edildi.
+    """
+    rows = conn.execute("SELECT id, chunk_count, ingested_at FROM documents").fetchall()
+    lines = [f"{r['id']}:{r['chunk_count']}:{r['ingested_at']}" for r in rows]
+    payload = "\n".join(sorted(lines))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def load_matrix(conn: sqlite3.Connection) -> tuple[np.ndarray, list[dict]]:
