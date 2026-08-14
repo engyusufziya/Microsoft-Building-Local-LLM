@@ -33,7 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from rag import answer, config, models, ocr, store
 
 from . import schemas
-from .routes import chat, documents, metrics, retrieve as retrieve_routes
+from .routes import artifacts, chat, documents, metrics, retrieve as retrieve_routes
 
 SKIP_WARMUP_ENV = "RAG_BACKEND_SKIP_WARMUP"
 DB_PATH_ENV = "RAG_BACKEND_DB_PATH"
@@ -170,6 +170,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api")
     app.include_router(retrieve_routes.router, prefix="/api")
     app.include_router(metrics.router, prefix="/api")
+    app.include_router(artifacts.router, prefix="/api")
 
     @app.get("/api/health", response_model=schemas.HealthResponse)
     async def health(request: Request) -> schemas.HealthResponse:

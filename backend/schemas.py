@@ -76,3 +76,43 @@ class IngestCompletePayload(BaseModel):
     page_count: int
     chunk_count: int
     skipped_pages: List[int] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- Studio artefaktları (§9.8)
+
+
+class ArtifactClaimOut(BaseModel):
+    node_path: str
+    claim_text: str
+    chunk_id: Optional[int]
+    score: Optional[float]  # HAM COSINE -- dokunulmaz (AGENTS.md §1.1)
+    verdict: Literal["grounded", "weak", "unsupported"]
+    source: Optional[str]  # chunk'ın belgesi; chunk_id yoksa None
+    page: Optional[int]  # 0 = markdown fixture
+    citation: Optional[str]  # "[Kaynak: dosya.pdf s.4]"
+
+
+class ArtifactSummary(BaseModel):
+    id: int
+    kind: Literal["mindmap", "report", "quiz"]
+    scope: Literal["corpus", "document"]
+    document_id: Optional[int]
+    title: str
+    fidelity_score: Optional[float]  # ORAN, benzerlik değil (§9.1)
+    generation_ms: Optional[int]
+    created_at: str  # ISO 8601
+    is_stale: bool  # TÜRETİLİR -- bkz. routes/artifacts.py
+
+
+class ArtifactDetail(ArtifactSummary):
+    params: dict
+    payload: dict
+    claims: List[ArtifactClaimOut]
+    unsupported_count: int  # TÜRETİLİR: verdict == 'unsupported'
+
+
+class ArtifactCreateRequest(BaseModel):
+    kind: Literal["mindmap", "report", "quiz"]
+    scope: Literal["corpus", "document"] = "corpus"
+    document_id: Optional[int] = None
+    params: dict = {}
