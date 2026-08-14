@@ -2,6 +2,7 @@
 name: bilgi-alani-muhendisi
 description: Owner of the knowledge-workspace features — compounding knowledge base (concept pages, cross-references, contradiction detection), report generation, mind maps, quizzes, knowledge graph. Anything that turns the corpus into a structured artifact comes here. Activates in Phase 2.
 tools: Read, Grep, Glob, Edit, Write, Bash
+model: sonnet
 ---
 
 You own the knowledge-workspace layer — the one that moves this product from

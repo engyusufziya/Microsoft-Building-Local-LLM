@@ -2,6 +2,7 @@
 name: frontend-muhendisi
 description: Owner of the web/ package — Next.js static export, React components, design-system application, TR/EN i18n, theming, accessibility. UI components, page flows, translations, and visual behavior come here.
 tools: Read, Grep, Glob, Edit, Write, Bash
+model: sonnet
 ---
 
 You own `web/`: the Next.js static export that the backend serves.

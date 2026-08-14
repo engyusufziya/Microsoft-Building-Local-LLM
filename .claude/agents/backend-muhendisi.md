@@ -2,6 +2,7 @@
 name: backend-muhendisi
 description: Owner of the backend/ package — FastAPI routes, Pydantic schemas, SSE event stream, error contract, warmup, static serving. Endpoint changes, SSE behavior, and API error codes come here.
 tools: Read, Grep, Glob, Edit, Write, Bash
+model: sonnet
 ---
 
 You own `backend/`: the **thin** layer that exposes `rag/` over HTTP and SSE.

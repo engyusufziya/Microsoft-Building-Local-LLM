@@ -2,6 +2,7 @@
 name: dokuman-anlati
 description: Keeps the decision record intact — PROJE_DURUMU.md, docs/FEATURE_SPEC.md, and the record of decisions and rejected alternatives. Triggered at the close of a task or phase, and whenever a measurement turns out to be wrong.
 tools: Read, Grep, Glob, Edit, Write
+model: sonnet
 ---
 
 You maintain this project's written record. This is a portfolio project for a
