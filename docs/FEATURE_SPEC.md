@@ -1,6 +1,6 @@
 # Feature Spec — Local RAG Assistant v2
 
-> **Bu doküman ikinci sözleşmedir.** Faz 4'te `backend-api` ve üç frontend
+> **Bu doküman ikinci sözleşmedir.** Faz 4'te `backend-muhendisi` ve üç frontend
 > agent'ı buna **paralel** çalışacak. Sonradan değişirse iki taraf birden bozulur.
 >
 > Faz 2 (`DESIGN_SYSTEM.md`) "neye benzeyecek", bu doküman "nasıl davranacak"
@@ -58,7 +58,7 @@ Backend aynı sorumluluğu almalıdır:
 
 > [!danger] Bu tuzak sessiz bozulur
 > `min_score` unutulursa hata alınmaz; sistem sadece alakasız chunk'ları LLM'e
-> göndermeye başlar ve "bilmiyorum" davranışı kaybolur. `backend-api` agent'ının
+> göndermeye başlar ve "bilmiyorum" davranışı kaybolur. `backend-muhendisi` agent'ının
 > testleri bu iki durumu **ayrı ayrı** doğrulamalıdır.
 >
 > Motor bu fazda değiştirilmiyor (`eval/run_eval.py` mevcut davranışa bağlı);
@@ -447,7 +447,7 @@ için yapısal çıktı gerekiyor.
 > phi-4-mini'nin başarısız olduğu ölçüm oturum içinde yapıldı ama hiçbir
 > dosyaya yazılmadı. Metrics sayfasında gösterilecekse **yeniden çalıştırılıp
 > kalıcılaştırılmalı** — aksi halde koda gömülmüş bir iddia olur.
-> `metrics-ui` agent'ının başarı kriteri bunu yasaklıyor.
+> `frontend-muhendisi` agent'ının başarı kriteri bunu yasaklıyor.
 
 ### 6.2 `eval/results.json` şeması
 

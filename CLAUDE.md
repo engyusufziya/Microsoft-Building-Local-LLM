@@ -138,8 +138,14 @@ don't fully understand, and multi-step work with unclear requirements.
 cd web && npm run build && npm run lint               # frontend
 ```
 
-Minimum gate before delivery: **eval 23/23 · backend 124/124 · clean frontend
-build**.
+Minimum gate before delivery: **eval 23/23 · `pytest backend/tests -q` with
+zero failures · `eval/fidelity_trap.py` PASS · clean frontend build**.
+
+The pytest gate is deliberately *not* a fixed number. It was written as
+`91/91` while the real count was 93, then 123, then 124 — a stale count
+reports a lost test as green, which is the exact failure the gate exists to
+catch. The eval gate stays numeric (23/23) because that set only grows by an
+explicit, justified decision.
 
 ---
 
@@ -177,3 +183,59 @@ other seven run on `sonnet`, where the task is bounded by a spec and a
 contract. Set per agent via the `model` frontmatter field. Note that the
 `CLAUDE_CODE_SUBAGENT_MODEL` environment variable, if set, overrides every
 one of these.
+
+### Ownership map
+
+Every directory has exactly one owner. Work goes to the owner of the directory
+it lands in, not the owner of the topic it sounds like.
+
+| Path | Owner |
+|---|---|
+| `rag/` except `rag/artifacts/` | `rag-muhendisi` |
+| `rag/artifacts/`, `web/components/studio/` | `bilgi-alani-muhendisi` |
+| `backend/` | `backend-muhendisi` |
+| `web/` except `web/components/studio/` | `frontend-muhendisi` |
+| `eval/`, `data/` | `prompt-eval-muhendisi` |
+| `docs/FEATURE_SPEC.md` | `urun-mimari` (exclusive) |
+| `PROJE_DURUMU.md`, rest of `docs/` | `dokuman-anlati` |
+| `graphify-out/` | generated artifact — no owner, never hand-edited |
+
+### What the harness enforces, and what it does not
+
+Be honest about this, because it changes how much the written rules can be
+trusted:
+
+- **Enforced by the harness:** each agent's tool set (`tools:` frontmatter),
+  and the allow/ask/deny rules in `.claude/settings.json`. Those deny rules
+  are **session-wide, not per-agent** — Claude Code has no per-agent path
+  permissions, so a rule like `Edit(rag/**)` would lock out `rag-muhendisi`
+  along with everyone else. That is why the ownership map above is not, and
+  cannot be, a permission rule.
+- **Not enforced — instruction only:** the ownership map, read-only status,
+  escalation. `kalite-muhafizi` reading the diff is the actual detection
+  mechanism, and it only runs when it is called.
+
+So: **route every delivery through `kalite-muhafizi`.** It is not a formality;
+it is the only thing standing between the ownership model and wishful
+thinking.
+
+### Escalation is an output, not a call
+
+Only `urun-mimari` can invoke other agents. The other seven escalate by
+**writing** a delivery whose first line is `ESKALASYON: <reason>` and stopping.
+Such a delivery is not a completed delivery. This matters most when an
+implementer is invoked directly by the user with no architect above it — the
+escalation lands with the user, so it must name the contract it is protecting.
+
+### Concurrency
+
+One git working tree, several sessions. Two agents editing the same file, or
+two `--ingest` runs against the same SQLite file, race — and the loser is
+silent. Rules:
+
+- **At most one implementer at a time** on the same path, unless each runs in
+  its own worktree (`isolation: "worktree"`).
+- Verification (`kalite-muhafizi`, `prompt-eval-muhendisi`) is read-mostly and
+  may run in parallel with nothing else writing.
+- A measurement run and an implementation run must not overlap: the numbers
+  would describe a tree that no longer exists.

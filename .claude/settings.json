@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python -m pytest backend/tests *)",
+      "Bash(.venv/bin/python eval/run_eval.py *)",
+      "Bash(.venv/bin/python eval/run_eval.py)",
+      "Bash(.venv/bin/python eval/offline_proof.py)",
+      "Bash(.venv/bin/python eval/fidelity_trap.py)",
+      "Bash(.venv/bin/python docs/check_contrast.py)",
+      "Bash(npm run build)",
+      "Bash(npm run lint)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)"
+    ],
+    "ask": [
+      "Bash(.venv/bin/pip install *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npx *)"
+    ],
+    "deny": [
+      "Bash(curl)",
+      "Bash(curl *)",
+      "Bash(wget)",
+      "Bash(wget *)",
+      "Bash(nc *)",
+      "Bash(ssh *)",
+      "Bash(sed -i *)",
+      "Bash(tee *)"
+    ]
+  }
+}

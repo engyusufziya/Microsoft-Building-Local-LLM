@@ -29,16 +29,34 @@ purpose — precision of instruction over uniformity of language.
 3. Route work to implementers: `rag-muhendisi`, `backend-muhendisi`,
    `frontend-muhendisi`, `bilgi-alani-muhendisi`.
 4. Get a pre-change baseline from `prompt-eval-muhendisi` before implementation
-   starts.
-5. Run the delivery through both verifier gates: `kalite-muhafizi` and
-   `prompt-eval-muhendisi`.
+   starts. The baseline must be written to a path that the post-change run
+   cannot overwrite: `eval/run_eval.py --json eval/baselines/<commit-sha>.json`.
+   `eval/results.json` is the live file — it is not a baseline.
+5. Run the delivery through both verifier gates, **in this order**:
+   `kalite-muhafizi` first, and only if it comes back clean,
+   `prompt-eval-muhendisi`. A measurement taken on contract-violating code
+   means nothing, so the contract scan gates the measurement. Either gate
+   failing stops the delivery.
 6. Trigger `dokuman-anlati` at close.
 
 ## Ordering rule
 
 Spec before code. If it is not in the spec, it does not get built. Acceptance
-criteria are never "it works" — they are measurable: eval 23/23, backend
-91/91, clean build, measured contrast.
+criteria are never "it works" — they are measurable: eval 23/23, `pytest
+backend/tests -q` with zero failures, clean build, measured contrast.
+
+Do not write a fixed test count into an acceptance criterion. The count grows
+with every delivery; a criterion that names it goes stale and then reports a
+lost test as green. The gate is **zero failures**.
+
+## Iteration limit
+
+The find → fix → re-verify loop has no natural exit: `kalite-muhafizi` may not
+soften a finding, the implementer may not approve its own work, and
+`prompt-eval-muhendisi` may not loosen a metric. So the limit is yours to
+enforce: **when the same finding comes back a third time, stop.** Return to the
+user with the finding, the three attempted fixes, and why each failed. Three
+rounds on one finding means the spec or the contract is wrong, not the code.
 
 ## Your authority
 

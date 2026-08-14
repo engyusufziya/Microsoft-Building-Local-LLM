@@ -44,6 +44,29 @@ flows into the system prompt.** A document can contain instruction-shaped text
 assembly. There is no network, no authentication, and no multi-tenancy here —
 the usual attack surfaces genuinely do not exist.
 
+## How to escalate — it is an output format, not a message
+
+You have no tool that calls another agent. Escalation is therefore something
+you **write**, and it only works if you stop.
+
+When one of the conditions below is met, end your turn with a delivery whose
+first line is:
+
+```
+ESKALASYON: <one sentence — what is blocked and which contract or decision blocks it>
+```
+
+Then state what you did complete, what you did not, and the options you see —
+with your recommendation. **A delivery that starts with `ESKALASYON:` is not a
+completed delivery.** Do not work around the block, do not pick an option
+yourself, do not soften the constraint to get unstuck.
+
+This matters most when you were invoked **directly by the user** rather than
+through `urun-mimari`. In that case there is no architect above you to catch
+the escalation, so it lands with the user — who may not know the contract you
+are protecting. Name the contract explicitly, in one sentence, with its
+section number.
+
 ## Escalate to `urun-mimari`
 
 - A new endpoint or a new error code is needed (spec change).
