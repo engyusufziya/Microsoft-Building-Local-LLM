@@ -357,6 +357,6 @@ Hiçbir faz şunlar korunmadan kapanmaz:
 
 ```bash
 .venv/bin/python eval/run_eval.py                 # 23/23
-.venv/bin/python -m pytest backend/tests -q       # 123/123 (Faz 1 sonrası)
+.venv/bin/python -m pytest backend/tests -q       # 124/124 (Faz 1 sonrası)
 .venv/bin/python eval/offline_proof.py            # 0 soket
 ```

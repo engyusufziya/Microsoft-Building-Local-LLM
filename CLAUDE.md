@@ -138,7 +138,7 @@ don't fully understand, and multi-step work with unclear requirements.
 cd web && npm run build && npm run lint               # frontend
 ```
 
-Minimum gate before delivery: **eval 23/23 · backend 91/91 · clean frontend
+Minimum gate before delivery: **eval 23/23 · backend 124/124 · clean frontend
 build**.
 
 ---
