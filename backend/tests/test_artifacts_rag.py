@@ -32,11 +32,11 @@ def _unit(angle_deg: float) -> list[float]:
 
 @pytest.fixture()
 def conn():
-    # store._matrix_cache ":memory:" bağlantıları için id(conn)'e dayanıyor;
-    # CPython bir önceki testin kapanmış bağlantısının adresini hemen geri
-    # kullanabilir ve BAŞKA bir testin matrisini önbellekten sızdırabilir.
-    # clear_cache() bunu her testin başında keser (store.py'ye dokunmadan).
-    store.clear_cache()
+    # Burada clear_cache() YOK, bilinçli: store._Connection.close() kapanışta
+    # ":memory:" önbellek girdisini kendisi düşürüyor (bkz. test_store_cache.py,
+    # id() çakışması orada deterministik olarak kanıtlanıyor). Savunma amaçlı
+    # bir clear_cache() burada dursaydı, o düzeltme ileride bozulduğunda bu
+    # dosyadaki testleri yeşil tutup regresyonu maskelerdi.
     c = store.connect(":memory:")
     yield c
     c.close()

@@ -239,3 +239,29 @@ silent. Rules:
   may run in parallel with nothing else writing.
 - A measurement run and an implementation run must not overlap: the numbers
   would describe a tree that no longer exists.
+
+### Memory — the same rule, second reason
+
+The concurrency rules above exist to prevent silent races. They have a second,
+harder justification: **the dev machine has 16 GB and the models are local.**
+Parallel agents crashed it once, and the cause was not the agents — it was two
+of them loading `qwen2.5-7b` at the same time while a third ran a Node build.
+
+Commands that load a local model, and therefore must never run concurrently
+with each other:
+
+| Command | Loads | Cost |
+|---|---|---|
+| `eval/run_eval.py` | 7B + embedding | ~200 s |
+| `eval/offline_proof.py` | 7B + embedding | ~180 s |
+| `eval/fidelity_trap.py` | embedding | ~10 s |
+| `python -m rag.ingest` | embedding | per document |
+
+Everything else is cheap and safe to loop on: `pytest backend/tests -q` is
+~1 s and loads **no** model, `npm run build && npm run lint` ~3 s.
+
+So the working loop is: **iterate against pytest and the frontend build; pay
+the expensive gate once, at delivery, with nothing else running.** Do not give
+each agent in a chain its own eval run — one measurement, one runner. And
+prefer doing a small, bounded change inline over spinning up an agent chain
+for it: every agent starts cold, re-derives context, and runs its own gates.

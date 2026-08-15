@@ -240,3 +240,21 @@ TOPIC_MAX_CLUSTERS = 12
 # kendisi kadar önemli. Ayrılmaları ancak bir ÖLÇÜMLE gerekçelendirilebilir
 # (CLAUDE.md §1.4); Faz 1'de böyle bir ölçüm yok.
 FIDELITY_MIN_SCORE = 0.45
+
+# 'weak' bandının genişliği: grounded ile unsupported arasındaki gri alan
+# FIDELITY_MIN_SCORE - 0.10 ile FIDELITY_MIN_SCORE arasıdır.
+#
+# Başlangıçta fidelity.py içinde _WEAK_BAND_WIDTH olarak duruyordu; gerekçesi
+# "FIDELITY_MIN_SCORE'a bağlı türev bir genişlik, tek tüketicisi verdict_for"
+# idi. Buraya taşındı çünkü o gerekçe yanlıştı: bu 0.10 verdict SÖZLEŞMESİNİN
+# parçası (docs/STUDIO_PLAN.md §2, docs/FEATURE_SPEC.md §9.6) ve 'weak' bandı
+# kullanıcıya gösterilecek -- yani MIN_SCORE ile aynı sınıfta, bir uygulama
+# detayı değil.
+#
+# REDDEDİLEN ALTERNATİF: sabiti yerinde bırakıp kalite-muhafizi'nin config
+# merkeziliği taramasına "gerekçesi yorumda yazılı türetilmiş bant genişlikleri
+# istisnadır" maddesi eklemek. Reddedildi: böyle bir muafiyeti yazarın kendisi
+# onaylamış olur, modül içinde kalan her sabit yanına bir gerekçe yorumu alır
+# ve tarama ayırt etme gücünü kaybeder. Bir bulguyu kaybetmek sorun değil,
+# kuralı kaybetmek sorun (CLAUDE.md §1.3 kasıtlı olarak mutlaktır).
+FIDELITY_WEAK_BAND_WIDTH = 0.10
