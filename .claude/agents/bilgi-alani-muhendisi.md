@@ -45,6 +45,14 @@ concept pages, graph) is **derived data** and must be reproducible from the
 corpus. Do not create a second source of truth: if the vault is deleted, it
 must be rebuildable.
 
+That rule has a quiet failure mode: **nothing an artifact depends on may be
+left in `/tmp` or a scratchpad.** The session's scratch directory is outside
+the repo, is not versioned, and disappears — an intermediate representation
+written there and then read back is a second source of truth that happens to
+be invisible. Scratch space is for throwaway probes only. Every intermediate
+representation an artifact is built from belongs in SQLite, where
+`corpus_fingerprint` can tell whether it is still valid.
+
 ## Your offline constraint
 
 Every output must be a single self-contained file: inlined CSS, inlined fonts

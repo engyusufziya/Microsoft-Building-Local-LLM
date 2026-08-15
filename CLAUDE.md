@@ -131,12 +131,21 @@ don't fully understand, and multi-step work with unclear requirements.
 .venv/bin/python cli.py --show-chunks                 # interactive, with context
 .venv/bin/streamlit run streamlit_app.py              # v1 interface
 .venv/bin/python eval/run_eval.py                     # 23-question evaluation
+.venv/bin/python eval/run_eval.py --category meta     # PARTIAL run, for iteration only
 .venv/bin/python eval/offline_proof.py                # + network audit log
+.venv/bin/python eval/fidelity_trap.py                # pinned known limit of the gate
 .venv/bin/python docs/check_contrast.py               # verify contrast claims
 .venv/bin/python -m rag.ingest --pdf dosya.pdf        # ingest a document
+.venv/bin/python -m rag.ingest --markdown-dir data    # ingest the markdown fixtures
 .venv/bin/python -m pytest backend/tests -q           # backend tests
 cd web && npm run build && npm run lint               # frontend
 ```
+
+`--category` exists because a full eval run costs ~200 s **and loads the 7B
+model**; iterating on one category costs ~45 s. It is deliberately refused in
+combination with `--json`: a partial result must never reach `results.json`,
+or `/api/metrics` and every baseline comparison would report a subset as if it
+were the gate.
 
 Minimum gate before delivery: **eval 23/23 · `pytest backend/tests -q` with
 zero failures · `eval/fidelity_trap.py` PASS · clean frontend build**.

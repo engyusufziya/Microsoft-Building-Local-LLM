@@ -85,6 +85,15 @@ def _save_results(path: Path, data: dict, conn) -> None:
     data["corpus"] = {
         "chunk_count": int(matrix.shape[0]),
         "document_count": len(store.list_documents(conn)),
+        # İki ölçümün KARŞILAŞTIRILABİLİR olduğunu doğrulayabilmek için. Bir
+        # baseline ile sonrasını yan yana koymak, ancak ikisi aynı korpus ve
+        # aynı embedding modeli üzerinde koştuysa anlamlı; bu iki alan olmadan
+        # bunu doğrulamanın yolu yoktu (eval.db gitignore'da, sürüm geçmişi yok).
+        # fingerprint için yeni bir hash uydurulmadı: Faz 1'in artefakt
+        # bayatlık kontrolünde kullanılan store.corpus_fingerprint() aynen
+        # kullanılıyor -- tek türetme, tek doğruluk kaynağı.
+        "fingerprint": store.corpus_fingerprint(conn),
+        "embedding_model": config.EMBEDDING_MODEL,
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"\n  -> {path} yazıldı")
@@ -102,6 +111,22 @@ def _merge_model_result(data: dict, model_result: dict) -> None:
 
 def load_questions() -> list[dict]:
     return json.loads(EVAL_SET.read_text(encoding="utf-8"))["questions"]
+
+
+def _categories() -> list[str]:
+    """--category seçeneklerini eval setinden türetir.
+
+    Elle yazılmış bir liste, sete yeni bir kategori eklendiğinde sessizce
+    bayatlar ve o kategori --category ile hiç koşulamaz hale gelirdi; sabitin
+    tek doğruluk kaynağı eval_set.json'un kendisidir.
+    """
+    seen: dict[str, None] = {}
+    for q in load_questions():
+        seen.setdefault(q["category"], None)
+    return list(seen)
+
+
+CATEGORIES = _categories()
 
 
 def keyword_hit(text: str, keywords: list[str]) -> tuple[int, list[str]]:
@@ -123,13 +148,21 @@ def refused(text: str) -> bool:
     return answer.is_refusal(text)
 
 
-def run(model: str | None, conn, min_score: float | None) -> tuple[int, dict]:
+def run(model: str | None, conn, min_score: float | None,
+        categories: list[str] | None = None) -> tuple[int, dict]:
     """Değerlendirmeyi çalıştırır. (çıkış_kodu, model_sonuç_dict) döndürür.
 
     Yazdırma davranışı değişmedi; dict yalnızca `--json` için ek olarak
     toplanır.
+
+    `categories` verilirse yalnızca o kategorilerin soruları koşar. Bu KISMİ
+    bir koşumdur ve teslim kapısı DEĞİLDİR -- kapı her zaman 23/23'tür.
+    Kısmi koşum sonucu diske yazılamaz (bkz. main(): --category ile --json
+    birlikte kullanılamaz).
     """
     questions = load_questions()
+    if categories:
+        questions = [q for q in questions if q["category"] in categories]
     rows, failures, records = [], [], []
     retrieval_found = 0
     answerable_total = 0
@@ -315,7 +348,20 @@ def main(argv=None) -> int:
     parser.add_argument("--json", nargs="?", const=str(RESULTS_PATH), metavar="YOL",
                         help=f"sonuçları JSON olarak yaz (varsayılan: {RESULTS_PATH.name}); "
                              "mevcut dosyayla BİRLEŞTİRİLİR")
+    parser.add_argument("--category", nargs="+", metavar="AD", choices=CATEGORIES,
+                        help="yalnızca bu kategorileri koş (KISMİ koşum, kapı değil). "
+                             f"seçenekler: {', '.join(CATEGORIES)}")
     args = parser.parse_args(argv)
+
+    # Kısmi koşum diske yazılamaz. Bir alt kümenin "3/3" sonucu results.json'a
+    # girerse /api/metrics ve tüm baseline karşılaştırmaları, tam koşum
+    # sanılan bir kısmi sonucu raporlar -- eval dürüstlüğünün (CLAUDE.md §1.4)
+    # tam olarak engellemek için var olduğu hata. İkisi ayrı amaçlar için:
+    # --category iterasyon içindir, --json kayıt içindir.
+    if args.category and args.json is not None:
+        parser.error("--category ile --json birlikte kullanılamaz: kısmi koşum "
+                     "sonucu kaydedilmez (CLAUDE.md §1.4). Kaydetmek için "
+                     "kategorisiz tam koşum yapın.")
 
     if args.ingest or not EVAL_DB.exists():
         print(f"=== eval.db kuruluyor (data/*.md) ===")
@@ -344,7 +390,10 @@ def main(argv=None) -> int:
 
         print(f"=== model: {args.model or config.CHAT_MODEL}, "
               f"eşik: {args.min_score if args.min_score is not None else config.MIN_SCORE} ===\n")
-        code, model_result = run(args.model, conn, args.min_score)
+        if args.category:
+            print(f"!!! KISMİ KOŞUM: yalnızca {', '.join(args.category)} !!!")
+            print("    Bu bir teslim kapısı DEĞİLDİR; kapı kategorisiz 23/23'tür.\n")
+        code, model_result = run(args.model, conn, args.min_score, args.category)
         if json_path:
             data = _load_results(json_path)
             _merge_model_result(data, model_result)
