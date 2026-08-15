@@ -22,12 +22,6 @@ import numpy as np
 
 from .. import config, models, store
 
-# verdict_for içinde literal yazılmaz -- FIDELITY_MIN_SCORE'a bağlı türev bir
-# genişlik, bağımsız bir ayar noktası değil (tek tüketicisi bu fonksiyon).
-# Bu yüzden config'e taşınmadı.
-_WEAK_BAND_WIDTH = 0.10
-
-
 @dataclass(frozen=True)
 class ClaimBinding:
     node_path: str
@@ -40,15 +34,18 @@ class ClaimBinding:
 def verdict_for(score: Optional[float]) -> str:
     """Ham cosine skorundan verdict türetir (FIDELITY_MIN_SCORE = 0.45).
 
-        grounded    : score >= FIDELITY_MIN_SCORE            (>= 0.45)
-        weak        : score >= FIDELITY_MIN_SCORE - 0.10      (0.35 - 0.45)
-        unsupported : altı, veya score is None                (< 0.35)
+        grounded    : score >= FIDELITY_MIN_SCORE                     (>= 0.45)
+        weak        : score >= FIDELITY_MIN_SCORE - WEAK_BAND_WIDTH  (0.35-0.45)
+        unsupported : altı, veya score is None                        (< 0.35)
+
+    Parantez içindeki sayılar bugünkü config değerleriyle; eşik tek doğruluk
+    kaynağı olan rag/config.py'den okunur.
     """
     if score is None:
         return "unsupported"
     if score >= config.FIDELITY_MIN_SCORE:
         return "grounded"
-    if score >= config.FIDELITY_MIN_SCORE - _WEAK_BAND_WIDTH:
+    if score >= config.FIDELITY_MIN_SCORE - config.FIDELITY_WEAK_BAND_WIDTH:
         return "weak"
     return "unsupported"
 
