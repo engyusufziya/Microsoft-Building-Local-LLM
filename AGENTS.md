@@ -256,21 +256,36 @@ harder justification: **the dev machine has 16 GB and the models are local.**
 Parallel agents crashed it once, and the cause was not the agents — it was two
 of them loading `qwen2.5-7b` at the same time while a third ran a Node build.
 
-Commands that load a local model, and therefore must never run concurrently
-with each other:
+Work that loads a local model, and therefore must never run concurrently with
+anything else on this list:
 
-| Command | Loads | Cost |
+| Work | Loads | Cost |
 |---|---|---|
 | `eval/run_eval.py` | 7B + embedding | ~200 s |
+| `eval/run_eval.py --category X` | **7B + embedding** | ~45 s |
 | `eval/offline_proof.py` | 7B + embedding | ~180 s |
 | `eval/fidelity_trap.py` | embedding | ~10 s |
 | `python -m rag.ingest` | embedding | per document |
+| **Running an artifact generator** | 7B + embedding | per LLM call |
 
-Everything else is cheap and safe to loop on: `pytest backend/tests -q` is
-~1 s and loads **no** model, `npm run build && npm run lint` ~3 s.
+Three traps in that table, all of them easy to walk into:
 
-So the working loop is: **iterate against pytest and the frontend build; pay
-the expensive gate once, at delivery, with nothing else running.** Do not give
-each agent in a chain its own eval run — one measurement, one runner. And
-prefer doing a small, bounded change inline over spinning up an agent chain
-for it: every agent starts cold, re-derives context, and runs its own gates.
+1. **`--category` buys time, not memory.** 45 s instead of 200 s, but the 7B
+   still loads. It is the cheap *iteration* path, never the cheap *concurrent*
+   path.
+2. **From Studio Faz 2 onward the feature under development is itself on this
+   list.** A report generator makes one LLM call per section; an agent
+   developing it loads the model on every iteration, not just at the gate. The
+   rule is no longer "the gates are expensive" — it is "the work is expensive."
+3. **`npm run build` is cheap alone, not free alongside.** It spawns six Node
+   workers and it was running next to two model loads when the machine died.
+   ~3 s on its own; do not overlap it with a model run to save wall time.
+
+`pytest backend/tests -q` is the one genuinely free loop: ~1 s, **no model**.
+
+So the working loop is: **iterate against pytest; when you must exercise the
+model, do it alone; pay the full gate once, at delivery, with nothing else
+running.** Do not give each agent in a chain its own eval run — one
+measurement, one runner, and say in the delivery who ran it. Prefer a small
+bounded change inline over an agent chain: every agent starts cold, re-derives
+context, and runs its own gates.
