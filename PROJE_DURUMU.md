@@ -442,10 +442,37 @@ ARTIFACT_NOT_FOUND** · statik export aynı süreçten servis ediliyor, HTML'de
 harici host referansı yok, bundle yeni bileşenleri (`Rapor üret`,
 `Rapordan çıkarılan iddialar`, `Markdown indir`, `data-print`) taşıyor.
 
-**Doğrulanmayan tek şey React etkileşimi**: bu ortamda tarayıcı sürücüsü yok,
-dolayısıyla düğmeye tıklama / yazdırma önizlemesi otomatik sürülemedi. HTTP
-yüzeyi, payload sözleşmesi ve bundle içeriği doğrulandı; tıklama akışı gözle
-kontrol edilmeyi bekliyor.
+### Arayüz kanıtı (gerçek tarayıcı) — `eval/ui_proof.py`
+
+HTTP yüzeyi doğrulandıktan sonra geriye tek katman kalmıştı: React
+etkileşimi. Playwright + Chromium ile ölçüldü (**28/28 kontrol**): sekme
+gezinmesi ok tuşlarıyla çalışıyor (WCAG AA, §9.9.3), artefakt listesi ve
+sadakat oranı görünüyor, rapor açılıyor, **63 cümlenin 63'ü** `data-node-path`
+ve atıf üst simgesi taşıyor, düşürülen **9 iddia** ayrı panelde sebebi ve ham
+cosine skoruyla duruyor, metinleri gövdeye sızmıyor, export bağlantısı aynı
+origin'de doğru endpoint'e gidiyor, `@media print` kabuğu gizleyip raporu tam
+boy bırakıyor, karanlık temada yazdırma açık palete düşüyor, üretim akışında
+ilerleme çubuğu 0–100 tam sayı gösteriyor ve bitince rapor otomatik açılıyor.
+**Sıfır konsol hatası, sıfır harici ağ isteği.**
+
+İki şey kasıtlı olarak sahtelendi ve script çıktısında açıkça yazılıyor:
+warmup atlanır (`model_status` elle "ready") ve `report` üreticisi LLM
+çağırmayan bir sahteyle değiştirilir — doğrulanan şey ÜRETİM değil (o zaten
+gerçek modelle ölçüldü), tarayıcıdaki davranış. Veritabanı yine `rag.db`
+kopyasıdır.
+
+`playwright` **`requirements.txt`'e girmedi**: ürün yolunda hiç import
+edilmiyor, yalnızca bu doğrulama script'i kullanıyor. Ayrı bir
+`requirements-dev.txt` açıldı; `eval/offline_proof.py`'nin 0-soket iddiası bu
+ayrım sayesinde bozulmuyor.
+
+**Görülen kozmetik kusur (düzeltilmedi, kayda geçti).** Model, prompt'un
+yasaklamasına rağmen ara sıra markdown vurgusu üretiyor (`**Yazım**`,
+`**Bir-Ay Proje Planı**`) ve rapor görünümü cümleleri düz metin bastığı için
+yıldızlar ekranda görünüyor. Bunların çoğu zaten `weak` bağ ile düşüyor ama
+hepsi değil. Çözüm `_strip_citations`'ın yanına bir vurgu temizleyicisi
+eklemek olurdu; üretici çıktısını değiştirdiği için kapanma ölçümünün
+yeniden koşulmasını gerektirir, o yüzden ayrı bir karara bırakıldı.
 
 **Bilinen sınır (Faz 2 sonrası).** Varlık şartı, korpusta hiç geçmeyen ama
 özel ad gibi yazılmamış **yanlış bir sayısal olmayan iddiayı** hâlâ

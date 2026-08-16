@@ -1729,8 +1729,11 @@ sürer. Faz 2'nin kapanma ölçümüdür; bir kez koşulur, sonucu
 > 63 cümlenin tamamı chunk'a bağlı, `fidelity_score` 0.9306, export 200 +
 > `text/markdown` + `attachment` (8433 karakter, sıfır `http(s)://`),
 > `format=html|pdf|` → 422, bilinmeyen id → 404, statik export aynı süreçten.
-> React etkileşimi (tıklama/yazdırma önizlemesi) doğrulanmadı: bu ortamda
-> tarayıcı sürücüsü yok.
+>
+> React etkileşimi ayrıca gerçek Chromium ile ölçüldü (`eval/ui_proof.py`,
+> 28/28): sekme gezinmesi, rapor render'ı (63 cümle · 63 atıf üst simgesi),
+> düşürülen 9 iddianın ayrı paneli, export bağlantısı, `@media print`
+> sözleşmesi, ilerleme çubuğu; sıfır konsol hatası, sıfır harici istek.
 
 **Kapı** (rutin, her teslimde):
 
