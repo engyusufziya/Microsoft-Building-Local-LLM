@@ -15,6 +15,12 @@
 import { parseSSEStream } from "./sse"
 import type {
   ApiErrorBody,
+  ArtifactCompleteEvent,
+  ArtifactCreateRequest,
+  ArtifactDetail,
+  ArtifactProgressEvent,
+  ArtifactStageEvent,
+  ArtifactSummary,
   ChatDoneEvent,
   ChatRetrievalEvent,
   ChatTokenEvent,
@@ -182,6 +188,82 @@ export async function streamChat(
         break
       case "done":
         callbacks.onDone?.(JSON.parse(frame.data) as ChatDoneEvent)
+        break
+      case "error":
+        callbacks.onError?.(JSON.parse(frame.data) as ApiErrorBody)
+        break
+    }
+  }
+}
+
+// --------------------------------------------------------------------------- artifacts (Studio)
+
+export function listArtifacts(kind?: string): Promise<ArtifactSummary[]> {
+  const query = kind ? `?kind=${encodeURIComponent(kind)}` : ""
+  return requestJson<ArtifactSummary[]>(`/artifacts${query}`)
+}
+
+export function getArtifact(artifactId: number): Promise<ArtifactDetail> {
+  return requestJson<ArtifactDetail>(`/artifacts/${artifactId}`)
+}
+
+export function deleteArtifact(artifactId: number): Promise<DeleteResponse> {
+  return requestJson<DeleteResponse>(`/artifacts/${artifactId}`, { method: "DELETE" })
+}
+
+/**
+ * Markdown dışa aktarım BAĞLANTISI (FEATURE_SPEC §10.11).
+ *
+ * `fetch` ile indirilmez: tarayıcının kendi indirme yolu `Content-Disposition`
+ * başlığını zaten okuyor; Blob + ObjectURL kurmak aynı işi ikinci kez yapmak
+ * olurdu. Bağlantı AYNI origin'dedir — offline garantisi korunur.
+ */
+export function artifactExportUrl(artifactId: number): string {
+  return `${API_BASE}/artifacts/${artifactId}/export?format=md`
+}
+
+export interface ArtifactCallbacks {
+  onStage?: (event: ArtifactStageEvent) => void
+  onProgress?: (event: ArtifactProgressEvent) => void
+  onComplete?: (event: ArtifactCompleteEvent) => void
+  onError?: (error: ApiErrorBody) => void
+}
+
+/**
+ * Artefakt üretir, SSE olaylarını callback'lere dağıtır
+ * (stage* -> progress* -> complete | error, bkz. FEATURE_SPEC §9.8/§10.11).
+ *
+ * DİKKAT: `progress.pct` burada 0-100 TAM SAYI; `uploadDocument`'ınki 0.0-1.0
+ * kesirli (§9.5 [!warning]). İki akış için paylaşılan bir ilerleme yardımcısı
+ * YAZILMAZ — her akış kendi ölçeğini kendi okur.
+ *
+ * Akış açılmadan önceki hatalar (503 MODEL_WARMING, 404 DOCUMENT_NOT_FOUND,
+ * 422 INSUFFICIENT_CORPUS) Promise'i reject eder; üretim SIRASINDAKİ hata
+ * (GENERATION_FAILED) `event: error` olarak gelir ve `onError`'a düşer.
+ */
+export async function createArtifact(
+  body: ArtifactCreateRequest,
+  callbacks: ArtifactCallbacks = {}
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/artifacts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new ApiRequestError(res.status, await parseErrorBody(res))
+  }
+
+  for await (const frame of parseSSEStream(res)) {
+    switch (frame.event) {
+      case "stage":
+        callbacks.onStage?.(JSON.parse(frame.data) as ArtifactStageEvent)
+        break
+      case "progress":
+        callbacks.onProgress?.(JSON.parse(frame.data) as ArtifactProgressEvent)
+        break
+      case "complete":
+        callbacks.onComplete?.(JSON.parse(frame.data) as ArtifactCompleteEvent)
         break
       case "error":
         callbacks.onError?.(JSON.parse(frame.data) as ApiErrorBody)

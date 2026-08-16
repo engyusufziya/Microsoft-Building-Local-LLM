@@ -140,6 +140,12 @@ export interface ArtifactDetail extends ArtifactSummary {
   claims: ArtifactClaim[]
   /** TÜRETİLİR: verdict === 'unsupported' sayısı. */
   unsupported_count: number
+  /**
+   * TÜRETİLİR: payload.dropped uzunluğu (§10.11). `unsupported_count` ile
+   * BİRLEŞTİRİLMEZ: biri bağlanabilirliği, öbürü rapordan ÇIKARILAN iddiayı
+   * sayar; tuzak iddia ikisinde de görünür (§10.6).
+   */
+  dropped_count: number
 }
 
 export interface ArtifactCreateRequest {
@@ -176,6 +182,67 @@ export interface ArtifactCompleteEvent {
   fidelity_score: number
   generation_ms: number
   unsupported_count: number
+  /** ADDITIVE (§10.11): rapordan çıkarılan iddia sayısı. */
+  dropped_count: number
+}
+
+// --------------------------------------------------------------------------- Rapor payload'ı (Faz 2)
+//
+// `payload_json` §10.5'te DONDURULDU; render'ın TEK girdisi budur, frontend
+// hiçbir alanı tahmin etmez. `ArtifactDetail.payload` jenerik bir
+// Record<string, unknown> olarak kalır (kind başına farklı şema) --
+// `isReportPayload()` ile daraltılır.
+
+export interface ReportParagraph {
+  /** Her cümle ayrı bir <span>: tıklanıp kaynağına gidilebilsin (§10.5). */
+  sentences: string[]
+}
+
+export interface ReportSection {
+  id: string
+  kind: "executive_summary" | "key_findings" | "detailed_analysis"
+  title: string
+  /** Yalnızca `detailed_analysis` için dolu. */
+  topic_id: number | null
+  /** Şeffaflık + ikinci katman kaydı; `exec` için birleşim kümesi (§10.4). */
+  context_chunk_ids: number[]
+  paragraphs: ReportParagraph[]
+}
+
+export interface ReportTable {
+  id: string
+  title: string
+  columns: string[]
+  /** Hücreler ya belge adı (string) ya da chunk sayısı (number). */
+  rows: (string | number)[][]
+}
+
+export interface ReportCitation {
+  chunk_id: number
+  source: string
+  /** 0 = markdown fixture (sayfa eki taşımaz). */
+  page: number
+  citation: string
+}
+
+/** Rapordan ÇIKARILAN iddia. Gövdede gösterilmez; ayrı panelde listelenir. */
+export interface DroppedClaim {
+  section_id: string
+  text: string
+  reason: "unsupported" | "weak" | "unverified_terms"
+  /** HAM COSINE; bağlanamayan iddiada null. */
+  score: number | null
+  /** Yalnızca `unverified_terms` sebebinde dolu. */
+  terms: string[]
+}
+
+export interface ReportPayload {
+  kind: "report"
+  outline: string[]
+  sections: ReportSection[]
+  tables: ReportTable[]
+  citations: ReportCitation[]
+  dropped: DroppedClaim[]
 }
 
 // --------------------------------------------------------------------------- Metrics

@@ -320,21 +320,152 @@ iddianın rapordan çıkarılması).
 2 test, sağlamlaştırma turunda eklenmiş ama hızlı komut listelerine
 yansımamıştı). `docs/STUDIO_PLAN.md §10` **93/93**'e düzeltildi.
 
+## Studio Katmanı — Faz 2 (Rapor Üreteci)
+
+Faz 1 hattı kurdu; Faz 2 hattan geçen **ilk gerçek artefaktı** üretti ve
+böylece hattı doğruladı — spec `docs/FEATURE_SPEC.md` §10.
+
+`rag/artifacts/report.py` (üretici): bölüm planı SABİT, LLM seçmez —
+Yönetici Özeti (en son üretilir, diziye index 0 yazılır) + Temel Bulgular +
+küme başına Detaylı Analiz + deterministik Tablolar/Kaynaklar. Bölüm bağlamı
+sorgudan değil KÜMEDEN gelir (`retrieve.get_top_chunks` çağrılmaz);
+`SUMMARY_MAX_CHUNKS` üst sınırı aşıldığında eşit aralıklı örneklenir, yeni
+sabit eklenmedi. `rag/models.py::get_chat_client` artık `(alias, max_tokens)`
+ile önbelleklenir — `ARTIFACT_SECTION_MAX_TOKENS=700` Faz 1'de config'te
+yazılıydı ama **ulaşılamazdı** (SDK çağrı başına ayar almıyor, ayar client'a
+gömülüyor); mevcut çağıranların davranışı birebir korundu.
+`backend/` ince kaldı: `GET /api/artifacts/{id}/export?format=md` (markdown'ı
+`report.to_markdown` üretir, rota yalnızca başlık kurar) + `dropped_count`
+türetmesi (SSE `complete` ve `ArtifactDetail`, additive).
+`web/components/studio/report/` rapor görünümü: her cümle kaynak numarasıyla,
+tablolar, kaynaklar, ayrı "çıkarılan iddialar" paneli, markdown indirme ve
+`@media print` ile tarayıcının kendi PDF'i. Yeni npm/pip bağımlılığı yok.
+
+**Kapı sayıları:** eval **23/23** (237 sn, 10.3 sn/soru) · backend
+**151 passed** (Faz 1 tabanı 123 + Faz 2'nin 28 yeni testi) · offline kanıtı
+**23/23, 0 soket** · `eval/fidelity_trap.py` **PASS (0.5487 / grounded)** ·
+`web` build + lint temiz (5/5 statik sayfa).
+
+**Kapanma ölçümü (§10.13, `eval/report_trap.py`).** Tuzak cümlesi bir bölümün
+LLM çıktısına **bilerek enjekte edildi** (organik hallüsinasyon değil; koşum
+bunu açıkça yazar), hattın geri kalanı gerçekten çalıştı. eval.db üzerinde,
+7 küme / 9 LLM çağrısı: **48 iddia, 44'ü rapora girdi, 4'ü düşürüldü**
+(hepsi `unverified_terms`). Tuzak `artifact_claims`'te **0.5487 / grounded**
+(pin birebir aynı) ama `node_path` `/dropped/1` — yani `sections` altında
+DEĞİL; rapor gövdesinde "gpt"/"openai" **0 eşleşme**; `fidelity_score`
+**1.0000** (oran). Faz 2'nin iddiası "kapı artık entailment ölçüyor" değil,
+"ürün artık entailment'ı geçemeyen cümleyi **yayımlamıyor**".
+
+### Faz 2'nin ölçümle çürüttüğü kendi kalibrasyonu
+
+İlk kapanma koşumu PASS verdi ama sayılar ürünün kullanılamaz olduğunu
+gösterdi: **47 cümlenin 42'si düşüyordu.** Kök neden ikinci katmanın
+(`fidelity.unverified_terms`) ilk hâlindeydi: bir terim yalnızca doküman
+frekansına göre "ayırt edici" sayılıyordu ve 20 chunk'lık bir korpusta
+sıradan Türkçe çekim de (`dayanır`, `olanak`, `yanıt`, `indirilmesi`) df=0
+alıyor — df sinyali hallüsinasyonu normal sözcükten **ayıramıyor**.
+
+Kalibrasyonun kendisi yanıltıcıydı: `rag/config.py`'deki (b) ölçümü
+korpustan **birebir alınmış** 399 cümleyle yapılmış ve "0/399 toplu düşme"
+demişti. Birebir cümle kendi bağlamında her zaman alt dize olarak bulunur;
+LLM nesri ise aynı bilgiyi **başka sözcüklerle** yazar. Ölçüm gerçek üretilmiş
+nesri temsil etmiyordu ve bu, config yorumuna açıkça yazıldı.
+
+Düzeltme eşik oynatarak değil, kurala **ikinci bir şart** ekleyerek yapıldı
+(§10.6 kural 4b): terim ayrıca **varlık benzeri** olmalı — rakam içermeli
+(`gpt-4`, `200-400`), içinde `-`/`.` bulunmalı (model kimlikleri) ya da
+**cümle başı olmayan** bir konumda büyük harf taşımalı (`OpenAI`, `SQLite`).
+Sözlük ya da durak-kelime listesi yok; işaret metnin kendi yazımından türüyor
+ve §10.6'nın kendi gerekçesine ("cosine özel adları/model kimliklerini
+kaçırır") sadık kalıyor.
+
+| Kural | Rapora giren | Düşen | Tuzağın terimleri |
+|---|---|---|---|
+| yalnız df | **5**/47 | 42 | `varsayılan, gpt-4, kullanır, verileri, openaı, sunucularına, gönderir` |
+| df + varlık | **43**/47 | 4 | `gpt-4, openaı` |
+
+Varlık şartıyla düşen 4 cümlenin 3'ü tuzak dışı ve hepsi **doğru** düşüş: iki
+bozuk `YAZMA:` başlığı ve modelin **uydurduğu bir sayı** (`200-400 kelime`;
+korpus 130+30 diyor). Yani katman, cosine'ın `grounded` saydığı gerçek bir
+hallüsinasyonu da yakaladı.
+
+`FIDELITY_MIN_SCORE` **değişmedi**, `bind_claims`/`verdict_for`/
+`fidelity_score` **değişmedi** — 4b `bind_claims`'in dışında, ondan sonra
+çalışıyor, bu yüzden `fidelity_trap.py`'nin pini aynen duruyor.
+
+**Reddedilen alternatifler (aynı koşum üzerinde ölçüldü).**
+- `FIDELITY_TERM_MIN_LENGTH`'i yükseltmek → **reddedildi**: Türkçe çekimli
+  sözcükler (`eşleşmelerine`, 13 harf) tuzaktan (`gpt-4`, 5 harf) daha uzun;
+  uzunluk iki sınıfı ayırmıyor.
+- `FIDELITY_TERM_DF_MAX_RATIO`'yu değiştirmek → **reddedildi**: her iki sınıf
+  da df=0; oran hangi yöne çekilirse çekilsin ayrım üretmiyor.
+- Kök/önek eşleşmesi (ilk K harf alt dize) → **ölçüldü ve reddedildi**:
+  K=7/6'da 5/47, K=5/4'te 7/47 — 42 düşüşün yalnızca ikisini kurtarıyor,
+  çünkü düşen sözcükler korpusta hiçbir biçimde yok.
+- "En az N doğrulanamayan terim" şartı → **reddedildi**: tuzakta 7 terim var,
+  gerçek cümlelerde de 7/12/14/17/20; sayı ayrım üretmiyor.
+- Varlık işaretine **rakamsız tire/nokta** kolu → **eklendi, sonra ölçümle
+  kaldırıldı**: ilk hâlinde "içinde `-`/`.` olan token model kimliğidir"
+  deniyordu. Üretim korpusundaki uçtan uca koşumda 13 düşüşün 4'ü yalnız bu
+  koldan geldi ve **hepsi yanlış pozitifti** (`soru-cevap` — Türkçe birleşik
+  sözcük). Kol hiçbir gerçek yakalama üretmedi; bu alandaki model kimlikleri
+  (`gpt-4`, `qwen2.5-7b`, `phi-4-mini`) zaten rakam taşıyor. Kaldırıldıktan
+  sonra aynı korpusta rapora giren cümle 59 → **63**, düşen 13 → **9** oldu;
+  tuzak yine `['gpt-4', 'openaı']` ile düştü.
+- Tuzağı `eval_set.json`'a eklemek → **reddedildi** (§10.1.1): "23/23"ün ne
+  ölçtüğünü sessizce genişletirdi. Eval seti **23 soruda kaldı**.
+- `format=html` export → **reddedildi**: yazdırma CSS'i PDF ihtiyacını zaten
+  karşılıyor; ikinci bir HTML render yolu rapor yerleşimi için ikinci bir
+  doğruluk kaynağı olurdu.
+- Önbellekli chat client'ın `settings`'ini geçici değiştirmek →
+  **reddedildi**: paylaşılan global durum; geri alma kaçarsa (istisna, iptal
+  edilen SSE akışı) sohbet cevapları sessizce 700 token tavanıyla çalışır ve
+  bunu hiçbir test yakalamaz.
+
+### Uçtan uca doğrulama (gerçek backend + gerçek model)
+
+Kapılar ve kapanma ölçümü kütüphane seviyesinde koşuyor; ürünün HTTP yüzeyi
+ayrıca **çalışan bir backend üzerinde** doğrulandı. Üretim `rag.db`'sine
+dokunulmadı: bir **kopya** üzerinde `RAG_BACKEND_DB_PATH` ile ayrı bir uvicorn
+açıldı (8 belge / 61 chunk / 10 küme / 12 LLM çağrısı, 267 sn).
+
+30 kontrolün tamamı geçti; öne çıkanlar: `stage` sırası
+`selection → clustering → generation → fidelity` · **12 `progress` olayı**,
+`pct` 8'den 100'e **tam sayı** · `complete` hem `unsupported_count` hem
+`dropped_count` taşıyor · **63 cümlenin 63'ünün** `artifact_claims` satırı ve
+bağlı chunk'ı var · `score` ham cosine aralığında (min 0.4559, max 0.8968) ·
+`fidelity_score` **0.9306** (üretim korpusunda da ≥0.90) · export `200` +
+`text/markdown; charset=utf-8` + `attachment` başlığı, **8433 karakter**,
+içinde **hiç `http(s)://` yok**, düşürülen 9 iddianın metni gövdede yok ama
+sayısı dipnotta · `format=html|pdf|` üçü de **422** · bilinmeyen id **404
+ARTIFACT_NOT_FOUND** · statik export aynı süreçten servis ediliyor, HTML'de
+harici host referansı yok, bundle yeni bileşenleri (`Rapor üret`,
+`Rapordan çıkarılan iddialar`, `Markdown indir`, `data-print`) taşıyor.
+
+**Doğrulanmayan tek şey React etkileşimi**: bu ortamda tarayıcı sürücüsü yok,
+dolayısıyla düğmeye tıklama / yazdırma önizlemesi otomatik sürülemedi. HTTP
+yüzeyi, payload sözleşmesi ve bundle içeriği doğrulandı; tıklama akışı gözle
+kontrol edilmeyi bekliyor.
+
+**Bilinen sınır (Faz 2 sonrası).** Varlık şartı, korpusta hiç geçmeyen ama
+özel ad gibi yazılmamış **yanlış bir sayısal olmayan iddiayı** hâlâ
+yakalamaz — sözcüksel katman entailment ölçmüyor, yalnızca ikinci ve bağımsız
+bir sinyal veriyor. Kapının bilinen entailment boşluğu (yukarıdaki Faz 1
+bölümü) kapanmadı; kapatılmadığı için de gizlenmedi. İkinci bir sınır:
+modelin ara sıra ürettiği **başlık satırları** (`**Yerel Veri Saklama ve
+Embedding Kullanımı**`) Title Case olduğu için varlık şartına takılıp
+düşürülüyor — prompt zaten başlık yazmayı yasaklıyor, yani düşmeleri yanlış
+değil, ama sebep olarak `unverified_terms` görünüyor.
+
 ## Açık işler
 
-`rag/store.py`'de latent bir hata **iki implementer tarafından bağımsız
-olarak** Faz 1 sırasında yakalandı: `:memory:` bağlantıları için matris
-önbelleği anahtarı `f"memory:{id(conn)}"` ve `_matrix_cache`, `conn.close()`
-sırasında hiç geçersiz kılınmıyor (yalnızca yazmada veya `clear_cache()`'te
-temizleniyor). CPython serbest kalan nesne adresini yeniden kullanabildiği
-için, kapanmış bir bağlantının bayat önbellek girdisi yeni açılan bir
-bağlantıya **çarpabiliyor**. ~29 tam test koşumunda 1 kez üretildi (boş
-beklenen yerde `(5,2)` boyutlu bir matris sızdı). **Üretim yolu
-etkilenmiyor** — dosya tabanlı DB kararlı bir yol anahtarı kullanıyor; risk
-yalnızca `:memory:` kullanan test paketinde. Faz 1'e kasıtlı olarak
-**dahil edilmedi** (AGENTS.md §2.3, cerrahi değişiklik ilkesi); ayrı ve
-ölçümle desteklenmiş bir değişiklik olarak ele alınacak. Şu an testler kendi
-fixture'larında `store.clear_cache()` çağırarak korunuyor.
+Faz 2 sonrası açık iş yok. (Faz 1'de kaydedilen `:memory:` bayat matris
+önbelleği hatası **kapandı**: `store._Connection.close()` artık kapanışta
+önbellek girdisini kendisi düşürüyor, `backend/tests/test_store_cache.py`
+`id()` çakışmasını deterministik olarak üretip kilitliyor.)
+
+Sıradaki iş `docs/STUDIO_PLAN.md §9`'un fazlarıdır: Faz 3 (Mind Map, küme
+etiketleme ve `d3-hierarchy` ilk kez o zaman gelir) ve Faz 4 (Quiz).
 
 ## Hızlı komutlar
 
