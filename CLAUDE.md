@@ -135,6 +135,7 @@ don't fully understand, and multi-step work with unclear requirements.
 .venv/bin/python eval/offline_proof.py                # + network audit log
 .venv/bin/python eval/fidelity_trap.py                # pinned known limit of the gate
 .venv/bin/python eval/report_trap.py                  # Faz 2 closing measurement, NOT a routine gate
+.venv/bin/python eval/ui_proof.py                     # browser proof (needs requirements-dev.txt); no model
 .venv/bin/python docs/check_contrast.py               # verify contrast claims
 .venv/bin/python -m rag.ingest --pdf dosya.pdf        # ingest a document
 .venv/bin/python -m rag.ingest --markdown-dir data    # ingest the markdown fixtures

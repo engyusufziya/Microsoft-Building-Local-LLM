@@ -1,0 +1,12 @@
+# Yalnızca GELİŞTİRME/DOĞRULAMA araçları. `requirements.txt`'ten AYRI tutulur.
+#
+# Gerekçe (CLAUDE.md §1.2): requirements.txt ürünün ÇALIŞMA ANI bağımlılık
+# listesidir ve offline garantisinin kapsamındadır. Buradakiler ürün yolunda
+# hiç import edilmez; yalnızca `eval/ui_proof.py` çalıştırılırken yüklenir.
+# `eval/offline_proof.py`'nin ölçtüğü koşumda bu paketlerin hiçbiri devrede
+# değildir -- 0 soket iddiası bu ayrım sayesinde bozulmaz.
+#
+#   .venv/bin/pip install -r requirements-dev.txt
+#   .venv/bin/playwright install chromium     # tarayıcı ikilisi (~130 MB)
+
+playwright>=1.40
