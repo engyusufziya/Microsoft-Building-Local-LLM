@@ -325,7 +325,7 @@ doğrulanır) · sadakat kapısı bilinçli bozuk bir iddiayı `unsupported`
 işaretliyor · eval 23/23 ve backend testleri sıfır başarısızlıkla geçiyor ·
 offline kanıtı 0 soket.
 
-### Faz 2 — Report Generator
+### Faz 2 — Report Generator — **KAPANDI**
 
 **Başarı:** raporun her cümlesi bir chunk'a bağlı · sadakat skoru ≥0.90
 (oran: grounded/toplam — ortalama cosine değil, bkz. FEATURE_SPEC §9.11) ·
@@ -339,6 +339,22 @@ konuya yakın bir iddia 0.5487 ile `grounded` geçiyor
 üretilen rapordan **düşürüldüğü** ve düşürülen iddia sayısının kullanıcıya
 gösterildiği ölçümle kanıtlanmadan kapanmaz. Telafi ikinci bir katmandır —
 `FIDELITY_MIN_SCORE` yükseltilerek değil (o alternatif reddedildi, §9.6).
+
+**Ölçüldü ve karşılandı** (`eval/report_trap.py`, eval.db, 7 küme / 9 LLM
+çağrısı): 48 iddia · 44'ü rapora girdi · 4'ü düşürüldü · tuzak
+`artifact_claims`'te hâlâ **0.5487 / grounded** ama `node_path` `/dropped/1`,
+yani `sections` altında değil · rapor gövdesinde "gpt"/"openai" **0 eşleşme** ·
+`fidelity_score` **1.0000** · `dropped_count` SSE `complete`'te,
+`ArtifactDetail`'de ve arayüzde görünüyor.
+
+> [!warning] Bu planın ikinci katman tarifi ölçümle DÜZELTİLDİ
+> Katmanın ilk hâli terimi yalnızca doküman frekansına göre "ayırt edici"
+> sayıyordu; gerçek üretilmiş raporda **47 cümlenin 42'sini** düşürdü, çünkü
+> 20 chunk'lık korpusta sıradan Türkçe çekim de df=0 alıyor. Kurala ikinci bir
+> şart eklendi (terim ayrıca **varlık benzeri** olmalı: rakam / iç tire-nokta /
+> cümle başı olmayan büyük harf) ve aynı koşumda 43/47 cümle rapora girdi.
+> Tam ölçüm tablosu ve elenen alternatifler: `FEATURE_SPEC §10.6`,
+> `PROJE_DURUMU.md` "Faz 2'nin ölçümle çürüttüğü kendi kalibrasyonu".
 
 ### Faz 3 — Mind Map
 
@@ -360,4 +376,14 @@ Hiçbir faz şunlar korunmadan kapanmaz:
 .venv/bin/python eval/run_eval.py                 # 23/23
 .venv/bin/python -m pytest backend/tests -q       # sıfır başarısızlık
 .venv/bin/python eval/offline_proof.py            # 0 soket
+.venv/bin/python eval/fidelity_trap.py            # PASS, 0.5487 / grounded
+cd web && npm run build && npm run lint           # temiz
 ```
+
+Backend testinin sayısı kapıya **yazılmaz** (Faz 1'de "91/91" bayat kalıp
+regresyonu yeşil göstermişti; gerçek taban 93'tü, Faz 2 sonrası **151**).
+Kapı "sıfır başarısızlık"tır; sayı yalnızca teslim kaydında anılır.
+
+`eval/report_trap.py` bu listede **yoktur** ve kasıtlıdır: Faz 2'nin bir
+kerelik kapanma ölçümüdür, dakikalar sürer (`FEATURE_SPEC §10.13`). Rutin
+kapıya eklemek her teslime birkaç dakika ve bir 7B yüklemesi bindirirdi.

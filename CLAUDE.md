@@ -134,6 +134,7 @@ don't fully understand, and multi-step work with unclear requirements.
 .venv/bin/python eval/run_eval.py --category meta     # PARTIAL run, for iteration only
 .venv/bin/python eval/offline_proof.py                # + network audit log
 .venv/bin/python eval/fidelity_trap.py                # pinned known limit of the gate
+.venv/bin/python eval/report_trap.py                  # Faz 2 closing measurement, NOT a routine gate
 .venv/bin/python docs/check_contrast.py               # verify contrast claims
 .venv/bin/python -m rag.ingest --pdf dosya.pdf        # ingest a document
 .venv/bin/python -m rag.ingest --markdown-dir data    # ingest the markdown fixtures
@@ -265,6 +266,7 @@ anything else on this list:
 | `eval/run_eval.py --category X` | **7B + embedding** | ~45 s |
 | `eval/offline_proof.py` | 7B + embedding | ~180 s |
 | `eval/fidelity_trap.py` | embedding | ~10 s |
+| `eval/report_trap.py` | 7B + embedding | ~4 min (9 LLM calls on eval.db) |
 | `python -m rag.ingest` | embedding | per document |
 | **Running an artifact generator** | 7B + embedding | per LLM call |
 

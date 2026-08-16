@@ -340,10 +340,14 @@ def test_generate_artifact_bilinmeyen_belge_id(conn):
 
 
 def test_registry_bos_ve_register_calisir(conn):
-    """§9.5: get_generator her kind için None döner; register() Faz 1'de
-    çağrılmaz ama fonksiyonun kendisi çalışır (Faz 2'nin tek satırı için)."""
+    """§9.5/§10.14: mindmap ve quiz Faz 2'de de kayıtsız kalır (get_generator
+    None döner). report İSE Faz 2'de KAYITLIDIR -- rag/artifacts/report.py
+    modül yüklenirken `register(ReportGenerator())` çalışır (bkz.
+    rag/artifacts/__init__.py); bu paket zaten import edildiği için (üstteki
+    `from rag.artifacts import base` satırı) kayıt bu test çalışana kadar
+    gerçekleşmiş olur."""
     assert base.get_generator("mindmap") is None
-    assert base.get_generator("report") is None
+    assert base.get_generator("report") is not None
     assert base.get_generator("quiz") is None
 
     class _DummyGenerator:

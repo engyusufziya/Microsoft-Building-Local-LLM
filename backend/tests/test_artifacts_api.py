@@ -11,9 +11,37 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+from rag.artifacts import base
 from rag import store
 from rag.artifacts.fidelity import ClaimBinding
 from rag.artifacts.store import create_artifact
+
+# Faz 2 rapor payload'ı (§10.5 dondurulmuş şema) -- export ve dropped_count
+# türetmeleri bunun üzerinden doğrulanır.
+_REPORT_PAYLOAD = {
+    "kind": "report",
+    "outline": ["executive_summary", "key_findings", "detailed_analysis", "tables", "citations"],
+    "sections": [
+        {
+            "id": "exec",
+            "kind": "executive_summary",
+            "title": "Yönetici Özeti",
+            "topic_id": None,
+            "context_chunk_ids": [1],
+            "paragraphs": [{"sentences": ["Rapora giren cümle."]}],
+        }
+    ],
+    "tables": [{"id": "coverage", "title": "Belge × Konu Kapsama",
+                "columns": ["Belge", "K0"], "rows": [["kaynak.pdf", 2]]}],
+    "citations": [{"chunk_id": 1, "source": "kaynak.pdf", "page": 1,
+                   "citation": "[Kaynak: kaynak.pdf s.1]"}],
+    "dropped": [
+        {"section_id": "exec", "text": "Bu sistem GPT-4 kullanır.",
+         "reason": "unverified_terms", "score": 0.5487, "terms": ["gpt-4"]},
+        {"section_id": "exec", "text": "Bağlanamayan iddia.",
+         "reason": "unsupported", "score": None, "terms": []},
+    ],
+}
 
 
 def _parse_sse(text: str) -> list[tuple[str, dict]]:
@@ -266,3 +294,138 @@ def test_create_artifact_streams_stage_then_generation_failed(ready_client, app)
     # complete VE error birden gelmez.
     assert kinds.count("complete") == 0
     assert kinds.count("error") == 1
+
+
+# --------------------------------------------------------------------------- dropped_count (§10.11)
+
+
+def _seed_report(conn, payload=None, claims=()):
+    return create_artifact(
+        conn,
+        kind="report",
+        scope="corpus",
+        document_id=None,
+        title="Korpus Raporu",
+        params={},
+        payload=_REPORT_PAYLOAD if payload is None else payload,
+        corpus_fingerprint=store.corpus_fingerprint(conn),
+        fidelity_score=0.9,
+        generation_ms=1000,
+        claims=list(claims),
+    )
+
+
+def test_get_artifact_dropped_count_payloaddan_turetilir(app, client):
+    """§10.11: yeni sütun YOK -- len(payload["dropped"]). unsupported_count'tan
+    AYRI bir sayıdır (§10.6): burada biri 2, öbürü 1."""
+    conn = app.state.conn
+    doc_id = _upsert_fake_document(conn, "kaynak.pdf")
+    chunk_id = _chunk_ids(conn, doc_id)[0]
+    claims = [
+        ClaimBinding("/sections/0/paragraphs/0/sentences/0", "Rapora giren cümle.",
+                     chunk_id, 0.72, "grounded"),
+        ClaimBinding("/dropped/0", "Bu sistem GPT-4 kullanır.", chunk_id, 0.5487, "grounded"),
+        ClaimBinding("/dropped/1", "Bağlanamayan iddia.", None, None, "unsupported"),
+    ]
+    artifact_id = _seed_report(conn, claims=claims)
+
+    body = client.get(f"/api/artifacts/{artifact_id}").json()
+    assert body["dropped_count"] == 2
+    assert body["unsupported_count"] == 1
+
+
+def test_dropped_count_dropped_tasimayan_payloadda_sifir(app, client):
+    """mindmap/quiz gibi `dropped` taşımayan artefaktlarda 0 -- KeyError değil."""
+    conn = app.state.conn
+    _upsert_fake_document(conn, "kaynak.pdf")
+    artifact_id = create_artifact(
+        conn, kind="mindmap", scope="corpus", document_id=None, title="H",
+        params={}, payload={"nodes": []},
+        corpus_fingerprint=store.corpus_fingerprint(conn),
+        fidelity_score=None, generation_ms=1, claims=[],
+    )
+    assert client.get(f"/api/artifacts/{artifact_id}").json()["dropped_count"] == 0
+
+
+def test_complete_olayi_dropped_count_tasir(ready_client, app, monkeypatch):
+    """§10.11: `complete` olayına ADDITIVE eklenir -- unsupported_count
+    kaldırılmaz, yeniden adlandırılmaz."""
+    conn = app.state.conn
+    _upsert_fake_document(conn, "a.pdf", n_chunks=2)
+
+    class _Dummy:
+        kind = "report"
+
+        def generate(self, ctx):
+            return base.GeneratedArtifact(
+                title="Korpus Raporu",
+                payload=_REPORT_PAYLOAD,
+                claims=[
+                    ("/sections/0/paragraphs/0/sentences/0", "Rapora giren cümle."),
+                    ("/dropped/0", "Bu sistem GPT-4 kullanır."),
+                    ("/dropped/1", "Bağlanamayan iddia."),
+                ],
+            )
+
+    monkeypatch.setitem(base._registry, "report", _Dummy())
+    monkeypatch.setattr(
+        "rag.models.embed_texts",
+        lambda texts, is_query=False: [[1.0, 0.0, 0.0] for _ in texts],
+    )
+
+    r = ready_client.post("/api/artifacts", json={"kind": "report", "scope": "corpus"})
+    events = _parse_sse(r.text)
+    assert [e for e, _ in events][-1] == "complete"
+    complete = events[-1][1]
+    assert complete["dropped_count"] == 2
+    assert "unsupported_count" in complete
+    assert set(complete) == {
+        "artifact_id", "fidelity_score", "generation_ms",
+        "unsupported_count", "dropped_count",
+    }
+
+
+# --------------------------------------------------------------------------- export (§10.11)
+
+
+def test_export_markdown_basarili(app, client):
+    conn = app.state.conn
+    artifact_id = _seed_report(conn)
+
+    r = client.get(f"/api/artifacts/{artifact_id}/export?format=md")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "text/markdown; charset=utf-8"
+    assert r.headers["content-disposition"] == f'attachment; filename="report-{artifact_id}.md"'
+
+    md = r.text
+    assert "## Yönetici Özeti" in md
+    assert "Rapora giren cümle." in md
+    # §10.12: düşürülen iddianın METNİ değil, yalnızca SAYISI geçer.
+    assert "GPT-4" not in md
+    assert "2 iddia" in md
+    # CLAUDE.md §1.2: harici kaynak yok.
+    assert "http://" not in md and "https://" not in md
+
+
+def test_export_bilinmeyen_artefakt_404(client):
+    r = client.get("/api/artifacts/999/export?format=md")
+    assert r.status_code == 404
+    assert r.json()["code"] == "ARTIFACT_NOT_FOUND"
+
+
+def test_export_gecersiz_format_422(app, client):
+    """`format=html` §10.15'te reddedildi -- FastAPI doğrulaması 422 verir."""
+    conn = app.state.conn
+    artifact_id = _seed_report(conn)
+    assert client.get(f"/api/artifacts/{artifact_id}/export?format=html").status_code == 422
+    assert client.get(f"/api/artifacts/{artifact_id}/export").status_code == 422
+
+
+def test_export_bayat_artefakt_200(app, client):
+    """Export bir OKUMA işlemidir: bayat artefakt 409 değil 200 döner (§9.8)."""
+    conn = app.state.conn
+    artifact_id = _seed_report(conn)
+    _upsert_fake_document(conn, "sonradan.pdf")  # korpus değişti -> is_stale
+
+    assert client.get(f"/api/artifacts/{artifact_id}").json()["is_stale"] is True
+    assert client.get(f"/api/artifacts/{artifact_id}/export?format=md").status_code == 200

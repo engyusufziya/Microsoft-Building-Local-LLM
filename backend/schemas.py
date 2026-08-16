@@ -109,6 +109,10 @@ class ArtifactDetail(ArtifactSummary):
     payload: dict
     claims: List[ArtifactClaimOut]
     unsupported_count: int  # TÜRETİLİR: verdict == 'unsupported'
+    # TÜRETİLİR: len(payload["dropped"]) -- yeni sütun YOK (§10.11).
+    # unsupported_count'tan AYRI bir sayıdır: biri bağlanabilirliği, öbürü
+    # rapordan ÇIKARILAN iddiayı sayar; tek skora katlanmazlar (§10.6).
+    dropped_count: int
 
 
 class ArtifactCreateRequest(BaseModel):

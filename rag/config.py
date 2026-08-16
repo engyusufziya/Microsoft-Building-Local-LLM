@@ -258,3 +258,47 @@ FIDELITY_MIN_SCORE = 0.45
 # ve tarama ayırt etme gücünü kaybeder. Bir bulguyu kaybetmek sorun değil,
 # kuralı kaybetmek sorun (CLAUDE.md §1.3 kasıtlı olarak mutlaktır).
 FIDELITY_WEAK_BAND_WIDTH = 0.10
+
+# rag/artifacts/fidelity.py::unverified_terms -- Faz 2'nin ikinci katmanı
+# (FEATURE_SPEC.md §10.6). Cosine "bu konuda bir chunk var mı" sorusunu
+# cevaplıyor, özel adları/model kimliklerini (entailment boşluğu, bkz.
+# FIDELITY_MIN_SCORE'un üstündeki 0.5487 tuzağı) kaçırıyor; bu iki sabit,
+# sözcüksel doküman-frekansından türeyen İKİNCİ ve BAĞIMSIZ bir sinyal kurar.
+# Ne biri ne öbürü FIDELITY_MIN_SCORE'u DEĞİŞTİRME gerekçesi değildir --
+# tamamlayıcıdır (§9.6'da eşik yükseltme zaten reddedildi).
+#
+# ÖLÇÜLDÜ (eval.db: 20 chunk, rag.db: 61 chunk; model YÜKLEMEZ, saf metin
+# taraması -- python -m pytest kadar ucuz):
+#   (a) Tuzağın terimleri her iki korpusta da HİÇ geçmiyor (df=0, oran=0.000)
+#       -- "gpt-4" ve "openai" (Türkçe-duyarlı küçültmeyle "openaı") ratio
+#       eşiğinin her zaman altında, yani her zaman AYIRT EDİCİ sayılıyor.
+#   (b) Korpustan birebir alınmış 399 cümle (eval.db 64 + rag.db 335), kendi
+#       kaynak chunk'ı bağlam verildiğinde 0/399 toplu düşürüldü -- gerçek
+#       içerik alt dize eşleşmesiyle her zaman kendi bağlamında bulunuyor.
+#
+# (b) ÖLÇÜMÜ YANILTICIYDI, KAYDA GEÇİRİLDİ (FEATURE_SPEC.md §10.6): birebir
+# alınmış cümle kendi bağlamında HER ZAMAN bulunur; LLM nesri ise aynı bilgiyi
+# BAŞKA sözcüklerle yazar. Gerçek üretilmiş raporda (eval.db, 47 cümle) yalnız
+# df'ye bakan biçim 42 cümleyi düşürdü -- çünkü 20 chunk'lık korpusta sıradan
+# Türkçe çekim de df=0 alıyor. Çözüm bu iki sabiti DEĞİŞTİRMEK olmadı (ikisi de
+# ayrım üretmiyor, ölçüldü); kurala ikinci bir şart eklendi: terim ayrıca
+# "varlık benzeri" olmalı (rakam/tire/nokta ya da cümle başı olmayan büyük
+# harf). Aynı koşumda 43/47 cümle rapora girdi, tuzak yalnızca "gpt-4" ve
+# "openaı" ile düştü. Bkz. fidelity.py::_entity_like.
+FIDELITY_TERM_MIN_LENGTH = 4
+
+# 2-3 harfli Türkçe bağlaçlar/ekler ("ve", "bu", "bir", "da", "de", "ile")
+# hiçbir zaman ayırt edici bir sinyal taşımaz; MIN_LENGTH=4 bunları terim
+# kontrolüne HİÇ sokmadan eler (df hesaplamasını gereksiz yere gürültüye
+# maruz bırakmaz).
+FIDELITY_TERM_DF_MAX_RATIO = 0.15
+
+# ÖLÇÜLDÜ: 0.15'te en yaygın gerçek korpus terimleri kontrol dışı kalıyor --
+# "rag" oran=0.50/0.51, "bir" oran=0.75/0.246, "ve" oran=0.65/0.23, "bu"
+# oran=0.60/0.197 (eval.db/rag.db) hiçbiri "ayırt edici" sayılmıyor. Bilinen
+# sınır: MIN_LENGTH>=4'ü aşan ama küçük korpusta seyrek geçen bazı gerçek
+# bağlaçlar ("kadar", "olarak") yine de ayırt edici sayılabiliyor (rag.db'de
+# sırasıyla oran=0.033/0.049) -- ama (b) ölçümünün 0/399 sonucu gösteriyor ki
+# bu, gerçek/kendi bağlamına sahip içeriği toplu düşürmüyor; alt dize
+# eşleşmesi kendi kaynağında her zaman buluyor.
+
