@@ -156,7 +156,7 @@ def _term_tokens(text: str) -> list[str]:
 _UPPERCASE = set("ABCDEFGHIJKLMNOPQRSTUVWXYZÇĞİIÖŞÜ")
 
 
-def _entity_like(raw: str, index: int) -> bool:
+def _entity_like(raw: str, index: int, is_title: bool = False) -> bool:
     """Token bir ÖZEL AD ya da MODEL KİMLİĞİ gibi mi duruyor (§10.6, kural 4b)?
 
     İki işaretten biri yeterli, ikisi de metnin KENDİ yazımından türer --
@@ -169,6 +169,22 @@ def _entity_like(raw: str, index: int) -> bool:
     Cümle başı (index == 0) DIŞARIDA bırakılır: Türkçede her cümle büyük harfle
     başlar, dolayısıyla ilk token'ın büyük harfi özel ad işareti değildir.
 
+    `is_title=True` ise BÜYÜK HARF KOLU HİÇ ÇALIŞMAZ; yalnızca rakam işareti
+    kalır. Gerekçe ölçümden geldi (FEATURE_SPEC §11.4): metin bir BAŞLIK
+    olduğunda büyük harf hiçbir bilgi taşımaz -- başlıkta zaten her sözcük
+    büyük yazılır. Faz 3'ün ilk koşumunda modelin 7 etiketinin 3'ü tam bu
+    yüzden düştü ("Retrieval-Augmented Generation Anlatımı", "Yakın Komşu Arama
+    Teknikleri", "Embedding Ve Benzerlik Analizi") ve üçü de YANLIŞ POZİTİFTİ.
+    Önce prompt'a "cümle düzeni kullan" kuralı eklendi; ÖLÇÜLDÜ ve İŞE
+    YARAMADI (model kuralı yok sayıp "Embedding Ve Benzerlik Analizi" üretti --
+    bu projenin "üretim yalnızca prompt ile kontrol edilir" varsayımının
+    sınırı). Bu yüzden ayrım ÇAĞIRANA taşındı: cümle veren çağıran (rapor,
+    quiz) varsayılanı kullanır ve DAVRANIŞI DEĞİŞMEZ -- Faz 2'nin ölçülmüş
+    43/47 sonucu ve report_trap.py aynen geçerli kalır.
+
+    Eşik ya da oran YOK: "başlık mı" sorusunu metnin biçimine bakarak TAHMİN
+    etmiyoruz, çağıran zaten BİLİYOR.
+
     RAKAMSIZ TİRE/NOKTA İŞARETİ YOK -- ölçümle çıkarıldı (FEATURE_SPEC §10.6):
     üretim korpusunda (61 chunk) gerçek raporun 13 düşüşünden 4'ü yalnızca bu
     koldan geliyordu ve hepsi YANLIŞ POZİTİFTİ ("soru-cevap" -- Türkçe birleşik
@@ -177,6 +193,8 @@ def _entity_like(raw: str, index: int) -> bool:
     """
     if any(ch.isdigit() for ch in raw):
         return True
+    if is_title:
+        return False
     return index > 0 and any(ch in _UPPERCASE for ch in raw)
 
 
@@ -197,8 +215,57 @@ def _corpus_term_df(conn: sqlite3.Connection) -> tuple[dict[str, int], int]:
     return df, n
 
 
+def distinctive_terms(
+    conn: sqlite3.Connection, text: str, *, is_title: bool = False
+) -> list[tuple[str, str]]:
+    """Metnin AYIRT EDİCİ terimleri: (ham yazım, küçültülmüş) çiftleri.
+
+    unverified_terms'in 1-4. kuralları burada uygulanır; 5. kural (bağlam
+    chunk'larında geçiyor mu) UYGULANMAZ -- o, çağıranın sorusudur.
+
+    İki tüketicisi var ve ikisinin de AYNI "ayırt edici" tanımını kullanması
+    zorunlu (CLAUDE.md §1.3'ün aynı gerekçesi, tek doğruluk kaynağı):
+      - unverified_terms (Faz 2 sadakat katmanı, aşağıda),
+      - quiz'in boşluk/çeldirici seçimi (Faz 4, §12.4) -- bir soruda
+        boşaltılacak terim, tam da korpusta ayırt edici olan terimdir.
+
+    Faz 3'te unverified_terms'ten ÇIKARILDI; davranışı değişmedi
+    (backend/tests/test_artifacts_report.py'nin dört terim testi aynen geçiyor).
+
+    BİLİNEN SINIR: config.FIDELITY_TERM_MIN_LENGTH (4) yüzünden kısa sayılar
+    ("130", "30", "16") ayırt edici SAYILMAZ. Sadakat katmanı için bu doğru
+    kalibrasyon (kısa token gürültülüdür); quiz için bunun sonucu, kısa
+    sayıların boşluk olarak seçilememesidir -- eşiği quiz için gevşetmek
+    kuralı ikiye bölerdi, o yüzden gevşetilmedi (§12.4).
+    """
+    df, n = _corpus_term_df(conn)
+    if n == 0:
+        return []
+
+    terms: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(_raw_terms(text)):
+        token = _term_lower(raw)
+        if token in seen:  # sırayı koruyarak tekilleştir
+            continue
+        seen.add(token)
+        if len(token) < config.FIDELITY_TERM_MIN_LENGTH:
+            continue
+        ratio = df.get(token, 0) / n
+        if ratio > config.FIDELITY_TERM_DF_MAX_RATIO:
+            continue  # yaygın terim -- ayırt edici değil, kontrol edilmez
+        if not _entity_like(raw, index, is_title):
+            continue  # sıradan sözcük -- korpusta yokluğu hallüsinasyon işareti değil
+        terms.append((raw, token))
+    return terms
+
+
 def unverified_terms(
-    conn: sqlite3.Connection, claim_text: str, context_chunk_ids: Sequence[int]
+    conn: sqlite3.Connection,
+    claim_text: str,
+    context_chunk_ids: Sequence[int],
+    *,
+    is_title: bool = False,
 ) -> list[str]:
     """İddiadaki AYIRT EDİCİ terimlerden bağlamda geçmeyenleri döndürür.
 
@@ -238,27 +305,11 @@ def unverified_terms(
     else:
         context_text = ""
 
-    df, n = _corpus_term_df(conn)
-    if n == 0:
-        return []
-
-    unverified: list[str] = []
-    seen: set[str] = set()
-    for index, raw in enumerate(_raw_terms(claim_text)):
-        token = _term_lower(raw)
-        if token in seen:  # sırayı koruyarak tekilleştir
-            continue
-        seen.add(token)
-        if len(token) < config.FIDELITY_TERM_MIN_LENGTH:
-            continue
-        ratio = df.get(token, 0) / n
-        if ratio > config.FIDELITY_TERM_DF_MAX_RATIO:
-            continue  # yaygın terim -- ayırt edici değil, kontrol edilmez
-        if not _entity_like(raw, index):
-            continue  # sıradan sözcük -- korpusta yokluğu hallüsinasyon işareti değil
-        if token not in context_text:
-            unverified.append(token)
-    return unverified
+    return [
+        token
+        for _raw, token in distinctive_terms(conn, claim_text, is_title=is_title)
+        if token not in context_text
+    ]
 
 
 def should_drop(binding: ClaimBinding, unverified: Sequence[str]) -> Optional[str]:

@@ -1,5 +1,8 @@
-"""Studio artefakt hattının Faz 1 rag/ katmanı: şema göçü, corpus_fingerprint,
+"""Studio artefakt hattının ORTAK rag/ katmanı: şema göçü, corpus_fingerprint,
 rag/topics.py::cluster_corpus, rag/artifacts/ (fidelity, store, base).
+
+Bu dosya hattın TİP-BAĞIMSIZ kısmını ölçer; üretici başına testler
+test_artifacts_{report,mindmap,quiz}.py'dedir.
 
 FEATURE_SPEC.md §9'un doğrulanabilir kriterlerinin regresyon kilidi. Foundry
 Local'a HİÇ dokunulmaz -- conftest.py'nin deseni izlenir: kümeleme zaten
@@ -298,9 +301,13 @@ def test_create_list_get_delete_artifact(conn):
 # --------------------------------------------------------------------------- base.generate_artifact
 
 
-def test_generate_artifact_registry_bos_generation_failed(conn):
-    """Faz 1: registry boş. Seçim ve kümeleme GERÇEKTEN çalışır, sonra
-    GenerationFailedError fırlar -- ölü kod değil, hattın gerçek durumu."""
+def test_generate_artifact_kayitsiz_kind_generation_failed(conn):
+    """Seçim ve kümeleme GERÇEKTEN çalışır, sonra kayıtlı üretici yoksa
+    GenerationFailedError fırlar.
+
+    Faz 1'de bu testin `kind`'ı "mindmap"ti (o zaman registry BOŞTU). Faz 3/4
+    ile üç kind'in üçü de kayıtlandı; test artık gerçekten kayıtsız bir kind
+    kullanıyor. Ölçtüğü davranış aynı: hat 3. adıma kadar çalışır."""
     chunks = [_Chunk(f"c{i}") for i in range(4)]
     store.upsert_document(
         conn, "a.md", 1, chunks, [_unit(a) for a in (0, 5, 90, 95)]
@@ -309,7 +316,7 @@ def test_generate_artifact_registry_bos_generation_failed(conn):
     events = []
     with pytest.raises(base.GenerationFailedError):
         base.generate_artifact(
-            conn, kind="mindmap", scope="corpus", document_id=None,
+            conn, kind="kayitsiz-kind", scope="corpus", document_id=None,
             params={}, emit=lambda name, payload: events.append((name, payload)),
         )
 
@@ -339,26 +346,29 @@ def test_generate_artifact_bilinmeyen_belge_id(conn):
     assert events == [("stage", {"stage": "selection", "label": "Kaynaklar seçiliyor"})]
 
 
-def test_registry_bos_ve_register_calisir(conn):
-    """§9.5/§10.14: mindmap ve quiz Faz 2'de de kayıtsız kalır (get_generator
-    None döner). report İSE Faz 2'de KAYITLIDIR -- rag/artifacts/report.py
-    modül yüklenirken `register(ReportGenerator())` çalışır (bkz.
-    rag/artifacts/__init__.py); bu paket zaten import edildiği için (üstteki
-    `from rag.artifacts import base` satırı) kayıt bu test çalışana kadar
-    gerçekleşmiş olur."""
-    assert base.get_generator("mindmap") is None
+def test_registry_kayitli_ureticiler_ve_register_calisir(conn):
+    """§9.5: üç üreticinin üçü de kendi modülü yüklenirken kaydolur.
+
+    Faz 1'de registry BOŞTU, Faz 2'de yalnızca `report` doldu; Faz 3 mindmap'i
+    ekledi, `quiz` Faz 4'te gelecek. Kayıt, `rag/artifacts/__init__.py`'nin alt modülleri
+    import etmesiyle gerçekleşir -- bu dosyanın `from rag.artifacts import base`
+    satırı paketi zaten yüklüyor."""
     assert base.get_generator("report") is not None
-    assert base.get_generator("quiz") is None
+    assert base.get_generator("mindmap") is not None
+    assert base.get_generator("quiz") is None  # Faz 4'te gelecek
+    # Kayıtlı OLMAYAN bir kind hâlâ None döner -- hattın 3. adımdaki hata yolu
+    # (test_generate_artifact_kayitsiz_kind_generation_failed) buna dayanıyor.
+    assert base.get_generator("kayitsiz-kind") is None
 
     class _DummyGenerator:
-        kind = "mindmap"
+        kind = "kayitsiz-kind"
 
         def generate(self, ctx):
             return base.GeneratedArtifact(title="t", payload={}, claims=[])
 
     base.register(_DummyGenerator())
     try:
-        assert base.get_generator("mindmap") is not None
+        assert base.get_generator("kayitsiz-kind") is not None
     finally:
         # global registry'yi diğer testlere sızdırmamak için temizle.
-        base._registry.pop("mindmap", None)
+        base._registry.pop("kayitsiz-kind", None)

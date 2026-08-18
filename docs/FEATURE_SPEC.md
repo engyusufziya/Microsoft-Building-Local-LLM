@@ -1768,3 +1768,255 @@ cd web && npm run build && npm run lint           # temiz
 | `fidelity_score` ile `dropped_count`'u tek "kalite skoru"nda birleştirmek | İki farklı soruyu tek sayıya sıkıştırmak ikisini de yalancı yapar (§10.6) |
 | Durak-kelime/kök sözlüğü ile ayırt edici terim seçmek | Ayırt edicilik korpusun kendi doküman frekansından türetilebiliyorken dışarıdan liste getirmek ikinci bir bakım yüzeyi açardı |
 | Bölüm chunk üst sınırı için yeni sabit | `SUMMARY_MAX_CHUNKS` aynı problemi aynı gerekçeyle zaten çözüyor (`CLAUDE.md §1.3`) |
+
+---
+
+## 11. Studio Katmanı — Faz 3 (Mind Map)
+
+> §9 hattı kurdu, §10 hattan ilk artefaktı geçirdi. Faz 3 aynı hattan **ikinci
+> artefakt tipini** geçirir ve böylece hattın gerçekten tip-bağımsız olduğunu
+> gösterir: `base.generate_artifact` DEĞİŞMEDİ, yalnızca yeni bir üretici
+> kaydedildi.
+
+### 11.0 Kapsam — ve kapsam DIŞI
+
+| İçeride (Faz 3) | Dışarıda |
+|---|---|
+| `rag/artifacts/mindmap.py` (üretici) | `d3-hierarchy` bağımlılığı (§11.9'da **reddedildi**) |
+| `topics.topic_title` (deterministik küme adı) | Pan/zoom, sürükleme, düğüm düzenleme |
+| `MINDMAP_EDGE_MIN_SIMILARITY`, `MINDMAP_LABEL_CONTEXT_CHUNKS` | Küme sayısını kullanıcıya ayarlatmak |
+| `web/components/studio/mindmap/**` | `rag/topics.py` kümeleme algoritması (Faz 1'de dondu) |
+| `eval/mindmap_proof.py` kapanma ölçümü | Yeni SSE olayı, yeni hata kodu |
+
+### 11.1 Temel karar — haritayı LLM çizmez
+
+`STUDIO_PLAN §6.1`: yapı embedding'lerden **deterministik** çıkar, LLM yalnızca
+kümelere isim verir. Gerekçe, Faz 2'nin sadakat mantığının aynısıdır: LLM'e
+"korpusu haritala" demek, düğümlerin belgede gerçekten olup olmadığını
+**doğrulanamaz** kılar. Küme yaklaşımında her düğüm **zaten bir chunk
+kümesidir** — hallüsinasyon yapısal olarak imkânsız, yalnızca **etiket** yanlış
+olabilir ve o da kapıdan geçer.
+
+Bu, ölçülebilir bir iddiadır ve §11.10 onu ölçer: etiketler tamamen değişse bile
+düğüm kimlikleri, chunk üyelikleri ve kenarlar **birebir aynı** kalır.
+
+### 11.2 `payload_json` şeması — DONDURULDU
+
+```json
+{
+  "kind": "mindmap",
+  "nodes": [
+    {"id": "root", "label": "Korpus Zihin Haritası", "kind": "root",
+     "parent": null, "topic_id": null, "chunk_ids": [], "size": 20,
+     "label_source": "corpus", "citations": []},
+    {"id": "n0", "label": "SQLite ile yerel veri saklama", "kind": "topic",
+     "parent": "root", "topic_id": 0, "chunk_ids": [12, 15, 19], "size": 3,
+     "label_source": "model",
+     "citations": [{"chunk_id": 12, "source": "belge_04.md", "page": 0,
+                    "citation": "[Kaynak: belge_04.md]"}]}
+  ],
+  "edges": [{"from": "n1", "to": "n4", "relation": "related", "weight": 0.7127}],
+  "dropped": [{"topic_id": 3, "text": "GPT-4 mimarisi",
+               "reason": "unverified_terms", "score": 0.5487, "terms": ["gpt-4"]}]
+}
+```
+
+- `nodes[0]` **her zaman köktür** ve LLM üretimi değildir (korpus metadatası) —
+  bu yüzden iddiası da yoktur.
+- `label_source` bir **dürüstlük alanıdır**: `model` (etiketi model yazdı ve
+  kapıdan geçti), `fallback` (kapıdan geçemedi, ad korpustan türedi),
+  `corpus` (kök). Arayüz `fallback`i **göstermek zorundadır** (§11.9).
+- `citations` düğümün **tüm** chunk'larını taşır; biçim `retrieve.Hit.citation()`
+  ile birebir aynıdır ve arayüz ikinci bir istek atmaz.
+- `weight` **ham cosine**dır (`topics.topic_similarity`), yeniden ölçeklenmez.
+
+### 11.3 Hat adımları
+
+| # | Adım | Ne yapar | LLM? |
+|---|---|---|---|
+| 1 | Seçim | `base.generate_artifact` (değişmedi) | — |
+| 2 | Yapı | `topics.cluster_corpus` (Faz 1'de dondu) | — |
+| 3 | Üretim | küme başına **1** etiket çağrısı | ✅ N çağrı |
+| 4 | Sadakat | `bind_claims` + `unverified_terms(is_title=True)` | — |
+| 5 | Kayıt | `artifacts.store.create_artifact` (değişmedi) | — |
+
+`progress` olayı etiket başına yayılır, `pct` **0–100 tam sayıdır** (§9.5).
+
+### 11.4 Etiketleme — ve ölçümle düzeltilen iki hata
+
+Bağlam kümenin merkezine **en yakın `MINDMAP_LABEL_CONTEXT_CHUNKS` (3)**
+chunk'ıdır; `Topic.chunk_ids` zaten merkeze yakınlıkta azalan sırada gelir.
+`SUMMARY_MAX_CHUNKS` (12) kullanılmaz: ≤5 kelimelik bir etiket için 12 chunk'lık
+bağlam yalnızca prefill maliyetidir.
+
+**Biçim temizliği.** Model, prompt'un yasağına rağmen markdown vurgusu, tırnak
+ve "Konu:" öneki üretebiliyor (Faz 2'de kayda geçen kozmetik kusurun aynısı).
+`_clean_label` ilk satırı alır, süslemeyi kırpar; sonuç boşsa ya da **5
+kelimeden uzunsa** etiket geçersizdir ve düğüm deterministik ada düşer
+(`dropped.reason = "label_invalid"`, `score = null` — bind_claims'e boş dize
+vermek anlamsız bir skor üretirdi).
+
+> [!warning] ÖLÇÜLDÜ — ilk koşumda 7 etiketin 3'ü YANLIŞ POZİTİF olarak düştü
+> `eval.db` üzerinde gerçek modelle: "Retrieval-Augmented Generation Anlatımı"
+> (0.7430), "Yakın Komşu Arama Teknikleri" (0.5167), "Embedding ve Benzerlik
+> Analizi" (0.8027) — üçü de **doğru** etiketti.
+>
+> Kök neden kapıda değil, **yazımdaydı**: model başlıkları Başlık Düzeninde
+> yazıyor; `fidelity._entity_like` ise "cümle başı olmayan büyük harf"i özel ad
+> kanıtı sayıyor. Başlık Düzeninde bu işaret **hiçbir bilgi taşımaz**, çünkü
+> her sözcük büyük.
+>
+> **Denenen ve ölçümle elenen çözüm:** prompt'a "CÜMLE DÜZENİ kullan, Her
+> Kelimeyi Büyük Harfle Başlatma" maddesi eklendi ve aynı korpusta yeniden
+> koşuldu. Model kuralı **yok saydı**; üstelik bir etiketi "Embedding ve
+> Benzerlik Analizi"nden "Embedding **Ve** Benzerlik Analizi"ne çevirdi. Düşen
+> etiket 3/7'de kaldı. Madde geri alındı (işlemeyen bir kuralı prompt'ta tutmak
+> çalıştığını ima eder). Bu, projenin "üretim kalitesi yalnızca prompt ve model
+> seçimiyle kontrol edilir" varsayımının **ölçülmüş sınırıdır**.
+>
+> **Uygulanan çözüm — kapı GEVŞETİLMEDİ:** ayrım çağırana taşındı.
+> `unverified_terms(..., is_title=True)` büyük harf kolunu kapatır, **rakam
+> kolu çalışmaya devam eder**. Cümle veren çağıranlar (rapor, quiz) varsayılanı
+> kullanır ve davranışları **birebir aynı** kalır — Faz 2'nin 43/47 ölçümü ve
+> `report_trap.py` geçerliliğini korur. Eşik ya da oran yok: "başlık mı"
+> sorusunu metnin biçimine bakarak tahmin etmiyoruz, **çağıran zaten biliyor**.
+>
+> Düzeltmeden sonra aynı koşumda: **7/7 etiket modelden**, 0 düşüş.
+> Tuzak savunması korundu: "GPT-4 mimarisi" hâlâ rakam kolundan düşer
+> (`backend/tests/test_artifacts_mindmap.py`).
+
+### 11.5 Kapıdan geçemeyen etiket — düğüm SİLİNMEZ
+
+Faz 3'ün Faz 2'den **ayrıldığı** tek nokta. Raporda bağlanamayan cümle
+çıkarılır; haritada bağlanamayan etiketin düğümü çıkarılamaz, çünkü düğüm
+korpusun **gerçek bir parçasıdır** — silmek, `rag/topics.py`'nin "artık kümeyi
+atma, emil" kuralının (korpusu sessizce yok etmeme) aynı ihlali olurdu.
+
+Bunun yerine:
+
+1. Etiket `topics.topic_title(topic, sources_by_chunk)` ile korpustan türer
+   (`"belge_04.md (3 bölüm)"`). Türetme raporun "Detaylı Analiz" başlığıyla
+   **aynı fonksiyondur** — iki kopya iki doğruluk kaynağı olurdu.
+2. `label_source = "fallback"` yazılır ve arayüz bunu gösterir.
+3. Modelin önerisi `payload["dropped"]`'a **sebebi ve ham cosine skoruyla** gider.
+4. Yedek etiket **iddia sayılmaz**: korpustan deterministik türüyor, onu sadakat
+   oranına katmak ölçülmemişi ölçülmüş göstermek olurdu.
+
+### 11.6 Kenarlar
+
+İki küme merkezi arasındaki ham cosine `MINDMAP_EDGE_MIN_SIMILARITY`'yi
+**aşarsa** kenar çizilir. Sıra deterministik: ağırlık azalan, eşitlikte düğüm
+kimliği artan.
+
+> [!danger] Bu eşik `MIN_SCORE` DEĞİLDİR ve onunla eşitlenemez
+> `MIN_SCORE` "bu chunk bu **soruya** cevap veriyor mu" eşiğidir; bu sabit "bu
+> iki **konu** birbirine yakın mı" eşiğidir. Ölçüldü (model yüklemez, yalnızca
+> kayıtlı embedding'ler):
+>
+> | Eşik | eval.db (7 küme, 21 çift) | rag.db (10 küme, 45 çift) |
+> |---|---|---|
+> | 0.45 (= `MIN_SCORE`) | çiftlerin ~yarısı | çiftlerin ~yarısı → **hairball** |
+> | 0.50 | 7 kenar (ort. derece 2.0) | 20 kenar (ort. derece 4.0) |
+> | **0.55** | **2 kenar (0.6)** | **11 kenar (2.2)** |
+> | 0.60 | 1 kenar (0.3) | 8 kenar (1.6) |
+> | 0.65 | 0 kenar | 2 kenar (0.4) |
+>
+> Merkez benzerliklerinin medyanı 0.4366 (eval.db) / 0.4707 (rag.db) — yani
+> `MIN_SCORE` bu soruya uygulanırsa haritanın yarısı kenar olur ve kenarın
+> taşıdığı bilgi sıfırlanır. **0.55** iki korpusta da okunabilir kalıyor.
+
+**Kenar yokluğu hata değildir**: kümeler gerçekten uzaksa harita yıldız olarak
+çizilir ve arayüz bunu açıkça söyler.
+
+### 11.7 İddialar
+
+```
+/nodes/{i}/label     -> model etiketinin metni  (yalnızca label_source == "model")
+/dropped/{i}         -> kapıdan geçemeyen etiket önerisi
+```
+
+Her `node_path` `payload_json` içinde **gerçekten çözülür** (RFC 6901);
+`mindmap_proof.py` ve birim testleri bunu doğrular.
+
+### 11.8 Export — `to_markdown` kind başına
+
+Faz 2'de `GET /api/artifacts/{id}/export` koşulsuz `report.to_markdown`
+çağırıyordu. Mindmap üretilebilir olduğu anda bu yol **sessizce boş bir dosya**
+döndürürdü (200 + boş gövde) — "sahte sayı göstermeme" ilkesinin aynı ihlali.
+
+Rota artık `kind → to_markdown` sözlüğünden seçer. Sözlük `kind` birliği
+üzerinde **tamdır** (üç tipin üçü de var), bu yüzden eksik-kind için savunma
+kodu ve **yeni bir hata kodu yazılmadı** (CLAUDE.md §2.2). Markdown düz metindir,
+`http(s)://` üretmez; düşürülen etiketin **metni gövdeye girmez**, yalnızca
+sayısı dipnot olur.
+
+### 11.9 Frontend — `d3-hierarchy` REDDEDİLDİ
+
+`STUDIO_PLAN §7` ve `§9.0` bu bağımlılığı Faz 3'e bırakmıştı. Faz 3 kararı:
+**kurulmuyor.**
+
+Gerekçe: bu harita **iki seviyelidir** (kök → konular). d3-hierarchy'nin değeri
+derin/düzensiz ağaçların düğüm ayrıştırma matematiğidir; iki seviyeli radyal
+yerleşim `angle = 2π·i/N` — `mindmap-payload.ts` içinde ~20 satır. Tek
+kullanımlık bir bağımlılığı offline yüzeyine sokmanın karşılığı yok
+(CLAUDE.md §2.2). Sonuç: **`package.json` DEĞİŞMEDİ.**
+
+Bileşenler: `web/components/studio/mindmap/{mindmap-payload.ts,mindmap-view.tsx}`.
+`ArtifactViewer` (`components/studio/artifact-viewer.tsx`) açık artefaktı
+`kind`'ına göre yönlendirir; `web/app/page.tsx`'teki tek satır **sabit kalır**
+(sahiplik sınırı, §10.12).
+
+Erişilebilirlik (WCAG AA, §9.9.3'ün deseni): SVG `role="tree"`, düğümler
+`role="treeitem"` + `aria-level` + `aria-selected`, roving `tabindex`, ok
+tuşları/`Home`/`End` ile gezinme. Seçili düğümün kaynakları yanda listelenir.
+
+> [!warning] Kenar ağırlığı RENKLE gösterilmez
+> `weight` ham cosine olsa da `DESIGN_SYSTEM §1.2` bantları **sorgu→chunk**
+> alaka düzeyi için kalibre edildi. İki konu merkezi arasındaki benzerlik
+> başka bir sorudur; bantla renklendirmek Inspector'ın anlamını sessizce
+> genişletirdi. Ağırlık **çizgi kalınlığıyla** gösterilir.
+
+### 11.10 Faz 3 kapanma ölçümü — `eval/mindmap_proof.py`
+
+Rutin kapıya **eklenmez** (küme sayısı kadar LLM çağrısı). `eval.db` üzerinde
+koşulur, üretim `rag.db`'sine dokunulmaz.
+
+**Ölçüldü (7 küme / 7 LLM çağrısı, 13/13 kontrol PASS):**
+
+| Gösterilen | Sonuç |
+|---|---|
+| Düğüm | 8 (1 kök + 7 konu), her küme için tam bir düğüm |
+| Korpus kapsaması | 20 chunk'ın **20'si** bir düğümde |
+| Atıf | her düğümün her chunk'ı için `[Kaynak: ...]` |
+| Etiket | **7/7 modelden** (düzeltmeden önce 4/7), 0 düşüş |
+| Kenar | 2 · `0.6094` ve `0.5520` · ikisi de eşiği aşıyor |
+| Kenar ağırlığı | `topics.topic_similarity` ile **birebir** (yeniden ölçeklenmemiş) |
+| `fidelity_score` | **1.0000** (oran) |
+| Markdown | `http(s)://` **yok**, düşen etiket metni gövdede yok |
+| Determinizm | ikinci `cluster_corpus` çağrısı birebir aynı |
+
+
+### 11.11 Faz 3 tamamlanma kriterleri
+
+- [x] Harita korpustan otomatik çıkıyor; yapı modelden **bağımsız** (test)
+- [x] Her düğüm kaynağa tıklanabilir (payload'da `citations`, arayüzde panel)
+- [x] SVG'de harici kaynak yok; `package.json` **değişmedi**
+- [x] Klavyeyle gezilebilir (roving tabindex + ok tuşları, WCAG AA)
+- [x] 12 kümede okunabilir kalıyor (radyal yerleşim + kenar eşiği ölçümü)
+- [x] `bind_claims` / `verdict_for` / `fidelity_score` / `FIDELITY_MIN_SCORE`
+      **değişmedi**; `unverified_terms` varsayılan davranışı **birebir aynı**
+
+### 11.12 Reddedilen alternatifler
+
+| Alternatif | Neden reddedildi |
+|---|---|
+| `d3-hierarchy` kurmak | İki seviyeli harita için ~20 satırlık trigonometri yeter; tek kullanımlık bağımlılık offline yüzeyini büyütür (§11.9) |
+| React Flow | 100 KB+ runtime ve kendi stil sistemi dondurulmuş tasarım sistemiyle çakışır (`STUDIO_PLAN §6.1`) |
+| Kapıdan geçemeyen etiketin düğümünü silmek | Korpusun bir kısmını haritadan sessizce yok ederdi — `topics.py`'nin "artık kümeyi emil" kuralının aynı ihlali (§11.5) |
+| Prompt'a "cümle düzeni" kuralı ekleyerek Başlık Düzenini önlemek | **Ölçüldü, işe yaramadı**: model kuralı yok saydı, düşen etiket 3/7'de kaldı (§11.4) |
+| `_entity_like`'ın büyük harf kolunu tamamen kaldırmak | Tuzağın "OpenAI"sı yalnızca o koldan yakalanıyor; Faz 2'nin ölçülmüş savunmasını silerdi |
+| Başlık olup olmadığını metinden TAHMİN etmek (büyük harf oranı eşiği) | Yeni bir kalibrasyon eşiği doğururdu; çağıran zaten biliyor (§11.4) |
+| Kenar eşiğini `MIN_SCORE`'a eşitlemek | Ölçüldü: merkez benzerliklerinin medyanı 0.44–0.47, harita hairball olur (§11.6) |
+| Kenar ağırlığını `ScoreBadge` bantlarıyla renklendirmek | O bantlar sorgu→chunk için kalibre edildi (§11.9) |
+| Küme sayısını kullanıcıya ayarlatmak | `TOPIC_MAX_CLUSTERS`/`TOPIC_MIN_CLUSTER_SIZE` önceliği Faz 1'de karara bağlandı (§9.3); ikinci bir ayar yüzeyi aynı kararı iki yerden yönetirdi |
+

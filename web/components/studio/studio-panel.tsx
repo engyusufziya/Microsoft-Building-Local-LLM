@@ -1,6 +1,12 @@
 "use client"
 
-import { FileTextIcon, LoaderIcon, SparklesIcon } from "lucide-react"
+import {
+  FileTextIcon,
+  ListChecksIcon,
+  LoaderIcon,
+  NetworkIcon,
+  SparklesIcon,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
@@ -10,15 +16,14 @@ import { Button } from "@/components/ui/button"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-import { useArtifacts } from "./use-artifacts"
+import { useArtifacts, type ArtifactKind } from "./use-artifacts"
 
 /**
- * Studio sekmesinin içeriği — docs/FEATURE_SPEC.md §9.9.4 + §10.11.
+ * Studio sekmesinin içeriği — docs/FEATURE_SPEC.md §9.9.4 · §10.11 · §11.9.
  *
- * Faz 2'de "Üret" düğmesi GELDİ: Faz 1'de kasıtlı olarak yoktu, çünkü
- * arkasında çalışan bir üretici yoktu (basılamayan düğme, "sahte sayı
- * göstermeme" ilkesinin aynı ihlali). Artık `POST /api/artifacts` gerçek bir
- * rapor üretiyor.
+ * Düğmeler üreticiler GERÇEKTEN çalıştıkça geldi: Faz 1'de hiç yoktu (basılamayan
+ * düğme, "sahte sayı göstermeme" ilkesinin aynı ihlali), Faz 2'de rapor,
+ * Faz 3'te zihin haritası. Quiz Faz 4'te gelecek.
  *
  * İlerleme `progress.pct` alanından gelir ve 0–100 TAM SAYIDIR; yükleme
  * akışının 0.0–1.0 ölçeğiyle paylaşılan bir yardımcı YAZILMAZ (§9.5).
@@ -31,7 +36,7 @@ export function StudioPanel({ className }: StudioPanelProps) {
   const t = useT(studio)
   const {
     artifacts,
-    generating,
+    generatingKind,
     pct,
     progressDetail,
     generateError,
@@ -39,6 +44,8 @@ export function StudioPanel({ className }: StudioPanelProps) {
     generate,
     openArtifact,
   } = useArtifacts()
+
+  const generating = generatingKind !== null
 
   const errorText = (code: ApiErrorBody["code"] | null): string | null => {
     switch (code) {
@@ -62,19 +69,22 @@ export function StudioPanel({ className }: StudioPanelProps) {
       data-slot="studio-panel"
       className={cn("flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4", className)}
     >
-      <Button
-        type="button"
-        onClick={() => void generate()}
-        disabled={generating}
-        className="w-full"
-      >
-        {generating ? (
-          <LoaderIcon aria-hidden="true" className="animate-spin" />
-        ) : (
-          <SparklesIcon aria-hidden="true" />
-        )}
-        {generating ? t.generating : t.generateReport}
-      </Button>
+      <div className="flex flex-col gap-1.5">
+        <GenerateButton
+          kind="report"
+          label={t.generateReport}
+          icon={<FileTextIcon aria-hidden="true" />}
+          generatingKind={generatingKind}
+          onGenerate={generate}
+        />
+        <GenerateButton
+          kind="mindmap"
+          label={t.generateMindMap}
+          icon={<NetworkIcon aria-hidden="true" />}
+          generatingKind={generatingKind}
+          onGenerate={generate}
+        />
+      </div>
 
       {generating ? (
         <Progress value={pct} aria-label={t.progressAria}>
@@ -100,9 +110,9 @@ export function StudioPanel({ className }: StudioPanelProps) {
           </span>
           <div className="flex flex-col gap-1">
             <p className="text-h3 font-semibold text-foreground">{t.emptyTitle}</p>
-            <p className="max-w-70 text-body-sm text-text-secondary">{t.emptyBody}</p>
+            <p className="max-w-70 text-body-sm text-text-secondary">{t.emptyBodyAll}</p>
           </div>
-          <p className="text-caption text-text-tertiary">{t.emptyNote}</p>
+          <p className="text-caption text-text-tertiary">{t.emptyNoteAll}</p>
         </div>
       )}
 
@@ -122,6 +132,44 @@ export function StudioPanel({ className }: StudioPanelProps) {
   )
 }
 
+function GenerateButton({
+  kind,
+  label,
+  icon,
+  generatingKind,
+  onGenerate,
+}: {
+  kind: ArtifactKind
+  label: string
+  icon: React.ReactNode
+  generatingKind: ArtifactKind | null
+  onGenerate: (kind: ArtifactKind) => Promise<void>
+}) {
+  const t = useT(studio)
+  const isThis = generatingKind === kind
+  return (
+    <Button
+      type="button"
+      variant={kind === "report" ? "default" : "secondary"}
+      onClick={() => void onGenerate(kind)}
+      // Üretim sürerken ÜÇÜ de kapalı: backend model kilidini üretim boyunca
+      // tutuyor, ikinci istek kilidin arkasında donmuş gibi görünürdü (§9.8).
+      disabled={generatingKind !== null}
+      data-kind={kind}
+      className="w-full"
+    >
+      {isThis ? <LoaderIcon aria-hidden="true" className="animate-spin" /> : icon}
+      {isThis ? t.generating : label}
+    </Button>
+  )
+}
+
+const KIND_ICON: Record<ArtifactSummary["kind"], React.ReactNode> = {
+  report: <FileTextIcon aria-hidden="true" className="mt-0.5 size-4 text-text-tertiary" />,
+  mindmap: <NetworkIcon aria-hidden="true" className="mt-0.5 size-4 text-text-tertiary" />,
+  quiz: <ListChecksIcon aria-hidden="true" className="mt-0.5 size-4 text-text-tertiary" />,
+}
+
 function ArtifactRow({
   artifact,
   active,
@@ -132,18 +180,25 @@ function ArtifactRow({
   onOpen: () => void
 }) {
   const t = useT(studio)
+  const kindLabel = { report: t.kindReport, mindmap: t.kindMindMap, quiz: t.kindQuiz }[
+    artifact.kind
+  ]
   return (
     <li
+      data-kind={artifact.kind}
       className={cn(
         "flex flex-col gap-1.5 rounded-lg border bg-card p-3",
         active ? "border-primary" : "border-border"
       )}
     >
       <div className="flex items-start gap-2">
-        <FileTextIcon aria-hidden="true" className="mt-0.5 size-4 text-text-tertiary" />
+        {KIND_ICON[artifact.kind]}
         <p className="flex-1 text-body-sm font-medium text-text-primary">
           {artifact.title}
         </p>
+        <span className="shrink-0 rounded-sm border border-border px-1.5 text-caption text-text-secondary">
+          {kindLabel}
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {/* Oran; güven bandı rengi YOK (§9.1). */}

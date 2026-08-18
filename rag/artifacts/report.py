@@ -20,12 +20,11 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections import Counter
 from typing import Optional
 
 from .. import config, models
 from ..retrieve import Hit, build_context
-from ..topics import Topic
+from ..topics import Topic, topic_title
 from .base import GeneratedArtifact, GenerationContext, register
 from .fidelity import bind_claims, should_drop, unverified_terms
 
@@ -257,12 +256,12 @@ def _all_chunk_sources(conn: sqlite3.Connection) -> dict[int, str]:
 def _detail_title(topic: Topic, sources_by_chunk: dict[int, str]) -> str:
     """§10.3: 'detail-{k}' başlığı, kümenin en çok chunk katkısı yapan
     belgesinden türetilir: '{belge_adı} ({n} bölüm)'. Eşitlikte deterministik
-    olarak alfabetik en küçük belge adı kazanır."""
-    counts = Counter(sources_by_chunk[cid] for cid in topic.chunk_ids if cid in sources_by_chunk)
-    if not counts:
-        return f"Küme {topic.id}"
-    top_source, n = min(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-    return f"{top_source} ({n} bölüm)"
+    olarak alfabetik en küçük belge adı kazanır.
+
+    Türetme Faz 3'te `topics.topic_title`'a TAŞINDI (davranış birebir aynı):
+    mind map düğümünün etiket yedeği aynı adı üretmek zorunda, iki kopya iki
+    doğruluk kaynağı olurdu (§11.5)."""
+    return topic_title(topic, sources_by_chunk)
 
 
 def _coverage_table(topics: list[Topic], sources_by_chunk: dict[int, str]) -> dict:

@@ -21,14 +21,6 @@ export const studio = {
 
   // --- Studio sekmesi: boş durum (§9.9.4) ---
   emptyTitle: { tr: "Henüz artefakt yok", en: "No artifacts yet" },
-  emptyBody: {
-    tr: "Korpusunuzdan kaynakları doğrulanmış bir rapor üretin.",
-    en: "Generate a report from your corpus with every sentence traced to a source.",
-  },
-  emptyNote: {
-    tr: "Zihin haritası ve quiz sonraki fazlarda geliyor.",
-    en: "Mind map and quiz are coming in later phases.",
-  },
 
   // --- Üretim akışı (Faz 2, §10.11) ---
   generateReport: { tr: "Rapor üret", en: "Generate report" },
@@ -96,4 +88,60 @@ export const studio = {
     tr: (n: number) => `${n} kaynak bölüm`,
     en: (n: number) => `${n} source chunks`,
   },
+
+  // --- Artefakt tipleri (Faz 3-4) ---
+  generateMindMap: { tr: "Zihin haritası üret", en: "Generate mind map" },
+  kindReport: { tr: "Rapor", en: "Report" },
+  kindMindMap: { tr: "Zihin haritası", en: "Mind map" },
+  kindQuiz: { tr: "Quiz", en: "Quiz" },
+  emptyBodyAll: {
+    tr: "Korpusunuzdan kaynakları doğrulanmış bir rapor, zihin haritası veya quiz üretin.",
+    en: "Generate a source-verified report, mind map, or quiz from your corpus.",
+  },
+  emptyNoteAll: {
+    tr: "Her cümle, her düğüm ve her cevap bir belge bölümüne bağlıdır.",
+    en: "Every sentence, node, and answer is tied to a document chunk.",
+  },
+
+  // --- Zihin haritası (§11.9) ---
+  mindMapAria: { tr: "Zihin haritası", en: "Mind map" },
+  mindMapHint: {
+    tr: "Düğümler arasında ok tuşlarıyla gezinin; seçili düğümün kaynakları yanda listelenir.",
+    en: "Move between nodes with the arrow keys; the selected node's sources are listed beside it.",
+  },
+  mindMapNodeCount: {
+    tr: (n: number) => `${n} konu`,
+    en: (n: number) => `${n} topics`,
+  },
+  mindMapEdgeCount: {
+    tr: (n: number) => `${n} ilişki`,
+    en: (n: number) => `${n} links`,
+  },
+  mindMapEdgeHint: {
+    tr: "İki konu merkezi arasındaki ham cosine benzerliği eşiği aştığında çizilir. Kenar yokluğu hata değildir.",
+    en: "A link is drawn when the raw cosine between two topic centroids passes the threshold. No links is not an error.",
+  },
+  mindMapNoEdges: {
+    tr: "Konular birbirinden uzak: bu korpusta ilişki çizgisi yok.",
+    en: "The topics are far apart: no links in this corpus.",
+  },
+  labelSourceFallback: { tr: "korpustan türetildi", en: "derived from corpus" },
+  labelSourceFallbackHint: {
+    tr: "Modelin önerdiği etiket sadakat kapısından geçemedi. Düğüm silinmedi; adı korpustaki baskın belgeden türetildi.",
+    en: "The model's proposed label did not pass the fidelity gate. The node was not removed; its name is derived from the dominant source document.",
+  },
+  droppedLabelsHeading: {
+    tr: "Haritaya alınmayan etiket önerileri",
+    en: "Label suggestions kept out of the map",
+  },
+  droppedReasonLabelInvalid: {
+    tr: "biçim tutmadı (boş ya da çok uzun)",
+    en: "malformed (empty or too long)",
+  },
+  nodeSourcesHeading: { tr: "Düğümün kaynakları", en: "Sources for this node" },
+  nodeSelectHint: {
+    tr: "Kaynaklarını görmek için bir düğüm seçin.",
+    en: "Select a node to see its sources.",
+  },
+
 } as const satisfies Namespace

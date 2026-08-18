@@ -17,9 +17,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response, StreamingResponse
 
 from rag import store
+from rag.artifacts import mindmap, report
 from rag.artifacts import store as artifact_store
 from rag.artifacts.base import GenerationFailedError, generate_artifact
-from rag.artifacts.report import to_markdown
 from rag.topics import InsufficientCorpusError, cluster_corpus
 
 from .. import schemas
@@ -27,6 +27,17 @@ from ..errors import ApiError
 from ..sse import sse_event
 
 router = APIRouter(tags=["artifacts"])
+
+# Her `kind` markdown'ını KENDİ modülünde üretir; rota yalnızca seçer.
+# Sözlük üretilebilir kind'ler üzerinde TAM: kayıtlı her üreticinin markdown'ı
+# burada, dolayısıyla `_EXPORTERS[kind]` bir KeyError üretemez (quiz Faz 4'te). Eksik kind için
+# savunma kodu yazılmadı -- imkânsız senaryo için hata yolu (CLAUDE.md §2.2).
+# Faz 2'de bu bir sözlük değil, doğrudan `report.to_markdown` çağrısıydı ve
+# mindmap/quiz üretilebilir olduğu anda sessizce BOŞ dosya döndürürdü.
+_EXPORTERS = {
+    "report": report.to_markdown,
+    "mindmap": mindmap.to_markdown,
+}
 
 
 def _require_ready(request: Request) -> None:
@@ -148,9 +159,8 @@ async def get_artifact(artifact_id: int, request: Request) -> schemas.ArtifactDe
 async def export_artifact(
     artifact_id: int, request: Request, format: Literal["md"]
 ) -> Response:
-    """Markdown dışa aktarım (§10.11). Rota İNCE: markdown'ın kendisini
-    `rag/artifacts/report.py::to_markdown` üretir, burada yalnızca başlıklar
-    kurulur.
+    """Markdown dışa aktarım (§10.11 · §11.8). Rota İNCE: markdown'ın
+    kendisini üreticinin kendi modülü üretir, burada yalnızca başlıklar kurulur.
 
     `format` Literal olduğu için `md` dışındaki değeri FastAPI 422'ye çevirir;
     ikinci bir biçim (html) §10.15'te reddedildi. BAYAT artefakt 200 döner:
@@ -167,7 +177,7 @@ async def export_artifact(
 
     filename = f"{row['kind']}-{artifact_id}.md"
     return Response(
-        content=to_markdown(row["payload"]),
+        content=_EXPORTERS[row["kind"]](row["payload"]),
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
