@@ -1995,13 +1995,25 @@ koşulur, üretim `rag.db`'sine dokunulmaz.
 | Markdown | `http(s)://` **yok**, düşen etiket metni gövdede yok |
 | Determinizm | ikinci `cluster_corpus` çağrısı birebir aynı |
 
+**Arayüz ayrıca gerçek tarayıcıda ölçüldü** (`eval/ui_proof.py`, 42/42 — Faz 2'nin
+28 kontrolü + Faz 3/4'ün 14'ü): SVG `role="tree"`, düğüm başına `treeitem`,
+`aria-level` 1/2, roving `tabindex`, `ArrowRight`/`Home`/`End` gezinmesi, seçili
+düğümün kaynak listesi, yedek etiketin "korpustan türetildi" uyarısı, kenarların
+çizilmesi, export bağlantısı. Sıfır konsol hatası, sıfır harici istek.
+
+> [!note] Bu bölüm Faz 3 tesliminde EKSİKTİ ve kayda geçiriliyor
+> §11.11'in "klavyeyle gezilebilir" maddesi ilk teslimde **kod incelemesine**
+> dayanıyordu; Faz 2 ise React etkileşimini gerçek Chromium'da ölçme emsalini
+> koymuştu. Boşluk fark edildiğinde `ui_proof.py` iki yeni görünümü kapsayacak
+> şekilde genişletildi ve madde ölçüme bağlandı.
 
 ### 11.11 Faz 3 tamamlanma kriterleri
 
 - [x] Harita korpustan otomatik çıkıyor; yapı modelden **bağımsız** (test)
 - [x] Her düğüm kaynağa tıklanabilir (payload'da `citations`, arayüzde panel)
 - [x] SVG'de harici kaynak yok; `package.json` **değişmedi**
-- [x] Klavyeyle gezilebilir (roving tabindex + ok tuşları, WCAG AA)
+- [x] Klavyeyle gezilebilir (roving tabindex + ok tuşları, WCAG AA) —
+      **gerçek Chromium'da ölçüldü**, kod incelemesiyle değil (`eval/ui_proof.py`)
 - [x] 12 kümede okunabilir kalıyor (radyal yerleşim + kenar eşiği ölçümü)
 - [x] `bind_claims` / `verdict_for` / `fidelity_score` / `FIDELITY_MIN_SCORE`
       **değişmedi**; `unverified_terms` varsayılan davranışı **birebir aynı**
@@ -2296,6 +2308,12 @@ Rutin kapıya **eklenmez**. `eval.db` üzerinde, `--trap` ile tuzak enjeksiyonu
 | Quiz gövdesinde "gpt"/"openai" | — | **0 eşleşme** |
 | Markdown | `http(s)://` yok, cevap anahtarı ayrı bölümde | aynı |
 
+**Arayüz ayrıca gerçek tarayıcıda ölçüldü** (`eval/ui_proof.py`): dört soru tipi
+render ediliyor, `true_false` şıkları yerelleşiyor (payload kanonik kalıyor),
+üç deterministik soru doğru cevaplandığında skor **3/3** çıkıyor, `short_answer`
+kartında **"Doğru"/"Yanlış" ibaresi YOK** — yalnızca benzerlik sayısı (§12.8'in
+görünür kanıtı) — ve deneme sunucuya `score=1.0` ile kaydediliyor.
+
 > [!note] `eval_set.json`'a quiz kategorisi EKLENMEDİ
 > `STUDIO_PLAN §9`'un Faz 4 kriteri "quiz üretimi eval setine kendi kategorisi
 > olarak eklendi" diyordu. **Reddedildi**, gerekçesi §10.1.1'in birebir aynısı:
@@ -2314,6 +2332,8 @@ Rutin kapıya **eklenmez**. `eval.db` üzerinde, `--trap` ile tuzak enjeksiyonu
 - [x] Quiz üretimi kendi koşucusuyla ölçüldü; `eval_set.json` **23'te kaldı**
 - [x] `short_answer` bir eşiğe indirgenmiyor; skora katılmıyor
 - [x] `package.json` ve `requirements.txt` **değişmedi**
+- [x] `short_answer`'ın doğru/yanlış işaretlenmediği **tarayıcıda** doğrulandı
+      (`eval/ui_proof.py`)
 
 ### 12.14 Reddedilen alternatifler
 
