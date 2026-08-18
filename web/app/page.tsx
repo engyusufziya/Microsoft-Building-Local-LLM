@@ -8,7 +8,7 @@ import { ChatPanel, type ChatLockReason } from "@/components/chat"
 import { LanguageToggle } from "@/components/language-toggle"
 import { AppShell, useAppShell } from "@/components/shell"
 import { KnowledgeSidebar, useKnowledge } from "@/components/sidebar"
-import { RightPanelTabs } from "@/components/studio"
+import { ArtifactViewer, RightPanelTabs, useArtifacts } from "@/components/studio"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -84,6 +84,26 @@ function ChatSlot({
   )
 }
 
+/**
+ * `<main>` ya sohbeti ya açık artefaktı gösterir — FEATURE_SPEC §10.12.
+ * Hangi görüntüleyicinin açılacağına `ArtifactViewer` karar verir (§11.9).
+ *
+ * Artefakt açıkken sohbet UNMOUNT edilmez, `hidden` ile gizlenir: aksi halde
+ * artefakta bakıp geri dönmek sohbet geçmişini ve akış durumunu sıfırlardı
+ * (`right-panel-tabs.tsx`'teki sekme kararının aynısı).
+ */
+function MainSlot(props: { lock: ChatLockReason | null; documentCount: number | undefined }) {
+  const { open, close } = useArtifacts()
+  return (
+    <>
+      <div hidden={open !== null} className="flex min-h-0 flex-1 flex-col">
+        <ChatSlot {...props} />
+      </div>
+      {open !== null && <ArtifactViewer artifact={open} onClose={close} />}
+    </>
+  )
+}
+
 export default function Home() {
   // Sidebar'ın callback'leri yerine aynı store'a doğrudan bağlanıyoruz:
   // mobilde sidebar drawer kapalıyken UNMOUNT oluyor ve callback'ler susuyor,
@@ -111,7 +131,7 @@ export default function Home() {
       brand={<Brand />}
       headerActions={<HeaderActions />}
       sidebar={<KnowledgeSidebar onUploadingChange={setUploading} />}
-      chat={<ChatSlot lock={lock} documentCount={documents?.length} />}
+      chat={<MainSlot lock={lock} documentCount={documents?.length} />}
       inspector={<RightPanelTabs />}
       inspectorTitle={s.panelDrawerTitle}
     />

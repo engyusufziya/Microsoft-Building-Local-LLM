@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Any, AsyncIterator, List, Optional
+from typing import Any, AsyncIterator, List, Literal, Optional
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from rag import store
+from rag.artifacts import mindmap, quiz, report
 from rag.artifacts import store as artifact_store
 from rag.artifacts.base import GenerationFailedError, generate_artifact
 from rag.topics import InsufficientCorpusError, cluster_corpus
@@ -26,6 +27,18 @@ from ..errors import ApiError
 from ..sse import sse_event
 
 router = APIRouter(tags=["artifacts"])
+
+# Her `kind` markdown'ını KENDİ modülünde üretir; rota yalnızca seçer.
+# Sözlük `ArtifactCreateRequest.kind` Literal'i üzerinde TAM: üç kind'in üçü de
+# burada, dolayısıyla `_EXPORTERS[kind]` bir KeyError üretemez. Eksik kind için
+# savunma kodu yazılmadı -- imkânsız senaryo için hata yolu (AGENTS.md §2.2).
+# Faz 2'de bu bir sözlük değil, doğrudan `report.to_markdown` çağrısıydı ve
+# mindmap/quiz üretilebilir olduğu anda sessizce BOŞ dosya döndürürdü.
+_EXPORTERS = {
+    "report": report.to_markdown,
+    "mindmap": mindmap.to_markdown,
+    "quiz": quiz.to_markdown,
+}
 
 
 def _require_ready(request: Request) -> None:
@@ -79,6 +92,16 @@ def _to_claim_out(conn, claim: dict) -> schemas.ArtifactClaimOut:
     )
 
 
+def _dropped_count(payload: dict) -> int:
+    """`unsupported_count` gibi TÜRETİLİR (§10.11) -- yeni sütun eklenmez.
+
+    Rapordan ÇIKARILAN iddia sayısı; `unsupported_count` ile karıştırılmamalı
+    (biri bağlanabilirliği, öbürü yayımlanabilirliği sayar, §10.6). `dropped`
+    taşımayan artefakt kind'leri (mindmap/quiz) için 0.
+    """
+    return len(payload.get("dropped", []))
+
+
 def _to_summary(conn, row: dict) -> schemas.ArtifactSummary:
     return schemas.ArtifactSummary(
         id=row["id"],
@@ -129,6 +152,35 @@ async def get_artifact(artifact_id: int, request: Request) -> schemas.ArtifactDe
         payload=row["payload"],
         claims=claims,
         unsupported_count=unsupported_count,
+        dropped_count=_dropped_count(row["payload"]),
+    )
+
+
+@router.get("/artifacts/{artifact_id}/export")
+async def export_artifact(
+    artifact_id: int, request: Request, format: Literal["md"]
+) -> Response:
+    """Markdown dışa aktarım (§10.11 · §11.8 · §12.9). Rota İNCE: markdown'ın
+    kendisini üreticinin kendi modülü üretir, burada yalnızca başlıklar kurulur.
+
+    `format` Literal olduğu için `md` dışındaki değeri FastAPI 422'ye çevirir;
+    ikinci bir biçim (html) §10.15'te reddedildi. BAYAT artefakt 200 döner:
+    export bir OKUMA işlemidir (§9.8'in okuma kuralı), 409 üretmez.
+
+    Dosya adı ASCII: artefakt başlığı Türkçe karakter taşıyabiliyor ve
+    Content-Disposition başlığı latin-1 ile kodlanıyor -- `kind-id.md` hem
+    deterministik hem güvenli.
+    """
+    conn = request.app.state.conn
+    row = artifact_store.get_artifact(conn, artifact_id)
+    if row is None:
+        raise ApiError(404, "ARTIFACT_NOT_FOUND", f"'{artifact_id}' bulunamadı.")
+
+    filename = f"{row['kind']}-{artifact_id}.md"
+    return Response(
+        content=_EXPORTERS[row["kind"]](row["payload"]),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -221,6 +273,9 @@ async def create_artifact_endpoint(
                             "fidelity_score": detail["fidelity_score"],
                             "generation_ms": detail["generation_ms"],
                             "unsupported_count": unsupported_count,
+                            # ADDITIVE (§10.11): unsupported_count kaldırılmaz,
+                            # yeniden adlandırılmaz.
+                            "dropped_count": _dropped_count(detail["payload"]),
                         },
                     )
                 elif item_kind == "error":

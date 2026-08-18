@@ -2,8 +2,8 @@
 Studio artefaktları için CRUD katmanı (`artifacts` / `artifact_claims` tabloları).
 
 rag/store.py'nin üslubunu izler: bağlantıyı parametre alır, kendi bağlantısını
-açmaz, `with conn:` ile transaction kullanır. `quiz_attempts` CRUD'u burada
-YOK (Faz 4) -- tablo yalnızca şema göçü olarak Faz 1'de oluşturuldu.
+açmaz, `with conn:` ile transaction kullanır. `quiz_attempts` CRUD'u Faz 4'te
+eklendi (tablo Faz 1'de yalnızca şema göçü olarak oluşturulmuştu).
 
 Yazma işlemleri store.clear_cache() ÇAĞIRMAZ: artefakt tabloları embedding
 matrisini etkilemez, önbelleği düşürmek gereksiz bir retrieval yavaşlaması
@@ -148,6 +148,70 @@ def delete_artifact(conn: sqlite3.Connection, artifact_id: int) -> bool:
     with conn:
         cur = conn.execute("DELETE FROM artifacts WHERE id = ?", (artifact_id,))
         return cur.rowcount > 0
+
+
+# --------------------------------------------------------------------------- quiz_attempts (Faz 4)
+
+
+def create_attempt(
+    conn: sqlite3.Connection,
+    *,
+    artifact_id: int,
+    started_at: str,
+    completed_at: Optional[str],
+    score: Optional[float],
+    answers: dict,
+) -> int:
+    """Bir quiz denemesini yazar, quiz_attempts.id döndürür (FEATURE_SPEC §12.10).
+
+    `score` NULL olabilir ve bu bir eksiklik DEĞİLDİR: quiz yalnızca
+    short_answer sorularından oluşuyorsa deterministik puanlanabilir soru
+    yoktur ve 0.0 yazmak "hepsini yanlış yaptı" demek olurdu (aynı gerekçe:
+    fidelity.fidelity_score iddiasız artefaktta None döner).
+
+    `answers` HAM kullanıcı girdisidir; puanlama sonucu SAKLANMAZ -- payload
+    değişmediği sürece `quiz.score_attempt` aynı girdiden aynı sonucu üretir
+    ve iki doğruluk kaynağı oluşmaz.
+    """
+    with conn:
+        cur = conn.execute(
+            """
+            INSERT INTO quiz_attempts (artifact_id, started_at, completed_at, score, answers_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                artifact_id,
+                started_at,
+                completed_at,
+                score,
+                json.dumps(answers, ensure_ascii=False),
+            ),
+        )
+        return int(cur.lastrowid)
+
+
+def list_attempts(conn: sqlite3.Connection, artifact_id: int) -> list[dict]:
+    """Bir quiz'in denemeleri; en yeni önce. `answers_json` SEÇİLMEZ (liste
+    görünümünde kullanılmaz, `list_artifacts`'ın payload kuralının aynısı)."""
+    cur = conn.execute(
+        """
+        SELECT id, artifact_id, started_at, completed_at, score
+        FROM quiz_attempts
+        WHERE artifact_id = ?
+        ORDER BY id DESC
+        """,
+        (artifact_id,),
+    )
+    return [
+        {
+            "id": r["id"],
+            "artifact_id": r["artifact_id"],
+            "started_at": r["started_at"],
+            "completed_at": r["completed_at"],
+            "score": r["score"],
+        }
+        for r in cur.fetchall()
+    ]
 
 
 def _row_to_summary(row: sqlite3.Row) -> dict:
