@@ -22,7 +22,7 @@ from . import config
 _manager = None
 _models: dict[str, object] = {}
 _embedding_client = None
-_chat_clients: dict[str, object] = {}
+_chat_clients: dict[tuple[str, int], object] = {}
 
 
 def get_manager():
@@ -80,23 +80,32 @@ def get_embedding_client():
     return _embedding_client
 
 
-def get_chat_client(alias: Optional[str] = None):
+def get_chat_client(alias: Optional[str] = None, max_tokens: Optional[int] = None):
     """Chat client'ı ayarlarıyla birlikte döndürür.
 
     max_tokens ve düşük temperature, küçük modellerde görülen tekrar döngüsünü
     engellemek için burada merkezî olarak uygulanır.
+
+    SDK çağrı başına ayar kabul etmiyor (`complete_chat(messages, tools=None)`),
+    ayarlar client'a önbellekleme anında gömülüyor. Bu yüzden farklı token
+    bütçeleri (sohbet: MAX_ANSWER_TOKENS=220 runaway kesicisi, rapor bölümü:
+    ARTIFACT_SECTION_MAX_TOKENS=700) aynı client'ı paylaşamaz — önbellek anahtarı
+    `(alias, max_tokens)` olarak genişletildi. `max_tokens=None` mevcut
+    çağıranların davranışını birebir korur (`config.MAX_ANSWER_TOKENS`'a düşer).
     """
     alias = alias or config.CHAT_MODEL
-    if alias not in _chat_clients:
+    tokens = max_tokens or config.MAX_ANSWER_TOKENS
+    key = (alias, tokens)
+    if key not in _chat_clients:
         model = _load_model(alias)
         client = model.get_chat_client()
         client.settings = ChatClientSettings(
-            max_tokens=config.MAX_ANSWER_TOKENS,
+            max_tokens=tokens,
             temperature=config.TEMPERATURE,
             top_p=config.TOP_P,
         )
-        _chat_clients[alias] = client
-    return _chat_clients[alias]
+        _chat_clients[key] = client
+    return _chat_clients[key]
 
 
 def embed_texts(texts: List[str], is_query: bool = False) -> List[List[float]]:

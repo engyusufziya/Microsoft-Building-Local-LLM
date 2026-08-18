@@ -90,6 +90,34 @@ Tüm metin/zemin çiftleri WCAG AA (≥ 4.5:1) üstünde:
 Yeni bir renk eklenirse aynı hesap tekrarlanmalı — `docs/` altındaki kontrast
 script'i ile.
 
+### 1.5 Yazdırma paleti (Studio Faz 2)
+
+Rapor artefaktı tarayıcının kendi yazdırma yolundan PDF'e çıkıyor
+(`FEATURE_SPEC §10.12`). `web/app/globals.css`'teki `@media print` bloğu,
+**karanlık temada** `.dark` altındaki değerleri geçici olarak §1.1'in **açık**
+sütunuyla değiştirir:
+
+| Token | Yazdırmada kullanılan değer | Kaynak |
+|---|---|---|
+| `--background` · `--surface-raised` | `#FFFFFF` | §1.1 light |
+| `--surface` | `#F9FAFB` | §1.1 light |
+| `--border` · `--border-strong` | `#E5E7EB` · `#D1D5DB` | §1.1 light |
+| `--text-primary` · `--text-secondary` · `--text-tertiary` | `#111827` · `#6B7280` · `#6B7280` | §1.1 light |
+| `--primary` | `#4F46E5` | §1.1 light |
+| `--warning` | `#B45309` | §1.3 light |
+
+> [!warning] Bu tablo §1.1/§1.3'ün **kopyasıdır** — ikisi birlikte değişmeli
+> Yeni bir renk kararı değil: kâğıt beyazdır, karanlık temanın açık metni
+> basıldığında sessizce görünmez olurdu. Değerler `globals.css`'te literal
+> yazılıdır çünkü `.dark` bloğu `:root`'un light değerlerini zaten ezmiştir ve
+> CSS'te "ezilmiş değeri geri getir" diye bir başvuru yoktur. §1.1 veya §1.3
+> değişirse `@media print` bloğu **elle** güncellenmeli; kontrast oranları
+> §1.4'ten aynen geçerlidir (birebir aynı çiftler).
+
+Yazdırma seçicileri **ikidir** ve bileşen iç yapısına bağlanmaz:
+`[data-print="root"]` (basılacak kök — `ReportView`) ve `[data-print="hide"]`
+(kabuk denetimleri — `AppShell`'in header'ı, iki `aside`'ı, iki drawer'ı).
+
 ---
 
 ## 2. Tipografi

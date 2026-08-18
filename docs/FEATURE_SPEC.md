@@ -269,7 +269,7 @@ Studio katmanı (§9) dört kod **ekler** — mevcut sekizin hiçbiri değişmez
 | HTTP | `code` | Ne zaman | İlk emitter |
 |---|---|---|---|
 | 404 | `ARTIFACT_NOT_FOUND` | Verilen `id`'de artefakt yok | Faz 1 |
-| 409 | `ARTIFACT_STALE` | Bayat artefakt üzerinde **değiştirici** işlem | Faz 2 |
+| 409 | `ARTIFACT_STALE` | Bayat artefakt üzerinde **değiştirici** işlem | ~~Faz 2~~ → **Faz 4** (§10.11) |
 | 422 | `INSUFFICIENT_CORPUS` | Kümeleme için yeterli chunk yok | Faz 1 |
 | SSE | `GENERATION_FAILED` | Üretim akış ortasında kırıldı | Faz 1 |
 
@@ -278,10 +278,26 @@ Studio katmanı (§9) dört kod **ekler** — mevcut sekizin hiçbiri değişmez
 > artefaktı 200 ile, `is_stale: true` bayrağıyla döner (§9.7). Kullanıcıya
 > "kaynaklar değişti, yeniden üret" denir; sessiz otomatik yeniden üretim
 > yoktur — 30–120 sn'lik bir işi kullanıcının haberi olmadan başlatmak
-> yanlış olurdu. 409 yalnızca bayat bir artefakt üzerinde export/quiz
-> denemesi gibi **sonucu yanlış olacak** bir işlem istendiğinde anlamlıdır;
-> o işlemler Faz 2 ve Faz 4'te gelir. Kod sözleşmesi burada donduruluyor ki
-> `ApiErrorBody` birliği ikinci kez genişlemesin.
+> yanlış olurdu. 409 yalnızca bayat bir artefakt üzerinde **sonucu yanlış
+> olacak** bir işlem istendiğinde anlamlıdır. Kod sözleşmesi burada
+> donduruluyor ki `ApiErrorBody` birliği ikinci kez genişlemesin.
+
+> [!note] DÜZELTME (Faz 2 kapanışı): ilk emitter Faz 2 DEĞİL, Faz 4
+> Yukarıdaki not Faz 1'de yazılırken export'u "değiştirici" saymıştı ve
+> `ARTIFACT_STALE`'i Faz 2'ye işaretlemişti. §10.11 bunun **tersine** karar
+> verdi ve gerekçesini yazdı: **export bir OKUMA işlemidir**, bayat artefakt
+> `200` döner (`backend/tests/test_artifacts_api.py::test_export_bayat_artefakt_200`
+> bunu kilitler). Dolayısıyla Faz 2 bu kodu hiç üretmedi ve üretmesi de
+> gerekmiyordu.
+>
+> Kod `ApiErrorBody` birliğinde **kalıyor** (kaldırmak sözleşmeyi ikinci kez
+> değiştirmek olurdu). İlk emitter, bayat bir artefakt üzerinde gerçekten
+> değiştirici olan ilk işlemle gelir: **Faz 4'ün quiz denemesi**
+> (`POST /api/quiz/*` bir `quiz_attempts` satırı yazar; bayat bir quiz'e
+> cevap kaydetmek sonucu yanlış olacak işlemdir).
+>
+> Bu satır, "spec Faz 2 diyordu ama Faz 2 yapmadı" boşluğunun sessiz
+> kalmaması için kaydedildi (`CLAUDE.md §1.6`).
 
 ---
 
@@ -1172,3 +1188,1164 @@ Kayda geçiriliyor ki sonradan "plan böyle diyordu" denmesin.
 | §6.1 "agglomerative clustering" | `scipy`/`scikit-learn` **kurulu değil** | Saf numpy zorunlu kılındı; yeni bağımlılık yasaklandı (§9.0) |
 | §7 "Tek yeni npm bağımlılığı: `d3-hierarchy`" | Faz 1'de çizilecek hiçbir şey yok | Faz 3'e bırakıldı; `package.json` Faz 1'de dondurulmuş (§9.0) |
 | §5 `ARTIFACT_STALE` 409 | Faz 1'de 409 döndürecek bir işlem yok | Kod donduruldu, emitter Faz 2'ye bırakıldı (§2.2) |
+
+---
+
+## 10. Studio Katmanı — Faz 2 (Report Generator)
+
+> §9 hattı kurdu; Faz 2 hattan geçen **ilk gerçek artefaktı** üretir ve böylece
+> hattı doğrular. §9 geçerliliğini korur; bu bölüm yalnızca §9'un Faz 2'ye
+> bıraktığı boşlukları doldurur ve §10.1'de sayılan iki noktada onu **düzeltir**.
+>
+> Bu bölümdeki her iddia yazılmadan önce koda karşı doğrulandı (§9.11'in
+> kaydettiği "plan koda uymuyordu" hatasını tekrarlamamak için). Doğrulanan
+> ölçümler §10.2'de.
+
+### 10.0 Kapsam — ve kapsam DIŞI
+
+| İçeride (Faz 2) | Dışarıda |
+|---|---|
+| `rag/artifacts/report.py` (üretici) | `mindmap.py` · `quiz.py` (Faz 3–4) |
+| `fidelity.py`'ye **ikinci katman** (terim desteği) | `bind_claims`'in kendisinde değişiklik |
+| `models.get_chat_client(max_tokens=…)` | Yeni model, yeni SDK alanı |
+| `GET /api/artifacts/{id}/export?format=md` | `format=html` (§10.15'te reddedildi) |
+| `web/components/studio/report/` (ReportView) | `MindMapCanvas` · `QuizRunner` |
+| `@media print` CSS (tarayıcının kendi PDF'i) | Headless tarayıcı, PDF kütüphanesi |
+| `dropped_count` (SSE + `ArtifactDetail`) | `quiz_attempts` CRUD, `/api/quiz/*` |
+
+> [!danger] Bağımlılıklar Faz 2'de de DONMUŞTUR
+> `package.json` **değişmez** (`d3-hierarchy` Faz 3'ün bağımlılığıdır, §9.0).
+> `requirements.txt` **değişmez**. Markdown export bir dize birleştirmesidir,
+> PDF tarayıcının kendi yazdırma yolundan çıkar; ikisi de yeni paket
+> gerektirmez. Yeni bir tablo, yeni bir veri deposu, yeni bir runtime yüzeyi
+> yok — `export` endpoint'i §9.8'in tablosunda zaten "Faz 2" olarak planlıydı.
+
+### 10.1 §9'a iki düzeltme
+
+**10.1.1 — Tuzak `eval_set.json`'a EKLENMEZ; `eval/fidelity_trap.py` hattı
+genişletilir.**
+
+§9.6 Faz 2'nin zorunlu doğrulamasını iki maddede yazdı ve birinci madde
+"eval setine … bir trap girişi eklenir" diyordu. Bu madde **geçersizdir** ve
+yerine bu bölüm geçer. Gerekçe §9.6'nın kendi gerekçesidir: `eval_set.json`
+tek bir hattı (`query_router → retrieve → answer`) ve "cevap" nesnesini ölçer;
+`bind_claims`'e elle metin veren bir giriş şemayı zorlayarak **"23/23"ün ne
+ölçtüğünü sessizce genişletirdi**. Bu tam olarak `CLAUDE.md §1.4`'ün
+yasakladığı türden bir kapı yumuşamasıdır — sayıyı düşürerek değil,
+**anlamını sulandırarak**.
+
+Madde 1, Faz 1 sağlamlaştırmasında zaten **daha iyi** bir mekanizmayla
+karşılandı: `eval/fidelity_trap.py` kendi koşucusu ve `CLAUDE.md §3`'te kendi
+kapı satırı oldu. Faz 2 bu mekanizmayı **genişletir** (§10.13), eval setini
+değil. **Eval seti 23 soruda kalır; kapı 23/23'tür.**
+
+**10.1.2 — İkinci katman `bind_claims`'in İÇİNE giremez.**
+
+Faz 2'nin kapanma koşulu ile teslim kapısı ancak bu kuralla bir arada
+durabilir:
+
+- Kapı: `eval/fidelity_trap.py` **PASS**, yani tuzak iddia `bind_claims`'ten
+  hâlâ `0.5487 / grounded` olarak çıkmalı.
+- Kapanma koşulu: aynı iddia üretilen **rapordan düşürülmüş** olmalı.
+
+İkisi çelişmiyor çünkü farklı katmanlarda ölçülüyorlar. `bind_claims`
+*bağlanabilirliği* ölçer ve **değişmez**; düşürme kararını ondan sonra gelen
+ayrı bir fonksiyon verir. İkinci katmanı `bind_claims`'in içine koymak pini
+kırar, tuzak script'ini FAIL'e düşürür ve kaydedilmiş bir ölçümü sessizce yok
+eder.
+
+> [!danger] `verdict_for`, `bind_claims`, `fidelity_score` imzaları ve
+> davranışları Faz 2'de **DEĞİŞMEZ**. `FIDELITY_MIN_SCORE` **değişmez**
+> (§9.6'da reddedildi). `artifact_claims.score` ham cosine kalır
+> (`CLAUDE.md §1.1`).
+
+### 10.2 Faz 2 planını şekillendiren, koda karşı doğrulanmış ölçümler
+
+Hiçbiri varsayım değil; her biri bu bölüm yazılırken çalıştırıldı.
+
+| Ölçüm | Değer | Nasıl doğrulandı |
+|---|---|---|
+| Üretim korpusu | 8 belge / 20 sayfa / **61 chunk** | `store.corpus_stats(rag.db)` |
+| Üretim korpusunda kümeleme | **10 küme**, belgeler arası gerçek gruplama (T1 = PDF ×13 + `belge_04` ×3) | `topics.cluster_corpus(rag.db)` |
+| `eval.db` korpusu | 7 belge / **20 chunk** → yine 10 küme | `store.corpus_stats(eval.db)` |
+| `get_chat_client()` | `max_tokens`'ı **alias başına önbelleğe gömüyor** (`ChatClientSettings(max_tokens=MAX_ANSWER_TOKENS)`) | `rag/models.py:83-99` |
+| `complete_chat()` | **çağrı başına ayar almıyor** — imza `(messages, tools)` | `inspect.signature(ChatClient.complete_chat)` |
+| "GPT" / "OpenAI" `eval.db`'de | **hiç geçmiyor** (0 chunk) | tüm `chunks.content` taraması |
+| "GPT" / "OpenAI" `rag.db`'de | PDF'te geçiyor (chunk 4, 5, 16, 20); markdown belgelerinde geçmiyor | aynı tarama |
+| Registry'ye bağlı testler | Hepsi `kind="mindmap"` kullanıyor; kırılan **tek** satır var (§10.14) | `backend/tests/test_artifacts_*.py` |
+
+Sonuçlar:
+
+1. **Detailed Analysis 10 alt bölüm olur** (küme başına bir tane). Toplam LLM
+   çağrısı = `1 (Key Findings) + 10 (Detailed) + 1 (Exec Summary)` = **12**.
+   Prefill baskın olduğu için (STUDIO_PLAN §1) bu, dakikalar mertebesinde bir
+   iştir; SSE ilerleme zorunludur, senkron endpoint kabul edilemez.
+2. **`ARTIFACT_SECTION_MAX_TOKENS = 700` bugün ULAŞILAMAZ durumda.** Config'te
+   yazılı ama onu kullanabilecek bir yol yok: chat client'ı `max_tokens`'ı
+   alias başına önbelleğe gömüyor ve SDK çağrı başına ayar kabul etmiyor.
+   `rag/models.py` değişmeden Faz 2 kendi config sabitini kullanamaz (§10.9).
+   Bu, `STUDIO_PLAN`'ın fark etmediği bir boşluktur.
+3. **Tuzağın terim temelli düşürülmesi `eval.db`'de deterministiktir**
+   ("GPT-4", "OpenAI" korpusta hiç yok), `rag.db`'de ise bağlanan chunk'a
+   bağlıdır. Bu yüzden Faz 2'nin kapanma ölçümü **`eval.db` üzerinde** yapılır
+   — pinlenmiş 0.5487 de orada ölçülmüştü, iki sayı ancak aynı korpusta
+   karşılaştırılabilir.
+
+### 10.3 Bölüm planı — SABİT taslak
+
+Taslağı **LLM seçmez** (STUDIO_PLAN §6.2). Sıra ve kimlikler dondurulmuştur:
+
+| # | `section.id` | `section.kind` | Başlık (TR) | Üretim | LLM |
+|---|---|---|---|---|---|
+| 0 | `exec` | `executive_summary` | Yönetici Özeti | **EN SON** | ✅ |
+| 1 | `findings` | `key_findings` | Temel Bulgular | 1. | ✅ |
+| 2… | `detail-{topic_id}` | `detailed_analysis` | küme başlığı | 2. | ✅ (küme başına) |
+| — | — | `tables` | Tablolar | deterministik | ❌ |
+| — | — | `citations` | Kaynaklar | deterministik | ❌ |
+
+- `sections` dizisi **her zaman** `exec` ile başlar (index 0), `findings`
+  index 1, ardından `detail-*` küme sırasında (`Topic.id` artan). Exec Summary
+  **en son üretilir ama diziye ilk yazılır** — `node_path`'ler dizideki NİHAİ
+  konuma göre üretilir, üretim sırasına göre değil.
+- `tables` ve `citations` `sections` dizisinde **değildir**; payload'ın kendi
+  üst düzey alanlarıdır (LLM üretimi olmadıkları için cümle→chunk bağlaması da
+  yoktur; iddia üretmezler).
+- Alt bölüm başlığı LLM'e sordurulmaz: küme etiketleme **Faz 3'ün işidir**
+  (§9.0). Faz 2'de `detail-{k}` başlığı deterministik olarak kümenin en çok
+  chunk katkısı yapan belgesinden türetilir: `"{belge_adı} ({n} bölüm)"`.
+  Gerekçe: 10 ek LLM çağrısı ödemeden okunabilir bir başlık; Faz 3 etiketlemeyi
+  getirdiğinde burası ona devredilir.
+
+### 10.4 Bölüm başına retrieval
+
+| Bölüm | Bağlam chunk'ları |
+|---|---|
+| `findings` | Her kümenin merkeze en yakın **1.** chunk'ı (= `Topic.chunk_ids[0]`), küme sırasında |
+| `detail-{k}` | Küme `k`'nın **tüm** chunk'ları (`Topic.chunk_ids`) |
+| `exec` | **Chunk yok** — girdisi diğer bölümlerin ÜRETİLMİŞ metnidir |
+
+`retrieve.get_top_chunks()` **çağrılmaz**: bölüm bağlamı bir sorgudan değil,
+kümeden gelir (kümeleme zaten deterministik seçim adımıdır, STUDIO_PLAN §0).
+Chunk metinleri `chunks` tablosundan `id` ile okunur ve modele
+`retrieve.build_context()` ile **aynı** numaralandırılmış/kaynak etiketli
+biçimde verilir — iki ayrı bağlam biçimi iki ayrı prompt davranışı demek
+olurdu.
+
+> [!warning] Exec Summary'nin bağlam chunk'ı yoktur — ama iddiaları yine bağlanır
+> Cümleleri yine `bind_claims`'ten geçer ve yine ikinci katmandan geçer. İkinci
+> katman için bağlamı, **kaynak aldığı bölümlerin bağlam chunk'larının
+> birleşimidir**. Yani Exec Summary, diğer bölümlerin dayandığı chunk'ların
+> dışına çıkan bir terim kullanamaz. Bu kasıtlı: özet, özetlediği şeyden fazlasını
+> söyleyemez.
+
+`detail-{k}` bölümünün chunk sayısı büyük olabilir (üretim korpusunda T0 = 20
+chunk ≈ 2600 kelime). Prefill baskın olduğu için üst sınır gerekir; mevcut
+`SUMMARY_MAX_CHUNKS = 12` sabiti **aynı problemi** (bir belgenin tamamını
+modele vermek) zaten çözüyor ve aynı gerekçeyle burada da kullanılır —
+kümenin chunk'ları 12'yi aşarsa **eşit aralıklı örneklenir**, ilk 12 alınmaz.
+Yeni bir sabit **eklenmez** (`CLAUDE.md §1.3`: aynı kararın ikinci bir ayar
+noktası olmaz).
+
+### 10.5 `payload_json` şeması — DONDURULDU
+
+Frontend bunu tahmin etmez; render'ın **tek** girdisi budur (§9.1).
+
+```json
+{
+  "kind": "report",
+  "outline": ["executive_summary", "key_findings", "detailed_analysis",
+              "tables", "citations"],
+  "sections": [
+    {
+      "id": "exec",
+      "kind": "executive_summary",
+      "title": "Yönetici Özeti",
+      "topic_id": null,
+      "context_chunk_ids": [12, 15, 19],
+      "paragraphs": [
+        { "sentences": ["Birinci cümle.", "İkinci cümle."] }
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "id": "coverage",
+      "title": "Belge × Konu Kapsama",
+      "columns": ["Belge", "K0", "K1"],
+      "rows": [["belge_01_rag_nedir.md", 0, 3]]
+    }
+  ],
+  "citations": [
+    { "chunk_id": 12, "source": "belge_01_rag_nedir.md", "page": 0,
+      "citation": "[Kaynak: belge_01_rag_nedir.md]" }
+  ],
+  "dropped": [
+    { "section_id": "detail-3",
+      "text": "Bu sistem varsayılan olarak GPT-4 kullanır …",
+      "reason": "unverified_terms",
+      "score": 0.5487,
+      "terms": ["gpt-4", "openai"] }
+  ]
+}
+```
+
+**`node_path` sözleşmesi** (RFC 6901 JSON pointer, payload köküne göre):
+
+| İddia | `node_path` |
+|---|---|
+| Rapora giren cümle | `/sections/{i}/paragraphs/{j}/sentences/{k}` |
+| Düşürülen iddia | `/dropped/{i}` |
+
+Her ikisi de payload içinde **gerçekten çözülen** pointer'lardır. Düşürülen
+iddianın metni payload'da durur ama `sections` içinde **durmaz** — yani rapor
+gövdesinin parçası değildir, ayrı bir şeffaflık listesidir.
+
+`reason` değerleri (kapalı küme): `unsupported` · `weak` · `unverified_terms`.
+
+- `sentences` bir dize dizisidir. Paragraf render'ı bunları **boşlukla
+  birleştirir**; her cümle ayrı bir `<span>` olur ki tıklanıp kaynağına
+  gidilebilsin (Faz 1'in `ChunkCard`'ı yeniden kullanılır, §9.9 / STUDIO_PLAN §7).
+- `context_chunk_ids` şeffaflık ve ikinci katman için kayıttadır; `exec` için
+  birleşim kümesidir (§10.4).
+- `page: 0` markdown fixture demektir ve atıfta sayfa soneki **taşımaz** —
+  `retrieve.Hit.citation()` ile birebir aynı kural (§9.8'de zaten
+  `backend/routes/artifacts.py::_citation` olarak uygulanıyor).
+
+### 10.6 İkinci katman — terim desteği (`fidelity.py`'ye EK)
+
+Faz 1'in bıraktığı entailment boşluğunun telafisi. Eşik yükselterek değil,
+`MIN_SCORE`'un iki katmanlı savunmasının aynısıyla: **farklı türde** bir
+ikinci sinyal. Cosine anlamsal yakınlığı ölçer ve özel adları/model
+kimliklerini kaçırır; sözcüksel eşleşme tam da onları yakalar (bu, hibrit
+retrieval'ın `rag/config.py`'de yazılı gerekçesinin birebir aynısıdır).
+
+```python
+def unverified_terms(
+    conn, claim_text: str, context_chunk_ids: Sequence[int]
+) -> list[str]
+    """İddiadaki AYIRT EDİCİ terimlerden bağlamda geçmeyenleri döndürür."""
+```
+
+**Kural** (tek kural, sözlük yok):
+
+1. İddia metni alfanümerik olmayan karakterlerden bölünür; token içindeki
+   `-` ve `.` **korunur** (aksi halde "GPT-4" ve "qwen2.5-7b" parçalanır).
+2. Türkçe-duyarlı küçültme: `İ→i`, `I→ı`, sonra `str.lower()`. (Düz `lower()`
+   "İ" için birleşen nokta üretir; bu bir testle sabitlenir.)
+3. Uzunluğu `FIDELITY_TERM_MIN_LENGTH`'ten kısa token atılır.
+4. Token **ayırt edici** sayılır ⟺ **iki şart birden**:
+   a. korpusta geçtiği chunk oranı `FIDELITY_TERM_DF_MAX_RATIO`'dan küçük
+      **veya eşit** (df = 0 dahil), **ve**
+   b. **varlık benzeri** yazılmış: rakam içeriyor (`gpt-4`, `qwen2.5-7b`,
+      `200-400`) ya da **cümle başı olmayan** bir konumda büyük harf taşıyor
+      (`OpenAI`, `SQLite`). Cümle başı dışarıda kalır: Türkçede her cümle
+      büyük harfle başlar, ilk token'ın büyük harfi özel ad işareti değildir.
+5. Ayırt edici token, bağlam chunk'larının birleştirilmiş metninde **alt dize
+   olarak** geçmiyorsa "doğrulanamamış" sayılır.
+
+Alt dize eşleşmesi kasıtlıdır: Türkçe ekleri sona ekler, dolayısıyla
+`"sqlite" ⊂ "sqlite'ın"` ve `"chunk" ⊂ "chunk'ları"` her iki yönde de çalışır.
+Bir kök sözlüğü ya da durak-kelime listesi **eklenmez** — hem ayırt edicilik
+hem varlık işareti metnin/korpusun **kendisinden** türer, dışarıdan getirilen
+bir listeden değil. Böylece kural tek bir yerde ve ölçülebilir kalır.
+
+> [!important] Kural 4b Faz 2'nin KAPANMA ÖLÇÜMÜNDE eklendi — sebebi ölçümdür
+> §10.10'un kalibrasyonu (a) tuzağın terimlerini, (b) korpustan **birebir
+> alınmış** 399 cümleyi ölçmüştü ve "0/399 toplu düşme" sonucunu vermişti. O
+> ölçüm **gerçek üretilmiş nesri temsil etmiyordu**: birebir cümle her zaman
+> kendi bağlamında alt dize olarak bulunur, LLM nesri ise başka sözcüklerle
+> yeniden yazar.
+>
+> §10.13'ün ilk koşumu bunu sayıyla gösterdi (eval.db, gerçek rapor, 47 cümle):
+>
+> | Kural | Rapora giren | Düşen | Tuzağın terimleri |
+> |---|---|---|---|
+> | yalnız 4a (df) | **5** | 42 | `varsayılan, gpt-4, kullanır, verileri, openaı, sunucularına, gönderir` |
+> | 4a + 4b (varlık) | **43** | 4 | `gpt-4, openaı` |
+>
+> Kök neden: 20 chunk'lık bir korpusta sıradan Türkçe çekim de df = 0 alıyor
+> (`dayanır`, `olanak`, `yanıt`, `indirilmesi`) — df sinyali hallüsinasyonu
+> normal sözcükten **ayıramıyor**. 4b ikisini ayırır ve §10.6'nın kendi
+> gerekçesine (“cosine **özel adları/model kimliklerini** kaçırır”) sadık kalır.
+>
+> 4b ile düşen 4 cümlenin 3'ü tuzak dışı ve hepsi **doğru** düşüş: iki bozuk
+> `YAZMA:` başlığı ve modelin **uydurduğu bir sayı** (`200-400 kelime`; korpus
+> 130+30 diyor). Yani katman gerçek bir hallüsinasyonu da yakaladı.
+>
+> **Denenip elenen alternatifler** (aynı koşum üzerinde ölçüldü):
+>
+> | Alternatif | Ölçüm | Neden reddedildi |
+> |---|---|---|
+> | `FIDELITY_TERM_MIN_LENGTH`'i yükseltmek | — | Türkçe çekimli sözcükler (`eşleşmelerine`, 13) tuzaktan (`gpt-4`, 5) **daha uzun**; uzunluk iki sınıfı ayırmıyor |
+> | `FIDELITY_TERM_DF_MAX_RATIO`'yu değiştirmek | — | Her iki sınıf da df = 0; oran hangi yöne çekilirse çekilsin ayrım üretmiyor |
+> | Kök/önek eşleşmesi (ilk K harf alt dize) | K=7/6 → 5, K=5/4 → **7**/47 | 42 düşüşün yalnızca 2'sini kurtarıyor: düşen sözcükler korpusta **hiçbir biçimde** yok |
+> | Düşürme için "en az N doğrulanamayan terim" şartı | tuzak 7, gerçek cümleler de 7/12/14/17/20 | Sayı iki sınıfı ayırmıyor |
+> | Durak-kelime listesi | — | §10.15'te zaten reddedildi: ikinci bir bakım yüzeyi |
+> | **Rakamsız** tire/nokta işareti (4b'nin ilk hâlinde vardı) | üretim korpusunda 13 düşüşün 4'ü, hepsi yanlış pozitif (`soru-cevap`) | Türkçe birleşik sözcüğü model kimliği sanıyor; hiçbir gerçek yakalama üretmedi — tuzağın `gpt-4`'ü rakamdan, `openaı`sı büyük harften zaten yakalanıyor. **Kaldırıldı** |
+
+`FIDELITY_MIN_SCORE` bu değişiklikten **etkilenmez** ve değişmez; kural 4b
+`bind_claims`'in dışında, ondan **sonra** çalışır (§10.1.2) —
+`eval/fidelity_trap.py`'nin pini (`0.5487 / grounded`) aynen durur.
+
+**`context_chunk_ids` boşsa** bağlam olarak **bağlanan chunk** kullanılır
+(`ClaimBinding.chunk_id`). Katman hiçbir durumda sessizce **kapanmaz**;
+"bağlam bildirilmedi" bir muafiyet değildir.
+
+**Düşürme kararı** — ayrı ve saf bir fonksiyon:
+
+```python
+def should_drop(binding: ClaimBinding, unverified: Sequence[str]) -> str | None
+    """Düşürme sebebini döndürür; düşürülmeyecekse None."""
+```
+
+| Koşul | `reason` |
+|---|---|
+| `verdict == "unsupported"` | `unsupported` |
+| `verdict == "weak"` | `weak` |
+| `verdict == "grounded"` ama `unverified` boş değil | `unverified_terms` |
+| aksi halde | `None` (rapora girer) |
+
+> [!important] İki sayı, tek gerçek — birleştirilmezler
+> `artifacts.fidelity_score` **tanımı değişmeden** kalır: `grounded / toplam`,
+> TÜM iddialar üzerinden (düşürülenler dahil). Yani **bağlanabilirlik oranıdır**
+> ve Faz 2'nin "≥0.90" kriteri budur.
+> `dropped_count` **ayrı** bir sayıdır: rapordan çıkarılan iddia adedi.
+> Tuzak iddia ikisinde de görünür — `fidelity_score`'da `grounded` sayılır
+> (pin korunur, boşluk gizlenmez) **ve** `dropped_count`'ta yer alır (ürün onu
+> yayımlamaz). İkisini tek bir "kalite skoru"na katlamak, §9.1'in
+> `fidelity_score`'u benzerlik bandından ayırmasıyla aynı hatayı yapmak
+> olurdu: iki farklı soruyu tek sayıya sıkıştırmak ikisini de yalancı yapar.
+
+### 10.7 Tablolar — deterministik, prozadan sayı üretilmez
+
+STUDIO_PLAN §6.2'nin dürüst sınırı bağlayıcıdır: bu korpus düz metindir;
+prozadan sayı uydurup grafik/tablo çizmek sadakat ilkesinin doğrudan ihlalidir.
+Tablo yalnızca **gerçekten elimizde olan** veriden gelir.
+
+Faz 2'de **tek** tablo üretilir: `coverage` — belge × konu kapsama matrisi.
+Satır = belge (`documents.filename`), sütun = küme, hücre = o belgenin o
+kümeye kaç chunk verdiği. Tamamen `topics` + `chunks` metadatasından türer,
+LLM görmez, iddia üretmez.
+
+STUDIO_PLAN'ın saydığı diğer iki tablo **bilerek** çıkarıldı:
+- *konu başına chunk dağılımı* = aynı matrisin sütun toplamları, ayrı bir tablo
+  olarak gösterilmesi aynı veriyi iki kez sunmak olurdu;
+- *sadakat skoru dağılımı* = artefaktın kendi hakkındaki ölçümü; hem
+  kendine-referanslıdır hem de düşürme sonrası değişir. `fidelity_score` ve
+  `dropped_count` zaten üst düzeyde gösteriliyor (§10.11).
+
+### 10.8 Atıflar
+
+`citations` dizisi, **rapora giren** iddiaların bağlandığı benzersiz
+chunk'lardan türer (düşürülenlerden değil — düşürülen bir iddianın kaynağı
+rapora kaynak gösterilemez). Sıra: `source` alfabetik, sonra `page` artan.
+Biçim `retrieve.Hit.citation()` ile birebir aynıdır; yeni bir atıf biçimi
+üretilmez.
+
+### 10.9 `rag/models.py` — bölüm başına token bütçesi
+
+§10.2'de ölçüldü: `get_chat_client()` `max_tokens`'ı alias başına önbelleğe
+gömüyor ve `complete_chat()` çağrı başına ayar kabul etmiyor. Dolayısıyla
+`ARTIFACT_SECTION_MAX_TOKENS` bugün **kullanılamaz** durumdadır.
+
+```python
+def get_chat_client(alias: Optional[str] = None,
+                    max_tokens: Optional[int] = None)
+```
+
+- Önbellek anahtarı `(alias, max_tokens or config.MAX_ANSWER_TOKENS)` olur.
+- Mevcut çağıranların davranışı **birebir aynı kalır** (`max_tokens=None` →
+  `MAX_ANSWER_TOKENS`). `rag/answer.py` **değişmez**.
+- `temperature`/`top_p` aynı şekilde geçmeye devam eder; runtime'ın onları yok
+  saydığı zaten ölçülü (`config.py` notu) ve bu Faz 2'de sorgulanmaz.
+
+> [!danger] REDDEDİLDİ: önbellekteki client'ın `settings`'ini geçici olarak değiştirmek
+> `client.settings = ChatClientSettings(max_tokens=700)` yazıp sonra geri almak
+> tek satırdır ama **paylaşılan global durumu** değiştirir: geri alma
+> başarısız olursa (istisna, iptal edilen SSE akışı) sohbet cevapları sessizce
+> 700 token tavanıyla çalışmaya devam eder ve bunu hiçbir test yakalamaz.
+> Tam olarak `CLAUDE.md §1`'in tarif ettiği "sessizce bozulan sözleşme".
+
+### 10.10 `rag/config.py` — iki yeni sabit
+
+`--- Studio artefaktları ---` başlığı altına, mevcut yorum üslubuyla
+(gerekçe + ölçüm). Başka hiçbir modül bu değerleri kendi içinde tanımlamaz.
+
+```python
+FIDELITY_TERM_MIN_LENGTH   = ...   # ayırt edici terim için asgari uzunluk
+FIDELITY_TERM_DF_MAX_RATIO = ...   # bu orandan seyrek geçen terim AYIRT EDİCİ
+```
+
+Değerler **ölçümle** belirlenir (`CLAUDE.md §1.4` — yeni bir eşik de kendi
+kararıdır): uygulayıcı `eval.db` (20 chunk) ve `rag.db` (61 chunk) üzerinde
+terim doküman-frekansı dağılımını çıkarır, seçtiği değerin (a) tuzağın
+terimlerini ayırt edici saydığını, (b) gerçek rapor cümlelerini toplu hâlde
+düşürmediğini gösteren sayıları teslimle birlikte sunar. Bu ölçüm **model
+yüklemez** (saf metin taraması) — pytest kadar ucuz bir döngüdür.
+
+Sabitlerin yorumunda ayrıca şu yazılı olmalı: bu iki değer
+`FIDELITY_MIN_SCORE`'un **alternatifi değil, tamamlayıcısıdır**; hiçbiri
+`FIDELITY_MIN_SCORE`'u değiştirme gerekçesi olarak kullanılamaz (§9.6).
+
+### 10.11 API — `backend/` yüzeyi (İNCE kalır)
+
+`backend/` iş mantığı taşımaz (`CLAUDE.md §1.5`). Faz 2'de üç ekleme:
+
+**1. `GET /api/artifacts/{id}/export?format=md`**
+
+| Durum | Sonuç |
+|---|---|
+| Artefakt yok | `404 ARTIFACT_NOT_FOUND` |
+| `format` `md` değil | FastAPI doğrulaması → `422` |
+| Başarılı | `200`, `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="…"` |
+
+Markdown'ın **kendisi** `rag/artifacts/report.py::to_markdown(payload) -> str`
+tarafından üretilir; rota yalnızca çağırır ve başlıkları kurar. Bayat artefakt
+`200` döner (§9.8'in okuma kuralı; export bir okuma işlemidir).
+
+**2. `dropped_count`** — `ArtifactDetail`'e eklenir. `unsupported_count` gibi
+**türetilir**: `len(payload.get("dropped", []))`. Yeni bir sütun eklenmez.
+
+**3. SSE `complete` olayına `dropped_count`** — mevcut alanların yanına
+**additive**. `unsupported_count` kaldırılmaz, yeniden adlandırılmaz.
+
+```
+event: complete
+data: {"artifact_id": 3, "fidelity_score": 0.92, "generation_ms": 268410,
+       "unsupported_count": 1, "dropped_count": 3}
+```
+
+`progress` olayı bölüm ilerlemesi için kullanılır ve ölçeği §9.5'te
+dondurulmuş **0–100 tam sayıdır**: `{"pct": 45, "detail": "6/12 bölüm yazıldı"}`.
+`/api/documents`'ın 0.0–1.0 ölçeğiyle birleştirilmez (§9.5 uyarısı).
+
+### 10.12 Frontend — sahiplik sınırı ve sözleşme
+
+`web/components/studio/**` `bilgi-alani-muhendisi`'nindir; `web/`'in geri
+kalanı `frontend-muhendisi`'nindir. Faz 2'de sınır şudur:
+
+| Dosya | Sahip | İçerik |
+|---|---|---|
+| `web/lib/types.ts` | `frontend-muhendisi` | `ReportPayload`, `ReportSection`, `ReportTable`, `ReportCitation`, `DroppedClaim`; `ArtifactDetail.dropped_count`; `ArtifactCompleteEvent.dropped_count` |
+| `web/lib/i18n/studio.ts` | `frontend-muhendisi` | rapor metinleri (TR/EN), düşürme sebepleri, export etiketleri |
+| `web/app/globals.css` | `frontend-muhendisi` | `@media print` bloğu |
+| `web/app/page.tsx` | `frontend-muhendisi` | artefakt açıkken `<main>`'e ReportView'ı takan bağlantı |
+| `web/components/studio/**` | `bilgi-alani-muhendisi` | `studio-panel` üretim akışı; `report/report-view.tsx` ve alt bileşenleri |
+
+**Yazdırma sözleşmesi (iki tarafın anlaştığı tek şey):** ReportView kök
+elemanı `data-print="root"`, uygulama kabuğunun yazdırılmayacak parçaları
+`data-print="hide"` taşır. `@media print` bloğu **yalnızca** bu iki seçiciye
+dayanır; bileşen iç yapısına bağlanmaz.
+
+> [!danger] Yazdırma CSS'i ve Markdown çıktısı harici kaynak İÇEREMEZ
+> `CLAUDE.md §1.2`. `@media print` içinde `url(http…)` yok, web font yok,
+> harici görsel yok — mevcut yerel fontlar (`web/app/fonts`) kullanılır.
+> Markdown çıktısı düz metindir; hiçbir `http(s)://` bağlantı üretmez. Bu
+> `kalite-muhafizi` tarafından grep'le doğrulanır.
+
+Düşürülen iddialar rapor gövdesinde **gösterilmez**; ayrı, açıkça
+etiketlenmiş bir panelde sebebiyle ve skoruyla birlikte gösterilir. Markdown
+çıktısı gövdesinde de yer almazlar — yalnızca dipnot olarak **sayıları**
+geçer. Gerekçe: ürün sınırını gizlemez ama doğrulanamamış bir cümleyi rapor
+içeriği gibi de sunmaz.
+
+Yeni npm bağımlılığı yok. Yeni `web/components/ui/` primitifi yok — tablo
+mevcut `Card`/`ScrollArea` içinde düz `<table>` ile çizilir.
+
+### 10.13 Kapanma ölçümü — tuzağın uçtan uca gösterimi
+
+`eval/` `prompt-eval-muhendisi`'nindir; ölçümü **tek** koşucu yapar.
+
+Yeni koşucu tuzağın *ürün davranışı* hâline geldiğini gösterir; mevcut
+`eval/fidelity_trap.py` **değiştirilmez** (pin orada kalır, §10.1.2).
+
+Koşum, **`eval.db` üzerinde** (pinin ölçüldüğü korpus, §10.2):
+
+1. Gerçek `generate_artifact(kind="report")` çalıştırılır.
+2. Bir bölümün LLM çıktısına tuzak cümlesi **açıkça enjekte edilir** — yani
+   "model bu cümleyi hallüsine etseydi" senaryosu. Koşum çıktısı bunun bir
+   enjeksiyon olduğunu **açıkça yazar**; organik bir sonuç gibi sunulmaz.
+3. Hattın geri kalanı gerçekten çalışır: bağlama → ikinci katman → payload →
+   kalıcılaştırma.
+4. Kaydedilen artefakt `artifacts.store.get_artifact()` ile **geri okunur** ve
+   şunlar sayıyla raporlanır:
+
+| Gösterilecek | Beklenen |
+|---|---|
+| Tuzağın `artifact_claims` satırı | `score ≈ 0.5487`, `verdict = grounded` (pinle aynı) |
+| Tuzağın `node_path`'i | `/dropped/{i}` — `sections` altında **değil** |
+| `payload["dropped"][i]["reason"]` | `unverified_terms` |
+| `payload["dropped"][i]["terms"]` | "gpt-4" ve "openai" içerir |
+| `dropped_count` | tuzağı **içerir** (≥1) |
+| Rapor gövdesinde "gpt"/"openai" araması | **0 eşleşme** |
+| `fidelity_score` | oran olarak raporlanır, ≥0.90 |
+| Toplam / rapora giren / düşürülen (sebep kırılımı) | sayıyla listelenir |
+
+Bu koşucu **rutin teslim kapısına eklenmez** — 12 LLM çağrısı ile dakikalar
+sürer. Faz 2'nin kapanma ölçümüdür; bir kez koşulur, sonucu
+`PROJE_DURUMU.md`'ye yazılır. Rutin kapı §10.14'tedir.
+
+> [!warning] Bu koşum `FIDELITY_MIN_SCORE`'u değiştirme gerekçesi ÜRETEMEZ
+> Tuzağın hâlâ `grounded` çıkması **beklenen** sonuçtur, bir arıza değil.
+> Faz 2'nin iddiası "kapı artık entailment ölçüyor" değil, "ürün artık
+> entailment'ı geçemeyen cümleyi **yayımlamıyor**"dur (§9.6, `CLAUDE.md §1.4`).
+
+### 10.14 Faz 2 tamamlanma kriterleri
+
+**Ürün:**
+
+- [x] Raporun rapora giren **her cümlesi** bir chunk'a bağlı; her birinin
+      `artifact_claims` satırı ve çözülebilir bir `node_path`'i var
+- [x] `fidelity_score` **≥ 0.90** — **oran** olarak (`grounded/toplam`),
+      ortalama cosine olarak değil (§9.1)
+- [x] Bağlanamayan/doğrulanamayan iddia rapordan **çıkarılmış**, sayısı
+      (`dropped_count`) hem SSE `complete`'te hem `ArtifactDetail`'de hem
+      arayüzde görünüyor
+- [x] Markdown ve yazdırma çıktısında **harici kaynak yok** (grep'le doğrulanır)
+- [x] §10.13'ün tablosu **sayılarla** karşılanmış (tuzak düşürüldü ve sayıldı)
+
+**Sözleşmeler:**
+
+- [x] `bind_claims` / `verdict_for` / `fidelity_score` davranışı değişmedi;
+      `FIDELITY_MIN_SCORE` değişmedi
+- [x] `artifact_claims.score` ham cosine (`CLAUDE.md §1.1`)
+- [x] `eval_set.json` **23 soruda** kaldı (§10.1.1)
+- [x] `package.json` ve `requirements.txt` **değişmedi**
+- [x] Yeni sabitler `rag/config.py`'de, gerekçe + ölçümle
+- [x] `backend/` ince: rapor mantığı yok, yalnızca yüzey
+
+> [!note] Ölçülen sonuçlar (bu teslim, tek koşucu)
+> eval **23/23** (237 sn) · pytest **151 passed** · offline **0 soket** ·
+> `fidelity_trap` **PASS 0.5487/grounded** · `web` build+lint temiz.
+> §10.13 koşumu: 48 iddia, 44 rapora girdi, 4 düşürüldü, tuzak `/dropped/1`,
+> gövdede 0 eşleşme, `fidelity_score` 1.0000.
+>
+> §10.6 kural 4b bu koşumun BİRİNCİ turunda eklendi (42/47 düşüyordu);
+> gerekçesi ve elenen alternatifler §10.6'da, kaydı PROJE_DURUMU.md'de.
+>
+> Ayrıca **çalışan backend üzerinde** uçtan uca doğrulandı (üretim rag.db'sinin
+> KOPYASI, 8 belge / 61 chunk / 12 LLM çağrısı, 267 sn): 30/30 kontrol —
+> SSE sırası, 12 `progress` olayı (`pct` tam sayı), `complete`'te iki sayaç,
+> 63 cümlenin tamamı chunk'a bağlı, `fidelity_score` 0.9306, export 200 +
+> `text/markdown` + `attachment` (8433 karakter, sıfır `http(s)://`),
+> `format=html|pdf|` → 422, bilinmeyen id → 404, statik export aynı süreçten.
+>
+> React etkileşimi ayrıca gerçek Chromium ile ölçüldü (`eval/ui_proof.py`,
+> 28/28): sekme gezinmesi, rapor render'ı (63 cümle · 63 atıf üst simgesi),
+> düşürülen 9 iddianın ayrı paneli, export bağlantısı, `@media print`
+> sözleşmesi, ilerleme çubuğu; sıfır konsol hatası, sıfır harici istek.
+
+**Kapı** (rutin, her teslimde):
+
+```bash
+.venv/bin/python eval/run_eval.py                 # 23/23
+.venv/bin/python -m pytest backend/tests -q       # SIFIR başarısızlık
+.venv/bin/python eval/offline_proof.py            # 0 soket
+.venv/bin/python eval/fidelity_trap.py            # PASS, 0.5487
+cd web && npm run build && npm run lint           # temiz
+```
+
+> [!note] Registry'ye bağlı testlerde kırılan TEK satır var
+> Ölçüldü (§10.2): registry davranışını sınayan testlerin **hepsi**
+> `kind="mindmap"` kullanıyor ve mindmap Faz 2'de de kayıtsız kalıyor.
+> `report` kaydedildiğinde kırılan tek assertion
+> `backend/tests/test_artifacts_rag.py::test_registry_bos_ve_register_calisir`
+> içindeki `assert base.get_generator("report") is None` satırıdır ve artık
+> **tersi** doğrudur. Testler toptan yeniden yazılmaz; bu satır güncellenir ve
+> docstring'i Faz 2 gerçeğini anlatır.
+
+### 10.15 Reddedilen alternatifler
+
+| Alternatif | Neden reddedildi |
+|---|---|
+| `FIDELITY_MIN_SCORE`'u 0.55'e çekip tuzağı elemek | §9.6'da zaten reddedildi ve kaydedildi; `MIN_SCORE`'un 0.55→0.45 inişini (gerçek bir soru 0.494 alıp reddedilmişti) tersine çevirirdi |
+| İkinci katmanı `bind_claims` içine koymak | `eval/fidelity_trap.py` pinini kırar, kaydedilmiş bir ölçümü yok eder (§10.1.2) |
+| Her cümle için LLM'e "bu chunk bu cümleyi destekliyor mu" sormak | Cümle başına bir çağrı, prefill baskın → rapor süresi katlanır; ayrıca hakem aynı modelin yanlılığını taşır — STUDIO_PLAN §6.3 `short_answer` puanlamasında **aynı** gerekçeyle LLM-hakem reddedildi |
+| Tuzağı `eval_set.json`'a eklemek | "23/23"ün ne ölçtüğünü sessizce genişletirdi (§10.1.1) |
+| Önbellekli chat client'ın `settings`'ini geçici değiştirmek | Paylaşılan global durum; geri alma kaçarsa sohbet sessizce bozulur (§10.9) |
+| `format=html` export | Yazdırma CSS'i PDF ihtiyacını zaten karşılıyor; ikinci bir HTML render yolu rapor yerleşimi için **ikinci bir doğruluk kaynağı** olurdu |
+| Küme başlıklarını LLM'e sordurmak | Küme etiketleme Faz 3'ün işi (§9.0); Faz 2'de 10 ek çağrı ödemenin karşılığı yok |
+| `fidelity_score` ile `dropped_count`'u tek "kalite skoru"nda birleştirmek | İki farklı soruyu tek sayıya sıkıştırmak ikisini de yalancı yapar (§10.6) |
+| Durak-kelime/kök sözlüğü ile ayırt edici terim seçmek | Ayırt edicilik korpusun kendi doküman frekansından türetilebiliyorken dışarıdan liste getirmek ikinci bir bakım yüzeyi açardı |
+| Bölüm chunk üst sınırı için yeni sabit | `SUMMARY_MAX_CHUNKS` aynı problemi aynı gerekçeyle zaten çözüyor (`CLAUDE.md §1.3`) |
+
+---
+
+## 11. Studio Katmanı — Faz 3 (Mind Map)
+
+> §9 hattı kurdu, §10 hattan ilk artefaktı geçirdi. Faz 3 aynı hattan **ikinci
+> artefakt tipini** geçirir ve böylece hattın gerçekten tip-bağımsız olduğunu
+> gösterir: `base.generate_artifact` DEĞİŞMEDİ, yalnızca yeni bir üretici
+> kaydedildi.
+
+### 11.0 Kapsam — ve kapsam DIŞI
+
+| İçeride (Faz 3) | Dışarıda |
+|---|---|
+| `rag/artifacts/mindmap.py` (üretici) | `d3-hierarchy` bağımlılığı (§11.9'da **reddedildi**) |
+| `topics.topic_title` (deterministik küme adı) | Pan/zoom, sürükleme, düğüm düzenleme |
+| `MINDMAP_EDGE_MIN_SIMILARITY`, `MINDMAP_LABEL_CONTEXT_CHUNKS` | Küme sayısını kullanıcıya ayarlatmak |
+| `web/components/studio/mindmap/**` | `rag/topics.py` kümeleme algoritması (Faz 1'de dondu) |
+| `eval/mindmap_proof.py` kapanma ölçümü | Yeni SSE olayı, yeni hata kodu |
+
+### 11.1 Temel karar — haritayı LLM çizmez
+
+`STUDIO_PLAN §6.1`: yapı embedding'lerden **deterministik** çıkar, LLM yalnızca
+kümelere isim verir. Gerekçe, Faz 2'nin sadakat mantığının aynısıdır: LLM'e
+"korpusu haritala" demek, düğümlerin belgede gerçekten olup olmadığını
+**doğrulanamaz** kılar. Küme yaklaşımında her düğüm **zaten bir chunk
+kümesidir** — hallüsinasyon yapısal olarak imkânsız, yalnızca **etiket** yanlış
+olabilir ve o da kapıdan geçer.
+
+Bu, ölçülebilir bir iddiadır ve §11.10 onu ölçer: etiketler tamamen değişse bile
+düğüm kimlikleri, chunk üyelikleri ve kenarlar **birebir aynı** kalır.
+
+### 11.2 `payload_json` şeması — DONDURULDU
+
+```json
+{
+  "kind": "mindmap",
+  "nodes": [
+    {"id": "root", "label": "Korpus Zihin Haritası", "kind": "root",
+     "parent": null, "topic_id": null, "chunk_ids": [], "size": 20,
+     "label_source": "corpus", "citations": []},
+    {"id": "n0", "label": "SQLite ile yerel veri saklama", "kind": "topic",
+     "parent": "root", "topic_id": 0, "chunk_ids": [12, 15, 19], "size": 3,
+     "label_source": "model",
+     "citations": [{"chunk_id": 12, "source": "belge_04.md", "page": 0,
+                    "citation": "[Kaynak: belge_04.md]"}]}
+  ],
+  "edges": [{"from": "n1", "to": "n4", "relation": "related", "weight": 0.7127}],
+  "dropped": [{"topic_id": 3, "text": "GPT-4 mimarisi",
+               "reason": "unverified_terms", "score": 0.5487, "terms": ["gpt-4"]}]
+}
+```
+
+- `nodes[0]` **her zaman köktür** ve LLM üretimi değildir (korpus metadatası) —
+  bu yüzden iddiası da yoktur.
+- `label_source` bir **dürüstlük alanıdır**: `model` (etiketi model yazdı ve
+  kapıdan geçti), `fallback` (kapıdan geçemedi, ad korpustan türedi),
+  `corpus` (kök). Arayüz `fallback`i **göstermek zorundadır** (§11.9).
+- `citations` düğümün **tüm** chunk'larını taşır; biçim `retrieve.Hit.citation()`
+  ile birebir aynıdır ve arayüz ikinci bir istek atmaz.
+- `weight` **ham cosine**dır (`topics.topic_similarity`), yeniden ölçeklenmez.
+
+### 11.3 Hat adımları
+
+| # | Adım | Ne yapar | LLM? |
+|---|---|---|---|
+| 1 | Seçim | `base.generate_artifact` (değişmedi) | — |
+| 2 | Yapı | `topics.cluster_corpus` (Faz 1'de dondu) | — |
+| 3 | Üretim | küme başına **1** etiket çağrısı | ✅ N çağrı |
+| 4 | Sadakat | `bind_claims` + `unverified_terms(is_title=True)` | — |
+| 5 | Kayıt | `artifacts.store.create_artifact` (değişmedi) | — |
+
+`progress` olayı etiket başına yayılır, `pct` **0–100 tam sayıdır** (§9.5).
+
+### 11.4 Etiketleme — ve ölçümle düzeltilen iki hata
+
+Bağlam kümenin merkezine **en yakın `MINDMAP_LABEL_CONTEXT_CHUNKS` (3)**
+chunk'ıdır; `Topic.chunk_ids` zaten merkeze yakınlıkta azalan sırada gelir.
+`SUMMARY_MAX_CHUNKS` (12) kullanılmaz: ≤5 kelimelik bir etiket için 12 chunk'lık
+bağlam yalnızca prefill maliyetidir.
+
+**Biçim temizliği.** Model, prompt'un yasağına rağmen markdown vurgusu, tırnak
+ve "Konu:" öneki üretebiliyor (Faz 2'de kayda geçen kozmetik kusurun aynısı).
+`_clean_label` ilk satırı alır, süslemeyi kırpar; sonuç boşsa ya da **5
+kelimeden uzunsa** etiket geçersizdir ve düğüm deterministik ada düşer
+(`dropped.reason = "label_invalid"`, `score = null` — bind_claims'e boş dize
+vermek anlamsız bir skor üretirdi).
+
+> [!warning] ÖLÇÜLDÜ — ilk koşumda 7 etiketin 3'ü YANLIŞ POZİTİF olarak düştü
+> `eval.db` üzerinde gerçek modelle: "Retrieval-Augmented Generation Anlatımı"
+> (0.7430), "Yakın Komşu Arama Teknikleri" (0.5167), "Embedding ve Benzerlik
+> Analizi" (0.8027) — üçü de **doğru** etiketti.
+>
+> Kök neden kapıda değil, **yazımdaydı**: model başlıkları Başlık Düzeninde
+> yazıyor; `fidelity._entity_like` ise "cümle başı olmayan büyük harf"i özel ad
+> kanıtı sayıyor. Başlık Düzeninde bu işaret **hiçbir bilgi taşımaz**, çünkü
+> her sözcük büyük.
+>
+> **Denenen ve ölçümle elenen çözüm:** prompt'a "CÜMLE DÜZENİ kullan, Her
+> Kelimeyi Büyük Harfle Başlatma" maddesi eklendi ve aynı korpusta yeniden
+> koşuldu. Model kuralı **yok saydı**; üstelik bir etiketi "Embedding ve
+> Benzerlik Analizi"nden "Embedding **Ve** Benzerlik Analizi"ne çevirdi. Düşen
+> etiket 3/7'de kaldı. Madde geri alındı (işlemeyen bir kuralı prompt'ta tutmak
+> çalıştığını ima eder). Bu, projenin "üretim kalitesi yalnızca prompt ve model
+> seçimiyle kontrol edilir" varsayımının **ölçülmüş sınırıdır**.
+>
+> **Uygulanan çözüm — kapı GEVŞETİLMEDİ:** ayrım çağırana taşındı.
+> `unverified_terms(..., is_title=True)` büyük harf kolunu kapatır, **rakam
+> kolu çalışmaya devam eder**. Cümle veren çağıranlar (rapor, quiz) varsayılanı
+> kullanır ve davranışları **birebir aynı** kalır — Faz 2'nin 43/47 ölçümü ve
+> `report_trap.py` geçerliliğini korur. Eşik ya da oran yok: "başlık mı"
+> sorusunu metnin biçimine bakarak tahmin etmiyoruz, **çağıran zaten biliyor**.
+>
+> Düzeltmeden sonra aynı koşumda: **7/7 etiket modelden**, 0 düşüş.
+> Tuzak savunması korundu: "GPT-4 mimarisi" hâlâ rakam kolundan düşer
+> (`backend/tests/test_artifacts_mindmap.py`).
+
+### 11.5 Kapıdan geçemeyen etiket — düğüm SİLİNMEZ
+
+Faz 3'ün Faz 2'den **ayrıldığı** tek nokta. Raporda bağlanamayan cümle
+çıkarılır; haritada bağlanamayan etiketin düğümü çıkarılamaz, çünkü düğüm
+korpusun **gerçek bir parçasıdır** — silmek, `rag/topics.py`'nin "artık kümeyi
+atma, emil" kuralının (korpusu sessizce yok etmeme) aynı ihlali olurdu.
+
+Bunun yerine:
+
+1. Etiket `topics.topic_title(topic, sources_by_chunk)` ile korpustan türer
+   (`"belge_04.md (3 bölüm)"`). Türetme raporun "Detaylı Analiz" başlığıyla
+   **aynı fonksiyondur** — iki kopya iki doğruluk kaynağı olurdu.
+2. `label_source = "fallback"` yazılır ve arayüz bunu gösterir.
+3. Modelin önerisi `payload["dropped"]`'a **sebebi ve ham cosine skoruyla** gider.
+4. Yedek etiket **iddia sayılmaz**: korpustan deterministik türüyor, onu sadakat
+   oranına katmak ölçülmemişi ölçülmüş göstermek olurdu.
+
+### 11.6 Kenarlar
+
+İki küme merkezi arasındaki ham cosine `MINDMAP_EDGE_MIN_SIMILARITY`'yi
+**aşarsa** kenar çizilir. Sıra deterministik: ağırlık azalan, eşitlikte düğüm
+kimliği artan.
+
+> [!danger] Bu eşik `MIN_SCORE` DEĞİLDİR ve onunla eşitlenemez
+> `MIN_SCORE` "bu chunk bu **soruya** cevap veriyor mu" eşiğidir; bu sabit "bu
+> iki **konu** birbirine yakın mı" eşiğidir. Ölçüldü (model yüklemez, yalnızca
+> kayıtlı embedding'ler):
+>
+> | Eşik | eval.db (7 küme, 21 çift) | rag.db (10 küme, 45 çift) |
+> |---|---|---|
+> | 0.45 (= `MIN_SCORE`) | çiftlerin ~yarısı | çiftlerin ~yarısı → **hairball** |
+> | 0.50 | 7 kenar (ort. derece 2.0) | 20 kenar (ort. derece 4.0) |
+> | **0.55** | **2 kenar (0.6)** | **11 kenar (2.2)** |
+> | 0.60 | 1 kenar (0.3) | 8 kenar (1.6) |
+> | 0.65 | 0 kenar | 2 kenar (0.4) |
+>
+> Merkez benzerliklerinin medyanı 0.4366 (eval.db) / 0.4707 (rag.db) — yani
+> `MIN_SCORE` bu soruya uygulanırsa haritanın yarısı kenar olur ve kenarın
+> taşıdığı bilgi sıfırlanır. **0.55** iki korpusta da okunabilir kalıyor.
+
+**Kenar yokluğu hata değildir**: kümeler gerçekten uzaksa harita yıldız olarak
+çizilir ve arayüz bunu açıkça söyler.
+
+### 11.7 İddialar
+
+```
+/nodes/{i}/label     -> model etiketinin metni  (yalnızca label_source == "model")
+/dropped/{i}         -> kapıdan geçemeyen etiket önerisi
+```
+
+Her `node_path` `payload_json` içinde **gerçekten çözülür** (RFC 6901);
+`mindmap_proof.py` ve birim testleri bunu doğrular.
+
+### 11.8 Export — `to_markdown` kind başına
+
+Faz 2'de `GET /api/artifacts/{id}/export` koşulsuz `report.to_markdown`
+çağırıyordu. Mindmap üretilebilir olduğu anda bu yol **sessizce boş bir dosya**
+döndürürdü (200 + boş gövde) — "sahte sayı göstermeme" ilkesinin aynı ihlali.
+
+Rota artık `kind → to_markdown` sözlüğünden seçer. Sözlük `kind` birliği
+üzerinde **tamdır** (üç tipin üçü de var), bu yüzden eksik-kind için savunma
+kodu ve **yeni bir hata kodu yazılmadı** (CLAUDE.md §2.2). Markdown düz metindir,
+`http(s)://` üretmez; düşürülen etiketin **metni gövdeye girmez**, yalnızca
+sayısı dipnot olur.
+
+### 11.9 Frontend — `d3-hierarchy` REDDEDİLDİ
+
+`STUDIO_PLAN §7` ve `§9.0` bu bağımlılığı Faz 3'e bırakmıştı. Faz 3 kararı:
+**kurulmuyor.**
+
+Gerekçe: bu harita **iki seviyelidir** (kök → konular). d3-hierarchy'nin değeri
+derin/düzensiz ağaçların düğüm ayrıştırma matematiğidir; iki seviyeli radyal
+yerleşim `angle = 2π·i/N` — `mindmap-payload.ts` içinde ~20 satır. Tek
+kullanımlık bir bağımlılığı offline yüzeyine sokmanın karşılığı yok
+(CLAUDE.md §2.2). Sonuç: **`package.json` DEĞİŞMEDİ.**
+
+Bileşenler: `web/components/studio/mindmap/{mindmap-payload.ts,mindmap-view.tsx}`.
+`ArtifactViewer` (`components/studio/artifact-viewer.tsx`) açık artefaktı
+`kind`'ına göre yönlendirir; `web/app/page.tsx`'teki tek satır **sabit kalır**
+(sahiplik sınırı, §10.12).
+
+Erişilebilirlik (WCAG AA, §9.9.3'ün deseni): SVG `role="tree"`, düğümler
+`role="treeitem"` + `aria-level` + `aria-selected`, roving `tabindex`, ok
+tuşları/`Home`/`End` ile gezinme. Seçili düğümün kaynakları yanda listelenir.
+
+> [!warning] Kenar ağırlığı RENKLE gösterilmez
+> `weight` ham cosine olsa da `DESIGN_SYSTEM §1.2` bantları **sorgu→chunk**
+> alaka düzeyi için kalibre edildi. İki konu merkezi arasındaki benzerlik
+> başka bir sorudur; bantla renklendirmek Inspector'ın anlamını sessizce
+> genişletirdi. Ağırlık **çizgi kalınlığıyla** gösterilir.
+
+### 11.10 Faz 3 kapanma ölçümü — `eval/mindmap_proof.py`
+
+Rutin kapıya **eklenmez** (küme sayısı kadar LLM çağrısı). `eval.db` üzerinde
+koşulur, üretim `rag.db`'sine dokunulmaz.
+
+**Ölçüldü (7 küme / 7 LLM çağrısı, 13/13 kontrol PASS):**
+
+| Gösterilen | Sonuç |
+|---|---|
+| Düğüm | 8 (1 kök + 7 konu), her küme için tam bir düğüm |
+| Korpus kapsaması | 20 chunk'ın **20'si** bir düğümde |
+| Atıf | her düğümün her chunk'ı için `[Kaynak: ...]` |
+| Etiket | **7/7 modelden** (düzeltmeden önce 4/7), 0 düşüş |
+| Kenar | 2 · `0.6094` ve `0.5520` · ikisi de eşiği aşıyor |
+| Kenar ağırlığı | `topics.topic_similarity` ile **birebir** (yeniden ölçeklenmemiş) |
+| `fidelity_score` | **1.0000** (oran) |
+| Markdown | `http(s)://` **yok**, düşen etiket metni gövdede yok |
+| Determinizm | ikinci `cluster_corpus` çağrısı birebir aynı |
+
+**Arayüz ayrıca gerçek tarayıcıda ölçüldü** (`eval/ui_proof.py`, 42/42 — Faz 2'nin
+28 kontrolü + Faz 3/4'ün 14'ü): SVG `role="tree"`, düğüm başına `treeitem`,
+`aria-level` 1/2, roving `tabindex`, `ArrowRight`/`Home`/`End` gezinmesi, seçili
+düğümün kaynak listesi, yedek etiketin "korpustan türetildi" uyarısı, kenarların
+çizilmesi, export bağlantısı. Sıfır konsol hatası, sıfır harici istek.
+
+> [!note] Bu bölüm Faz 3 tesliminde EKSİKTİ ve kayda geçiriliyor
+> §11.11'in "klavyeyle gezilebilir" maddesi ilk teslimde **kod incelemesine**
+> dayanıyordu; Faz 2 ise React etkileşimini gerçek Chromium'da ölçme emsalini
+> koymuştu. Boşluk fark edildiğinde `ui_proof.py` iki yeni görünümü kapsayacak
+> şekilde genişletildi ve madde ölçüme bağlandı.
+
+### 11.11 Faz 3 tamamlanma kriterleri
+
+- [x] Harita korpustan otomatik çıkıyor; yapı modelden **bağımsız** (test)
+- [x] Her düğüm kaynağa tıklanabilir (payload'da `citations`, arayüzde panel)
+- [x] SVG'de harici kaynak yok; `package.json` **değişmedi**
+- [x] Klavyeyle gezilebilir (roving tabindex + ok tuşları, WCAG AA) —
+      **gerçek Chromium'da ölçüldü**, kod incelemesiyle değil (`eval/ui_proof.py`)
+- [x] 12 kümede okunabilir kalıyor (radyal yerleşim + kenar eşiği ölçümü)
+- [x] `bind_claims` / `verdict_for` / `fidelity_score` / `FIDELITY_MIN_SCORE`
+      **değişmedi**; `unverified_terms` varsayılan davranışı **birebir aynı**
+
+### 11.12 Reddedilen alternatifler
+
+| Alternatif | Neden reddedildi |
+|---|---|
+| `d3-hierarchy` kurmak | İki seviyeli harita için ~20 satırlık trigonometri yeter; tek kullanımlık bağımlılık offline yüzeyini büyütür (§11.9) |
+| React Flow | 100 KB+ runtime ve kendi stil sistemi dondurulmuş tasarım sistemiyle çakışır (`STUDIO_PLAN §6.1`) |
+| Kapıdan geçemeyen etiketin düğümünü silmek | Korpusun bir kısmını haritadan sessizce yok ederdi — `topics.py`'nin "artık kümeyi emil" kuralının aynı ihlali (§11.5) |
+| Prompt'a "cümle düzeni" kuralı ekleyerek Başlık Düzenini önlemek | **Ölçüldü, işe yaramadı**: model kuralı yok saydı, düşen etiket 3/7'de kaldı (§11.4) |
+| `_entity_like`'ın büyük harf kolunu tamamen kaldırmak | Tuzağın "OpenAI"sı yalnızca o koldan yakalanıyor; Faz 2'nin ölçülmüş savunmasını silerdi |
+| Başlık olup olmadığını metinden TAHMİN etmek (büyük harf oranı eşiği) | Yeni bir kalibrasyon eşiği doğururdu; çağıran zaten biliyor (§11.4) |
+| Kenar eşiğini `MIN_SCORE`'a eşitlemek | Ölçüldü: merkez benzerliklerinin medyanı 0.44–0.47, harita hairball olur (§11.6) |
+| Kenar ağırlığını `ScoreBadge` bantlarıyla renklendirmek | O bantlar sorgu→chunk için kalibre edildi (§11.9) |
+| Küme sayısını kullanıcıya ayarlatmak | `TOPIC_MAX_CLUSTERS`/`TOPIC_MIN_CLUSTER_SIZE` önceliği Faz 1'de karara bağlandı (§9.3); ikinci bir ayar yüzeyi aynı kararı iki yerden yönetirdi |
+
+---
+
+## 12. Studio Katmanı — Faz 4 (Quiz Generator)
+
+> Hattan geçen **üçüncü** artefakt tipi. `base.generate_artifact` yine
+> değişmedi; Faz 4 ayrıca hattın **okuma sonrası** yüzeyini açar
+> (`quiz_attempts`, `/api/quiz/*`).
+
+### 12.0 Kapsam — ve kapsam DIŞI
+
+| İçeride (Faz 4) | Dışarıda |
+|---|---|
+| `rag/artifacts/quiz.py` (üretici + puanlama) | LLM-hakem ile puanlama (`STUDIO_PLAN §6.3`'te reddedildi) |
+| `quiz_attempts` CRUD · `/api/quiz/*` | Eşanlamlı sözlüğü (§12.6) |
+| `web/components/studio/quiz/**` | Zamanlayıcı, sıralama tablosu, tekrar planı |
+| `eval/quiz_proof.py` kapanma ölçümü | `eval_set.json`'a quiz kategorisi (§12.12'de **reddedildi**) |
+
+### 12.1 Temel karar — çeldiriciyi de LLM yazmaz
+
+`STUDIO_PLAN §6.3` doğru teşhis koyuyor: zor kısım soru üretimi değil,
+**çeldirici** üretimidir. Plan "hibrit" öneriyordu (aday havuzu korpustan, LLM
+yalnızca dilbilgisi düzeltir). Faz 4 bir adım daha ileri gidiyor: **LLM
+çeldiriciye hiç dokunmuyor.**
+
+Gerekçe kapının bilinen sınırına dayanır (§9.6): kapı *grounding* ölçer,
+*entailment* değil. LLM'e "makul ama **yanlış** bir şık yaz" demek,
+doğrulanamayan bir iddiayı cevap anahtarına koymaktır — üstelik yanlışlığı
+ölçebilecek bir aracımız yok. Korpustan gelen bir terim ise hem gerçek hem de
+**yanlışlığı kanıtlanabilir** (soru chunk'ında geçmediği kontrol edilir).
+
+Sonuç: dört tipin **üçü tamamen deterministik**, LLM yalnızca `short_answer`
+için çağrılır.
+
+### 12.2 `payload_json` şeması — DONDURULDU
+
+```json
+{
+  "kind": "quiz",
+  "questions": [
+    {"id": "q0", "type": "multiple_choice", "topic_id": 0,
+     "prompt": "Bu projede vektörler _____ motorunda saklanır.",
+     "choices": ["Foundry", "SQLite", "Cosine", "Streamlit"],
+     "answer": "SQLite", "chunk_id": 12, "source": "belge_04.md",
+     "citation": "[Kaynak: belge_04.md]",
+     "evidence": "Bu projede vektörler SQLite motorunda saklanır."}
+  ],
+  "dropped": [{"topic_id": 1, "text": "<doğrulanamayan metin>",
+               "prompt": "<soru gövdesi>", "reason": "unverified_terms",
+               "score": 0.8496, "terms": ["gpt-4", "openaı"]}]
+}
+```
+
+- `answer` `true_false`ta **kanonik** `"true"`/`"false"`tur; arayüz yerelleştirir.
+  Payload'a Türkçe etiket yazmak artefaktı üretildiği dile kilitlerdi.
+- `evidence` cevabın korpustaki dayanağıdır ve sonuç ekranında gösterilir.
+- `dropped[i].text` **doğrulanamayan metnin kendisidir** (soru gövdesi
+  `prompt` alanındadır) — raporun `dropped` alanıyla aynı anlam. Soru gövdesini
+  yazmak hangi metnin düştüğünü kayıttan silerdi (§12.7).
+
+### 12.3 Tip seçimi — küme başına SABİT değil
+
+Her küme için tipler deterministik bir sırada denenir, **kurulabilen ilk tip**
+seçilir. Sıra küme index'inden gelir:
+
+| `index % 4` | Deneme sırası |
+|---|---|
+| 0 | multiple_choice · fill_blank · true_false · short_answer |
+| 1 | fill_blank · multiple_choice · short_answer · true_false |
+| 2 | true_false · multiple_choice · fill_blank · short_answer |
+| 3 | short_answer · fill_blank · multiple_choice · true_false |
+
+> [!warning] Tablo ölçümden doğdu — tek satırlık bir rotasyon YETMEDİ
+> Dört tipin kurulabilirliği çok farklı: `multiple_choice`/`fill_blank` cümlede
+> **ayırt edici terim** ister (eval.db'de 7 kümenin 2'sinde, rag.db'de 10
+> kümenin 6'sında var); `true_false` yalnızca düzgün bir cümle ister;
+> `short_answer` **her zaman** kurulur.
+>
+> Son ikisi "her zaman kurulabilir" sınıfında olduğu için tek bir rotasyonda
+> hangisi önce gelirse MC/FB'nin kurulamadığı **her** kümeyi o kapıyor.
+> Ölçüldü (eval.db, kuru koşum): `true_false` önde → 7 sorunun **5'i**
+> true_false; `short_answer` önde → 7 sorunun **6'sı** short_answer. Tablo,
+> ikisinin yedeklik sırasını küme index'ine göre değiştirerek dengeyi kurar.
+
+### 12.4 Soru gövdesi seçimi — dört eleme, dördü de ölçümden
+
+`_candidate_sentences` bir chunk'tan yalnızca şu cümleleri alır:
+
+1. **Nokta/ünlem/soru ile biter.** Başlık satırları ("SQLite ile Yerel Veri
+   Saklama") bitmiyor; ilk sondada boşluk adayı olarak seçilip "Saklama" gibi
+   anlamsız boşluklar üretiyorlardı.
+2. **Büyük harf ya da rakamla başlar.** Chunking kelime penceresiyle çalışıyor
+   (`CHUNK_WORDS`, sayfa sınırı korunur ama **cümle sınırı korunmaz**), bu
+   yüzden bir chunk'ın ilk "cümlesi" neredeyse her zaman önceki chunk'tan taşan
+   yarım cümledir. Kuru koşumda üretilen soru buydu: «belgeleri aramasını ve
+   bulduğu bilgiyi cevaba dahil etmesini sağlar.»
+3. **8–40 kelime.** Altı madde başlığı, üstü PDF'te noktalama olmadan akan
+   satır çıkıyor.
+4. **`http(s)://` içermez.** İki sebep: PDF'teki URL satırından çıkan boşluk
+   ("4501968", bir blog kimliği) anlamsız bir soru üretiyor **ve** markdown
+   export'una harici bağlantı sızdırırdı — `CLAUDE.md §1.2`'nin grep
+   kontrolünü kıracak tek yol budur.
+
+**Boşluk terimi** cümlenin **en nadir** ayırt edici terimidir; "ayırt edici"
+tanımı `fidelity.distinctive_terms`ten gelir (tek doğruluk kaynağı). Tanım quiz
+için **gevşetilmedi**: sıradan bir Türkçe çekimi ("yaklaştıkça") boşaltmak,
+eşanlamlısı da doğru olan bir soru üretir ve tam eşleşme puanlaması onu haksız
+yere yanlış sayardı. Bilinen sonucu: `FIDELITY_TERM_MIN_LENGTH = 4` yüzünden
+kısa sayılar ("130", "30") boşluk olarak seçilemez.
+
+**`true_false` — kaynak atfı.** İfade korpustan birebir alınır ve bir belgeye
+atfedilir: doğru varyantta gerçek kaynağına, yanlış varyantta **başka** bir
+belgeye. Doğruluk değeri **metadata'dan kesindir** (cümlenin hangi chunk'tan
+geldiğini biliyoruz), bir entailment yargısı değildir; yanlış varyantta cümlenin
+o belgede geçmediği ayrıca doğrulanır.
+
+> [!warning] Elenen kurgu: sayısal mutasyon
+> İlk tasarım "cümledeki sayıyı değiştir, mutasyonun korpusta geçmediğini
+> doğrula" idi. **Ölçüldü ve elendi**: eval.db'de 7 kümenin yalnızca **1'inde**
+> soru üretebiliyordu; rag.db'de ürettiği tek şey bir URL kimliğinin
+> ("4501968" → "9003936") mutasyonuydu. Kaynak atfı aynı korpuslarda **7/7 ve
+> 10/10** kapsıyor — üstelik bu ürünün asıl iddiasını ("hangi belge ne diyor")
+> sınıyor.
+
+### 12.5 Çeldiriciler
+
+Havuz: **bu kümenin dışındaki** chunk'ların ayırt edici terimleri
+(`STUDIO_PLAN §6.3`'ün "embedding uzayında yakın ama farklı chunk'lardan"
+kuralının uygulaması — kümeler zaten embedding uzayının bölütleri). Üç filtre:
+
+1. Cevabın kendisi elenir.
+2. **Soru chunk'ında geçen terim elenir** — çeldiricinin yanlış olduğunun
+   doğrulaması budur (`STUDIO_PLAN §6.3` adım 4).
+3. **Biçim eşleşmesi** tercih edilir: cevap rakam taşıyorsa rakamlı adaylar öne
+   alınır, yoksa tek sayısal şık göze batar ve soru cevabı ele verir.
+
+Sıra: df **artan** (en nadir terim en makul çeldirici), eşitlikte **içerik
+hash'i**.
+
+> [!warning] Alfabetik sıralama ölçümle elendi
+> `(df, alfabetik)` ile sıralanınca df=1 olan onlarca terim arasından ilk üç
+> **hep "A" ile başlıyordu**: şıklar `['After', 'Apple', 'Approach', 'Internet']`
+> çıktı ve doğru cevap tek başına göze battı. Sıralama sha256 tabanlı bir
+> dağıtım anahtarına çevrildi. `hash()` **kullanılmaz**: `PYTHONHASHSEED` süreç
+> başına rastgeledir ve aynı korpus farklı koşumlarda farklı quiz üretirdi
+> (determinizm sözleşmesi, §9.4).
+
+### 12.6 Puanlama
+
+| Tip | Puanlama | Güvenilirlik |
+|---|---|---|
+| `multiple_choice` | normalize tam eşleşme | Deterministik |
+| `true_false` | normalize tam eşleşme | Deterministik |
+| `fill_blank` | normalize tam eşleşme | Deterministik |
+| `short_answer` | referans cevapla **ham cosine** | **Yaklaşık** |
+
+Normalleştirme: `İ→i`, `I→ı` **elle** eşlenir (düz `str.lower()` 'İ' için
+birleşen nokta üretir ve karşılaştırma sessizce başarısız olur — aynı tuzak
+`fidelity._term_lower`'da kayıtlı), sonra noktalama atılır.
+
+**Eşanlamlı listesi reddedildi** (`STUDIO_PLAN §6.3` öneriyordu): dışarıdan
+sözlük getirmek ikinci bir bakım yüzeyi açardı — `§10.15`'te durak-kelime
+sözlüğü aynı gerekçeyle reddedilmişti. Boşluk terimi zaten **ayırt edici** bir
+özel ad/kimlik olduğu için eşanlamlısı pratikte yoktur.
+
+> [!danger] `short_answer` bir eşiğe indirgenmez
+> `correct` **her zaman `null`**dur ve benzerlik **toplam skora katılmaz**.
+> `score` yalnızca deterministik sorulardan hesaplanır; hiç deterministik soru
+> yoksa `null` döner (0.0 yazmak "hepsini yanlış yaptı" demek olurdu).
+> `STUDIO_PLAN §6.3`: "puan bir eşik değil benzerlik skoru olarak gösterilir,
+> kullanıcı kendi doğrulamasını yapar". Bir eşik uydurmak, ölçülmemiş bir kararı
+> ölçülmüş gibi sunmak olurdu.
+>
+> Bu cosine `Hit.score` **değildir**: iki **cevap** arasındaki simetrik
+> benzerliktir (ikisi de `is_query=False` ile embed edilir), sorgu→chunk
+> asimetrik benzerliği değil. `DESIGN_SYSTEM §1.2` bantlarıyla
+> **renklendirilemez**.
+
+### 12.7 Sadakat kapısı — iddia tip başına DEĞİŞİR
+
+Kapı, modelin **uydurmuş olabileceği** metni korumalıdır:
+
+| Tip | `node_path` | İddia metni |
+|---|---|---|
+| `short_answer` | `/questions/{i}/answer` | modelin **referans cevabı** |
+| diğer üçü | `/questions/{i}/evidence` | korpustan **birebir** alınan cümle |
+
+Diğer üçünde bağlama bir **tutarlılık kontrolüdür** (cümle gerçekten korpusta
+mı) ve neredeyse her zaman `grounded` çıkar — yani bir quiz'in `fidelity_score`u
+**yapısı gereği yüksektir** ve asıl oynayan bileşen `short_answer` iddialarıdır.
+Bu, skorun zayıflığı değil, tasarımın sonucudur ve gizlenmez.
+
+`true_false`un **yanlış** varyantında kullanıcıya gösterilen ifade kasten
+yanlıştır; kapıya giden metin o değil, sorunun dayandığı **korpus cümlesidir** —
+yanlış bir iddiayı `grounded` diye kaydetmek olurdu.
+
+Kapıdan geçemeyen sorunun **tamamı** quiz'e alınmaz; sayısı `dropped_count`
+olarak SSE `complete`'te, `ArtifactDetail`'de ve arayüzde görünür (§10.11'in
+türetmesi `dropped` taşıyan her `kind` için çalışır).
+
+### 12.8 config sabitleri
+
+```python
+QUIZ_QUESTIONS_PER_TOPIC = 1    # kapsam kümeden gelir, sorular korpusa dağılır
+QUIZ_MAX_QUESTIONS       = 12   # bir oturumda bitirilebilir kalmalı
+QUIZ_CHOICE_COUNT        = 4    # 1 doğru + 3 çeldirici
+```
+
+`ARTIFACT_QUESTION_MAX_TOKENS = 200` Faz 1'de yazılmıştı ve **ilk kez burada
+tüketiliyor** (`models.get_chat_client(max_tokens=...)`, Faz 2'nin açtığı yol).
+
+### 12.9 Export
+
+`quiz.to_markdown`: **Sorular** ve **Cevap Anahtarı** ayrı bölümlerde — çıktı
+çalışma kâğıdı olarak da kullanılabilsin. `true_false` şıkları çıktıda Türkçe
+("Doğru"/"Yanlış"), payload'da kanonik. Düşürülen sorunun metni gövdeye girmez,
+yalnızca sayısı. `http(s)://` üretilmez (URL taşıyan cümleler §12.4'te zaten
+elendi).
+
+### 12.10 API — `/api/quiz/*`
+
+`backend/` ince kalır: puanlama `rag/artifacts/quiz.py::score_attempt`,
+kalıcılaştırma `rag/artifacts/store.py`.
+
+| Metot | Yol | Yanıt |
+|---|---|---|
+| `POST` | `/api/quiz/{artifact_id}/attempt` | `AttemptResult` |
+| `GET` | `/api/quiz/{artifact_id}/attempts` | `AttemptSummary[]` |
+
+```python
+class QuizAttemptRequest(BaseModel):
+    answers: dict = {}            # {question_id: kullanıcının cevabı}
+    started_at: str | None = None # quiz'in AÇILDIĞI an; yalnızca istemci bilir
+```
+
+- Artefakt yoksa **veya `kind != "quiz"`** ise `404 ARTIFACT_NOT_FOUND`. Rapor
+  kimliğiyle çağırmak "quiz {id}" kaynağının olmadığı anlamına gelir; yeni bir
+  hata kodu açılmaz (§2.2 listesi additive kalır).
+- **Model kilidi yalnızca gerektiğinde.** Quiz'de `short_answer` varsa puanlama
+  embedding çağırır → `503 MODEL_WARMING` kontrolü + `app.state.model_lock`.
+  Tamamen deterministik quiz'de kilit **alınmaz**: süren bir üretimi beklemesi
+  için sebep yok.
+- `quiz_attempts.score` NULL olabilir ve bu eksiklik değildir (§12.6).
+- Puanlama sonucu **saklanmaz**, yalnızca ham cevaplar: payload değişmediği
+  sürece `score_attempt` aynı girdiden aynı sonucu üretir; iki doğruluk kaynağı
+  oluşmaz.
+
+### 12.11 Frontend
+
+`web/components/studio/quiz/{quiz-payload.ts,quiz-runner.tsx}`. Puanlama
+**istemcide yapılmaz** (embedding tarayıcıda yok; ayrıca ikinci bir puanlama
+yolu ikinci bir doğruluk kaynağı olurdu). Sonuç ekranında her soru için beklenen
+cevap, **belgedeki dayanak** ve atıf gösterilir; `short_answer` için benzerlik
+sayısı ve "bu bir doğru/yanlış kararı değildir" açıklaması.
+
+`StudioPanel` artık üç üretim düğmesi taşır ve liste **`kind` süzgeci olmadan**
+gelir. Üretim sürerken **üç düğme de kapalıdır**: backend model kilidini üretim
+boyunca tutuyor, ikinci istek kilidin arkasında donmuş gibi görünürdü.
+
+### 12.12 Faz 4 kapanma ölçümü — `eval/quiz_proof.py`
+
+Rutin kapıya **eklenmez**. `eval.db` üzerinde, `--trap` ile tuzak enjeksiyonu
+(ilk `short_answer`ın **referans cevabına**) açıkça belirtilerek koşulur.
+
+**Ölçüldü (7 küme, 16/16 kontrol PASS):**
+
+| Gösterilen | Tuzaksız | `--trap` |
+|---|---|---|
+| Soru | **7** (3 true_false · 3 short_answer · 1 fill_blank) | 6 |
+| Düşen soru | 0 | **1** (`unverified_terms`, `['gpt-4','openaı']`, 0.8496) |
+| `fidelity_score` | 1.0000 | 1.0000 |
+| Cevap anahtarıyla deneme | **1.0 (4/4)** | 1.0 (4/4) |
+| Alakasız cevapla deneme | **0.0** | 0.0 |
+| `short_answer` `correct` | hepsi `None` | hepsi `None` |
+| Quiz gövdesinde "gpt"/"openai" | — | **0 eşleşme** |
+| Markdown | `http(s)://` yok, cevap anahtarı ayrı bölümde | aynı |
+
+**Arayüz ayrıca gerçek tarayıcıda ölçüldü** (`eval/ui_proof.py`): dört soru tipi
+render ediliyor, `true_false` şıkları yerelleşiyor (payload kanonik kalıyor),
+üç deterministik soru doğru cevaplandığında skor **3/3** çıkıyor, `short_answer`
+kartında **"Doğru"/"Yanlış" ibaresi YOK** — yalnızca benzerlik sayısı (§12.8'in
+görünür kanıtı) — ve deneme sunucuya `score=1.0` ile kaydediliyor.
+
+> [!note] `eval_set.json`'a quiz kategorisi EKLENMEDİ
+> `STUDIO_PLAN §9`'un Faz 4 kriteri "quiz üretimi eval setine kendi kategorisi
+> olarak eklendi" diyordu. **Reddedildi**, gerekçesi §10.1.1'in birebir aynısı:
+> `eval_set.json` tek bir hattı (`query_router → retrieve → answer`) ve "cevap"
+> nesnesini ölçüyor; quiz üretimi o şekle sokulursa "23/23"ün ne ölçtüğü
+> **sessizce** genişler. Ayrıca her teslime dakikalar ve bir 7B yüklemesi
+> binerdi. Ölçüm bunun yerine `report_trap.py`/`mindmap_proof.py` ile aynı
+> sınıfta, kendi koşucusuyla yapılır. **Eval seti 23 soruda kaldı.**
+
+### 12.13 Faz 4 tamamlanma kriterleri
+
+- [x] Her sorunun cevabı korpusta **doğrulanabilir** (§12.12 tablosu, ölçüldü)
+- [x] Çeldiriciler makul ama yanlış: gerçek korpus terimleri, soru chunk'ında
+      geçmedikleri **doğrulanmış**, rastgele değil
+- [x] Sorular kümelere dağılmış (küme başına en fazla bir soru)
+- [x] Quiz üretimi kendi koşucusuyla ölçüldü; `eval_set.json` **23'te kaldı**
+- [x] `short_answer` bir eşiğe indirgenmiyor; skora katılmıyor
+- [x] `package.json` ve `requirements.txt` **değişmedi**
+- [x] `short_answer`'ın doğru/yanlış işaretlenmediği **tarayıcıda** doğrulandı
+      (`eval/ui_proof.py`)
+
+### 12.14 Reddedilen alternatifler
+
+| Alternatif | Neden reddedildi |
+|---|---|
+| Çeldiricileri LLM'e yazdırmak | Yanlışlığı ölçülemeyen bir metni cevap anahtarına koymak; kapı entailment ölçmüyor (§12.1) |
+| LLM-hakem ile `short_answer` puanlamak | Soru başına ek çağrı (prefill baskın) ve hakem aynı modelin yanlılığını taşır — `STUDIO_PLAN §6.3` |
+| `short_answer` için benzerlik eşiği | Ölçülmemiş bir kararı ölçülmüş gibi sunardı (§12.6) |
+| Eşanlamlı sözlüğü | Dışarıdan liste ikinci bir bakım yüzeyi (§10.15'in aynı gerekçesi) |
+| `true_false` için sayısal mutasyon | **Ölçüldü**: eval.db'de 1/7 kapsama, rag.db'de URL kimliği mutasyonu (§12.4) |
+| Çeldirici havuzunu alfabetik sıralamak | **Ölçüldü**: şıkların üçü de "A" ile başlıyordu (§12.5) |
+| `hash()` ile dağıtım | `PYTHONHASHSEED` süreç başına rastgele; determinizm sözleşmesini kırar (§12.5) |
+| Quiz'i `eval_set.json`'a eklemek | "23/23"ün ne ölçtüğünü sessizce genişletirdi (§12.12) |
+| `score_attempt`e `conn` parametresi | Cevap anahtarı, atıf ve gerekçe zaten payload'da; kullanılmayan parametre (§10.5'in "payload render'ın tek girdisi" kuralı) |
+| Puanlama sonucunu `quiz_attempts`e yazmak | Payload değişmediği sürece aynı girdiden aynı sonuç çıkar; ikinci doğruluk kaynağı (§12.10) |

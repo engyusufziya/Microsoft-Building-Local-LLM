@@ -240,6 +240,53 @@
   --chart-5: oklch(0.269 0 0);
 }
 
+/* ==========================================================================
+   Yazdırma (rapor -> PDF) — FEATURE_SPEC.md §10.12.
+
+   Sözleşme İKİ seçicidir: `[data-print="root"]` yazdırılacak kök,
+   `[data-print="hide"]` yazdırılmayacak kabuk parçası. Blok bileşenlerin İÇ
+   yapısına bağlanmaz — kabuk yeniden düzenlense de çalışır. Ata zincirinin
+   yükseklik/kaydırma kilidi `:has()` ile açılır; uygulama kabuğu h-dvh +
+   overflow-hidden olduğu için aksi halde yalnızca ilk ekran basılırdı.
+
+   CLAUDE.md §1.2: burada harici kaynak YOK — web font yok, url(http…) yok.
+   ========================================================================== */
+@media print {
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  body :has([data-print="root"]) {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  [data-print="root"] {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Karanlık temada da okunur çıktı: yazdırma HER ZAMAN açık paleti kullanır
+     (kâğıt beyazdır; açık-üstü-açık metin sessizce görünmez olurdu). Yeni
+     renk kararı DEĞİL — bu değerler :root'taki dondurulmuş açık palet
+     değerlerinin birebir aynısıdır (DESIGN_SYSTEM.md §1.1); orası
+     değişirse burası da değişir. */
+  .dark {
+    --background: #ffffff;
+    --surface: #f9fafb;
+    --surface-raised: #ffffff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --text-primary: #111827;
+    --text-secondary: #6b7280;
+    --text-tertiary: #6b7280;
+    --primary: #4f46e5;
+    --warning: #b45309;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

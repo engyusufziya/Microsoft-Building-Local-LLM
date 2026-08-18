@@ -50,13 +50,21 @@ requests.
 
 ## Mechanical gates
 
+You run the **free** gates — no local model, safe to run any time:
+
 ```bash
 .venv/bin/python -m pytest backend/tests -q     # expect zero failures
-.venv/bin/python eval/offline_proof.py          # expect 0 sockets
-.venv/bin/python eval/fidelity_trap.py          # expect PASS (pinned known limit)
 .venv/bin/python docs/check_contrast.py         # if a color token changed
 cd web && npm run build && npm run lint         # if the frontend changed
 ```
+
+The model-loading gates (`eval/run_eval.py`, `eval/offline_proof.py`,
+`eval/fidelity_trap.py`) belong to **`prompt-eval-muhendisi`**, who runs after
+you and owns the single measurement pass (CLAUDE.md §5, "one measurement, one
+runner"). Running them here would load the 7B a second time for the same
+delivery — the exact waste the memory rule exists to prevent. Run them only
+when you are the *last* verifier in the chain and no measurement pass is
+coming; say so explicitly in your report when you do.
 
 The pytest gate is **zero failures**, not a fixed count. Do not write the
 current count into this file: it grows with every delivery, and a stale count

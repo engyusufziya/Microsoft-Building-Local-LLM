@@ -126,7 +126,12 @@ function AppShell({
           className
         )}
       >
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 md:px-4">
+        {/* data-print="hide": yazdırma sözleşmesi (FEATURE_SPEC §10.12) —
+            kabuğun denetimleri kâğıda basılmaz, yalnızca artefakt basılır. */}
+        <header
+          data-print="hide"
+          className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 md:px-4"
+        >
           {isSidebarOverlay && (
             <Button
               type="button"
@@ -159,6 +164,7 @@ function AppShell({
           {/* Tablet 240px · Desktop 260px — §4 tablosu. */}
           {!isSidebarOverlay && (
             <aside
+              data-print="hide"
               aria-label={t.regionDocuments}
               className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-border bg-surface xl:w-65"
             >
@@ -177,6 +183,7 @@ function AppShell({
           {/* Inspector yalnızca ≥1280px'te kalıcı kolon — §4 [!important]. */}
           {!isInspectorOverlay && (
             <aside
+              data-print="hide"
               aria-label={t.regionSources}
               className="flex h-full w-95 shrink-0 flex-col overflow-hidden border-l border-border bg-surface"
             >
@@ -188,6 +195,7 @@ function AppShell({
         {isSidebarOverlay && (
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetContent
+              data-print="hide"
               side="left"
               showCloseButton={false}
               className="gap-0 p-0 data-[side=left]:w-[86vw] data-[side=left]:sm:max-w-80"
@@ -217,6 +225,7 @@ function AppShell({
         {isInspectorOverlay && (
           <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
             <SheetContent
+              data-print="hide"
               side="right"
               showCloseButton={false}
               className="gap-0 p-0 data-[side=right]:w-[86vw] data-[side=right]:sm:max-w-95"

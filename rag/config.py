@@ -258,3 +258,107 @@ FIDELITY_MIN_SCORE = 0.45
 # ve tarama ayırt etme gücünü kaybeder. Bir bulguyu kaybetmek sorun değil,
 # kuralı kaybetmek sorun (CLAUDE.md §1.3 kasıtlı olarak mutlaktır).
 FIDELITY_WEAK_BAND_WIDTH = 0.10
+
+# rag/artifacts/fidelity.py::unverified_terms -- Faz 2'nin ikinci katmanı
+# (FEATURE_SPEC.md §10.6). Cosine "bu konuda bir chunk var mı" sorusunu
+# cevaplıyor, özel adları/model kimliklerini (entailment boşluğu, bkz.
+# FIDELITY_MIN_SCORE'un üstündeki 0.5487 tuzağı) kaçırıyor; bu iki sabit,
+# sözcüksel doküman-frekansından türeyen İKİNCİ ve BAĞIMSIZ bir sinyal kurar.
+# Ne biri ne öbürü FIDELITY_MIN_SCORE'u DEĞİŞTİRME gerekçesi değildir --
+# tamamlayıcıdır (§9.6'da eşik yükseltme zaten reddedildi).
+#
+# ÖLÇÜLDÜ (eval.db: 20 chunk, rag.db: 61 chunk; model YÜKLEMEZ, saf metin
+# taraması -- python -m pytest kadar ucuz):
+#   (a) Tuzağın terimleri her iki korpusta da HİÇ geçmiyor (df=0, oran=0.000)
+#       -- "gpt-4" ve "openai" (Türkçe-duyarlı küçültmeyle "openaı") ratio
+#       eşiğinin her zaman altında, yani her zaman AYIRT EDİCİ sayılıyor.
+#   (b) Korpustan birebir alınmış 399 cümle (eval.db 64 + rag.db 335), kendi
+#       kaynak chunk'ı bağlam verildiğinde 0/399 toplu düşürüldü -- gerçek
+#       içerik alt dize eşleşmesiyle her zaman kendi bağlamında bulunuyor.
+#
+# (b) ÖLÇÜMÜ YANILTICIYDI, KAYDA GEÇİRİLDİ (FEATURE_SPEC.md §10.6): birebir
+# alınmış cümle kendi bağlamında HER ZAMAN bulunur; LLM nesri ise aynı bilgiyi
+# BAŞKA sözcüklerle yazar. Gerçek üretilmiş raporda (eval.db, 47 cümle) yalnız
+# df'ye bakan biçim 42 cümleyi düşürdü -- çünkü 20 chunk'lık korpusta sıradan
+# Türkçe çekim de df=0 alıyor. Çözüm bu iki sabiti DEĞİŞTİRMEK olmadı (ikisi de
+# ayrım üretmiyor, ölçüldü); kurala ikinci bir şart eklendi: terim ayrıca
+# "varlık benzeri" olmalı (rakam/tire/nokta ya da cümle başı olmayan büyük
+# harf). Aynı koşumda 43/47 cümle rapora girdi, tuzak yalnızca "gpt-4" ve
+# "openaı" ile düştü. Bkz. fidelity.py::_entity_like.
+FIDELITY_TERM_MIN_LENGTH = 4
+
+# 2-3 harfli Türkçe bağlaçlar/ekler ("ve", "bu", "bir", "da", "de", "ile")
+# hiçbir zaman ayırt edici bir sinyal taşımaz; MIN_LENGTH=4 bunları terim
+# kontrolüne HİÇ sokmadan eler (df hesaplamasını gereksiz yere gürültüye
+# maruz bırakmaz).
+FIDELITY_TERM_DF_MAX_RATIO = 0.15
+
+# ÖLÇÜLDÜ: 0.15'te en yaygın gerçek korpus terimleri kontrol dışı kalıyor --
+# "rag" oran=0.50/0.51, "bir" oran=0.75/0.246, "ve" oran=0.65/0.23, "bu"
+# oran=0.60/0.197 (eval.db/rag.db) hiçbiri "ayırt edici" sayılmıyor. Bilinen
+# sınır: MIN_LENGTH>=4'ü aşan ama küçük korpusta seyrek geçen bazı gerçek
+# bağlaçlar ("kadar", "olarak") yine de ayırt edici sayılabiliyor (rag.db'de
+# sırasıyla oran=0.033/0.049) -- ama (b) ölçümünün 0/399 sonucu gösteriyor ki
+# bu, gerçek/kendi bağlamına sahip içeriği toplu düşürmüyor; alt dize
+# eşleşmesi kendi kaynağında her zaman buluyor.
+
+# --- Studio Faz 3: Mind Map ---------------------------------------------------
+
+# rag/artifacts/mindmap.py -- iki küme merkezi arasındaki HAM cosine bu değeri
+# AŞIYORSA haritaya "ilişkili" kenarı çizilir (topics.topic_similarity).
+#
+# DİKKAT: bu MIN_SCORE DEĞİLDİR ve onunla aynı soruyu cevaplamaz. MIN_SCORE
+# "bu chunk bu SORUYA cevap veriyor mu" eşiğidir; bu sabit "bu iki KONU
+# birbirine yakın mı" eşiğidir. İkisini eşitlemek (0.45) haritayı okunmaz
+# yapar -- ölçüm aşağıda.
+#
+# ÖLÇÜLDÜ (model YÜKLEMEZ: kayıtlı embedding'ler + rag/topics.py kümelemesi):
+#   eval.db, 20 chunk ->  7 küme,  21 çift: min 0.2493 medyan 0.4366 max 0.6094
+#   rag.db , 61 chunk -> 10 küme,  45 çift: min 0.2446 medyan 0.4707 max 0.7827
+#
+#   eşik   eval.db kenar (ort. derece)   rag.db kenar (ort. derece)
+#   0.45   ~medyanın üstü: çiftlerin YARISI    ~çiftlerin yarısı   -> hairball
+#   0.50    7/21 (2.0)                        20/45 (4.0)         -> hairball
+#   0.55    2/21 (0.6)                        11/45 (2.2)         <- SEÇİLDİ
+#   0.60    1/21 (0.3)                         8/45 (1.6)
+#   0.65    0/21 (0.0)                         2/45 (0.4)
+#
+# 0.55 seçildi çünkü iki korpusun İKİSİNDE birden okunabilir kalıyor: büyük
+# korpusta ortalama derece 2.2 (her düğümün birkaç komşusu var), küçük
+# korpusta harita boşalmıyor ama yalnızca gerçekten yakın iki çift kalıyor
+# (0.6094 RAG<->prompt engineering, 0.5520 prompt engineering<->chunking --
+# ikisi de elle bakıldığında doğru "ilişkili" çiftler). 0.50'de rag.db'de 10
+# düğüme 20 kenar düşüyor: her düğüm her düğüme bağlı görünür ve kenarın
+# taşıdığı bilgi sıfırlanır. 0.65'te küçük korpus tamamen kenarsız kalır.
+#
+# Kenar yokluğu HATA DEĞİLDİR: kümeler gerçekten uzaksa harita yıldız
+# (yalnızca kök-düğüm kenarları) olarak çizilir.
+MINDMAP_EDGE_MIN_SIMILARITY = 0.55
+
+# Küme etiketini yazan LLM çağrısına verilen chunk sayısı (merkeze en yakın
+# ilk N). SUMMARY_MAX_CHUNKS (12) rapor BÖLÜMÜ içindir; <=5 kelimelik bir
+# etiket için 12 chunk'lık bağlam yalnızca prefill maliyeti demektir (ölçüldü:
+# gecikmenin baskın kaynağı prefill, bkz. MAX_ANSWER_TOKENS yorumu). 3, kümenin
+# merkezini temsil etmeye yeter -- kümeler zaten tek konuya karşılık geliyor
+# (eval.db'de 7 kümenin 7'si de tam olarak bir kaynak belge).
+MINDMAP_LABEL_CONTEXT_CHUNKS = 3
+
+# --- Studio Faz 4: Quiz -------------------------------------------------------
+
+# Küme başına soru kotası. STUDIO_PLAN §6.3'ün "sorular tek chunk'a sıkışmasın"
+# kuralı: kapsam kümeden gelir, sorular korpusa dağılır. 1 seçildi çünkü LLM
+# çağrısı sayısı doğrudan gecikmedir (prefill baskın) ve 10 kümelik üretim
+# korpusunda 10 soru zaten dolu bir quiz'dir.
+QUIZ_QUESTIONS_PER_TOPIC = 1
+
+# Üst sınır: korpus büyüyüp küme sayısı tavana dayasa bile quiz bir oturumda
+# bitirilebilir kalmalı. TOPIC_MAX_CLUSTERS (12) x QUIZ_QUESTIONS_PER_TOPIC (1)
+# ile aynı değer; ikisi ayrıldığında (kota 2 olursa) bu tavan bağlayıcı olur.
+QUIZ_MAX_QUESTIONS = 12
+
+# Çoktan seçmeli şık sayısı (1 doğru + 3 çeldirici). Çeldiriciler LLM'e
+# uydurtulmaz, BAŞKA kümelerin doğru cevaplarından gelir (§12.5) -- yani havuz
+# küme sayısıyla sınırlı. 4, 7 kümelik korpusta bile her soruya 3 çeldirici
+# bulunabilmesini garanti eder (6 aday > 3 gerek).
+QUIZ_CHOICE_COUNT = 4
+

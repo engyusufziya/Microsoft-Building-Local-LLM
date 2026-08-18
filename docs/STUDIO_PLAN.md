@@ -325,7 +325,7 @@ doğrulanır) · sadakat kapısı bilinçli bozuk bir iddiayı `unsupported`
 işaretliyor · eval 23/23 ve backend testleri sıfır başarısızlıkla geçiyor ·
 offline kanıtı 0 soket.
 
-### Faz 2 — Report Generator
+### Faz 2 — Report Generator — **KAPANDI**
 
 **Başarı:** raporun her cümlesi bir chunk'a bağlı · sadakat skoru ≥0.90
 (oran: grounded/toplam — ortalama cosine değil, bkz. FEATURE_SPEC §9.11) ·
@@ -340,17 +340,82 @@ konuya yakın bir iddia 0.5487 ile `grounded` geçiyor
 gösterildiği ölçümle kanıtlanmadan kapanmaz. Telafi ikinci bir katmandır —
 `FIDELITY_MIN_SCORE` yükseltilerek değil (o alternatif reddedildi, §9.6).
 
-### Faz 3 — Mind Map
+**Ölçüldü ve karşılandı** (`eval/report_trap.py`, eval.db, 7 küme / 9 LLM
+çağrısı): 48 iddia · 44'ü rapora girdi · 4'ü düşürüldü · tuzak
+`artifact_claims`'te hâlâ **0.5487 / grounded** ama `node_path` `/dropped/1`,
+yani `sections` altında değil · rapor gövdesinde "gpt"/"openai" **0 eşleşme** ·
+`fidelity_score` **1.0000** · `dropped_count` SSE `complete`'te,
+`ArtifactDetail`'de ve arayüzde görünüyor.
+
+> [!warning] Bu planın ikinci katman tarifi ölçümle DÜZELTİLDİ
+> Katmanın ilk hâli terimi yalnızca doküman frekansına göre "ayırt edici"
+> sayıyordu; gerçek üretilmiş raporda **47 cümlenin 42'sini** düşürdü, çünkü
+> 20 chunk'lık korpusta sıradan Türkçe çekim de df=0 alıyor. Kurala ikinci bir
+> şart eklendi (terim ayrıca **varlık benzeri** olmalı: rakam / iç tire-nokta /
+> cümle başı olmayan büyük harf) ve aynı koşumda 43/47 cümle rapora girdi.
+> Tam ölçüm tablosu ve elenen alternatifler: `FEATURE_SPEC §10.6`,
+> `PROJE_DURUMU.md` "Faz 2'nin ölçümle çürüttüğü kendi kalibrasyonu".
+
+### Faz 3 — Mind Map — **KAPANDI**
 
 **Başarı:** harita korpustan otomatik · her düğüm kaynağa tıklanabilir ·
 SVG'de harici kaynak yok · klavyeyle gezilebilir (WCAG AA) · 12 kümede
 okunabilir kalıyor.
 
-### Faz 4 — Quiz Generator
+**Ölçüldü ve karşılandı** (`eval/mindmap_proof.py`, eval.db, 7 küme / 7 LLM
+çağrısı, 13/13 kontrol): 8 düğüm (1 kök + 7 konu) · 20 chunk'ın 20'si bir
+düğümde · her düğümün her chunk'ı için atıf · **7/7 etiket modelden** ·
+2 kenar (0.6094, 0.5520), ağırlıklar `topic_similarity` ile birebir ·
+`fidelity_score` 1.0000 · markdown'da `http(s)://` yok · kümeleme determinist.
+
+> [!warning] `d3-hierarchy` KURULMADI — §7'nin "tek yeni npm bağımlılığı" ifadesi geçersiz
+> Bu harita iki seviyelidir (kök → konular); radyal yerleşim `angle = 2π·i/N`,
+> yani ~20 satır. d3-hierarchy'nin değeri derin/düzensiz ağaçların düğüm
+> ayrıştırmasıdır ve burada hiç kullanılmazdı. `package.json` **değişmedi**.
+> Tam gerekçe: `FEATURE_SPEC §11.9`.
+
+> [!warning] Planın "5. düğüm → merkeze en yakın chunk → artifact_claims" adımı DEĞİŞTİ
+> İddia olarak bağlanan şey chunk değil, modelin **etiketidir** — hallüsinasyon
+> riski taşıyan tek metin odur. Ayrıca kapıdan geçemeyen etiketin düğümü
+> **silinmez**: ad korpustan türer (`topics.topic_title`), öneri `dropped`'a
+> sebebiyle yazılır (`FEATURE_SPEC §11.5`).
+
+### Faz 4 — Quiz Generator — **KAPANDI**
 
 **Başarı:** her sorunun cevabı korpusta doğrulanabilir · çeldiriciler makul
-ama yanlış (rastgele değil) · sorular kümelere dağılmış · quiz üretimi eval
-setine kendi kategorisi olarak eklendi.
+ama yanlış (rastgele değil) · sorular kümelere dağılmış · quiz üretimi ~~eval
+setine kendi kategorisi olarak eklendi~~ **kendi koşucusuyla ölçüldü** (aşağı
+bkz.).
+
+**Ölçüldü ve karşılandı** (`eval/quiz_proof.py`, eval.db, 7 küme, 16/16
+kontrol): 7 soru (3 true_false · 3 short_answer · 1 fill_blank) · her sorunun
+cevabı korpustan doğrulanabilir · çeldiriciler soru chunk'ında geçmiyor ·
+cevap anahtarıyla deneme **1.0 (4/4)**, alakasız cevapla **0.0** ·
+`short_answer` hiçbir eşiğe indirgenmiyor (`correct=None`) · `--trap`
+koşumunda tuzaklı soru quiz'e **alınmadı**, gövdede "gpt"/"openai" **0
+eşleşme**.
+
+> [!warning] §6.3'ün "LLM yalnızca dilbilgisel uyum için düzenler" adımı KALDIRILDI
+> Çeldiricilere LLM **hiç dokunmuyor**: havuz başka kümelerin gerçek korpus
+> terimleri, yanlışlıkları soru chunk'ında geçmedikleri kontrol edilerek
+> **kanıtlanıyor**. LLM'e "makul ama yanlış bir şık yaz" demek, yanlışlığı
+> ölçülemeyen bir metni cevap anahtarına koymaktır — kapı grounding ölçüyor,
+> entailment değil (§9.6'nın bilinen sınırı). Bedeli de sıfır: soru başına bir
+> çağrı eksiliyor.
+
+> [!warning] §6.3'ün `true_false` kurgusu ve eşanlamlı listesi DEĞİŞTİ
+> `true_false` **kaynak atfı** üzerinden kurulur ("bu bilgi X belgesinde
+> geçiyor") — doğruluk değeri metadata'dan kesindir. Denenen sayısal-mutasyon
+> kurgusu ölçümle elendi (eval.db'de 1/7 kapsama). `fill_blank`'in "eşanlamlı
+> listesi" reddedildi: dışarıdan sözlük getirmek ikinci bir bakım yüzeyi
+> açardı (§10.15'in aynı gerekçesi). Tam ölçümler: `FEATURE_SPEC §12.4`.
+
+> [!warning] Quiz `eval_set.json`'a EKLENMEDİ — Faz 4 kriteri düzeltildi
+> Gerekçe §10.1.1'in birebir aynısı: `eval_set.json` tek bir hattı
+> (`query_router → retrieve → answer`) ölçüyor; quiz üretimini o şekle sokmak
+> "23/23"ün ne ölçtüğünü **sessizce** genişletirdi ve her teslime dakikalar +
+> bir 7B yüklemesi bindirirdi. Ölçüm `eval/quiz_proof.py` ile, `report_trap.py`
+> ile aynı sınıfta yapılır. **Eval seti 23 soruda kaldı.**
 
 ## 10. Her fazda değişmeyen kapı
 
@@ -360,4 +425,27 @@ Hiçbir faz şunlar korunmadan kapanmaz:
 .venv/bin/python eval/run_eval.py                 # 23/23
 .venv/bin/python -m pytest backend/tests -q       # sıfır başarısızlık
 .venv/bin/python eval/offline_proof.py            # 0 soket
+.venv/bin/python eval/fidelity_trap.py            # PASS, 0.5487 / grounded
+cd web && npm run build && npm run lint           # temiz
 ```
+
+Backend testinin sayısı kapıya **yazılmaz** (Faz 1'de "91/91" bayat kalıp
+regresyonu yeşil göstermişti; gerçek taban 93'tü, Faz 2 sonrası 151, Faz 4
+sonrası **201**). Kapı "sıfır başarısızlık"tır; sayı yalnızca teslim kaydında
+anılır.
+
+Faz kapanma ölçümleri bu listede **yoktur** ve kasıtlıdır — her biri bir kerelik
+ölçümdür, dakikalar sürer ve rutin kapıya eklenmesi her teslime bir 7B
+yüklemesi bindirirdi:
+
+| Koşucu | Faz | Ne gösterir |
+|---|---|---|
+| `eval/report_trap.py` | 2 | Ürün, entailment'ı geçemeyen cümleyi **yayımlamıyor** (§10.13) |
+| `eval/mindmap_proof.py` | 3 | Yapı modelden **gelmiyor**, etiket denetleniyor (§11.10) |
+| `eval/quiz_proof.py` | 4 | Cevap anahtarı korpustan **doğrulanıyor** (§12.12) |
+| `eval/ui_proof.py` | 2–4 | React katmanı gerçek Chromium'da çalışıyor (42 kontrol) |
+
+`ui_proof.py` diğer üçünden bir yönüyle ayrılır: **model yüklemez** (üreticiler
+sahtelenir) ve tek bir fazın değil, üç görünümün tamamının ölçümüdür. Yine de
+rutin kapıda değildir -- `playwright` + Chromium ister ve bunlar
+`requirements-dev.txt`'tedir (ürün yolunda tarayıcı yok, CLAUDE.md §1.2).

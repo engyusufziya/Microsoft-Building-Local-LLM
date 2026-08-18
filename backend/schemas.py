@@ -109,6 +109,10 @@ class ArtifactDetail(ArtifactSummary):
     payload: dict
     claims: List[ArtifactClaimOut]
     unsupported_count: int  # TÜRETİLİR: verdict == 'unsupported'
+    # TÜRETİLİR: len(payload["dropped"]) -- yeni sütun YOK (§10.11).
+    # unsupported_count'tan AYRI bir sayıdır: biri bağlanabilirliği, öbürü
+    # rapordan ÇIKARILAN iddiayı sayar; tek skora katlanmazlar (§10.6).
+    dropped_count: int
 
 
 class ArtifactCreateRequest(BaseModel):
@@ -116,3 +120,56 @@ class ArtifactCreateRequest(BaseModel):
     scope: Literal["corpus", "document"] = "corpus"
     document_id: Optional[int] = None
     params: dict = {}
+
+
+# --------------------------------------------------------------------------- Quiz denemeleri (§12.10)
+
+
+class QuizAttemptRequest(BaseModel):
+    """`answers`: {question_id: kullanıcının cevabı}.
+
+    `started_at` istemciden gelir çünkü quiz'in ne zaman AÇILDIĞINI yalnızca
+    istemci bilir; gönderilmezse sunucu gönderim anını kullanır (deneme yine
+    kaydedilir, süre bilgisi kaybolur).
+    """
+
+    answers: dict = {}
+    started_at: Optional[str] = None
+
+
+class QuizAnswerResult(BaseModel):
+    question_id: str
+    type: Literal["multiple_choice", "true_false", "fill_blank", "short_answer"]
+    given: Optional[str]
+    expected: str
+    # short_answer'da HER ZAMAN None: o tip eşikle doğru/yanlış'a indirgenmez.
+    correct: Optional[bool]
+    # YALNIZCA short_answer'da dolu. HAM COSINE ama `Hit.score` DEĞİL: iki
+    # CEVAP arasındaki simetrik benzerlik (§12.8). DESIGN_SYSTEM §1.2 güven
+    # bantlarıyla renklendirilemez.
+    similarity: Optional[float]
+    chunk_id: Optional[int]
+    citation: Optional[str]
+    # Cevabın korpustaki dayanağı: kullanıcıya gösterilen gerekçe cümlesi.
+    evidence: str
+
+
+class AttemptResult(BaseModel):
+    attempt_id: int
+    artifact_id: int
+    # YALNIZCA deterministik sorular üzerinden oran; short_answer katılmaz.
+    # Deterministik soru yoksa None (0.0 "hepsi yanlış" demek olurdu).
+    score: Optional[float]
+    correct_count: int
+    deterministic_total: int
+    similarity_total: int
+    completed_at: str
+    results: List[QuizAnswerResult]
+
+
+class AttemptSummary(BaseModel):
+    id: int
+    artifact_id: int
+    started_at: str
+    completed_at: Optional[str]
+    score: Optional[float]
