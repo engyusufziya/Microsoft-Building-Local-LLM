@@ -21,6 +21,9 @@ import type {
   ArtifactProgressEvent,
   ArtifactStageEvent,
   ArtifactSummary,
+  AttemptResult,
+  AttemptSummary,
+  QuizAttemptRequest,
   ChatDoneEvent,
   ChatRetrievalEvent,
   ChatTokenEvent,
@@ -270,6 +273,31 @@ export async function createArtifact(
         break
     }
   }
+}
+
+// --------------------------------------------------------------------------- quiz (Faz 4)
+
+/**
+ * Quiz denemesini gönderir ve puanlanmış sonucu alır (FEATURE_SPEC §12.10).
+ *
+ * Puanlama SUNUCUDA yapılır -- cevap anahtarı zaten `payload` içinde geliyor
+ * olsa da, istemcide puanlamak short_answer benzerliği için embedding'i
+ * tarayıcıya taşımayı gerektirirdi (imkânsız) ve iki ayrı puanlama yolu
+ * oluştururdu.
+ */
+export function submitQuizAttempt(
+  artifactId: number,
+  body: QuizAttemptRequest
+): Promise<AttemptResult> {
+  return requestJson<AttemptResult>(`/quiz/${artifactId}/attempt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+export function listQuizAttempts(artifactId: number): Promise<AttemptSummary[]> {
+  return requestJson<AttemptSummary[]>(`/quiz/${artifactId}/attempts`)
 }
 
 // --------------------------------------------------------------------------- metrics

@@ -1,13 +1,13 @@
 """`/api/artifacts` -- CRUD + SSE üretim yüzeyi (FEATURE_SPEC.md §9.8).
 
 Faz 1'de registry BOŞTU ve POST akışı her zaman `GENERATION_FAILED` ile
-bitiyordu; Faz 2-3 ile `report` ve `mindmap` kayıtlandı. Hata yolu artık kırık bir
+bitiyordu; Faz 2-4 ile üç `kind` de kayıtlandı. Hata yolu artık kırık bir
 üretici stub'ıyla ölçülüyor -- conftest'in "Foundry Local'a HİÇ dokunulmaz"
 sözü korunuyor.
 
 GET/DELETE/export testleri `rag/artifacts/store.py::create_artifact` ile
 doğrudan artefakt tohumlayarak `is_stale`/`citation`/`dropped_count`
-türetmelerini ve `kind` başına markdown seçimini doğrular (quiz Faz 4'te).
+türetmelerini ve `kind` başına markdown seçimini doğrular.
 """
 
 from __future__ import annotations
@@ -424,7 +424,7 @@ def test_export_markdown_basarili(app, client):
 
 
 def test_export_kind_basina_kendi_markdownini_uretir(app, client):
-    """§11.8: her `kind` markdown'ını KENDİ modülünde üretir.
+    """§11.8/§12.9: her `kind` markdown'ını KENDİ modülünde üretir.
 
     Faz 2'de rota koşulsuz `report.to_markdown` çağırıyordu; mindmap/quiz
     üretilebilir olduğu anda o yol sessizce BOŞ dosya döndürürdü (200 + boş
@@ -454,13 +454,35 @@ def test_export_kind_basina_kendi_markdownini_uretir(app, client):
         corpus_fingerprint=store.corpus_fingerprint(conn),
         fidelity_score=1.0, generation_ms=1, claims=[],
     )
+    quiz_id = create_artifact(
+        conn, kind="quiz", scope="corpus", document_id=None, title="Korpus Quiz",
+        params={},
+        payload={
+            "kind": "quiz",
+            "questions": [{"id": "q0", "type": "fill_blank", "topic_id": 0,
+                           "prompt": "Veriler _____ içinde saklanır.", "choices": [],
+                           "answer": "SQLite", "chunk_id": chunk_id, "source": "a.pdf",
+                           "citation": "[Kaynak: a.pdf s.1]", "evidence": "Gerekçe."}],
+            "dropped": [],
+        },
+        corpus_fingerprint=store.corpus_fingerprint(conn),
+        fidelity_score=1.0, generation_ms=1, claims=[],
+    )
+
     mindmap_md = client.get(f"/api/artifacts/{mindmap_id}/export?format=md")
     assert mindmap_md.status_code == 200
     assert mindmap_md.headers["content-disposition"].endswith(f'"mindmap-{mindmap_id}.md"')
     assert "Depolama katmanı" in mindmap_md.text
     assert "[Kaynak: a.pdf s.1]" in mindmap_md.text
 
-    assert "http://" not in mindmap_md.text and "https://" not in mindmap_md.text
+    quiz_md = client.get(f"/api/artifacts/{quiz_id}/export?format=md")
+    assert quiz_md.status_code == 200
+    assert quiz_md.headers["content-disposition"].endswith(f'"quiz-{quiz_id}.md"')
+    assert "## Sorular" in quiz_md.text
+    assert "## Cevap Anahtarı" in quiz_md.text
+
+    for text in (mindmap_md.text, quiz_md.text):
+        assert "http://" not in text and "https://" not in text
 
 
 def test_export_bilinmeyen_artefakt_404(client):
