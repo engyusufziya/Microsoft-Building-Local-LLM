@@ -7,7 +7,7 @@ Innovators program.
 
 **Language:** the repo's prose is Turkish — code comments, `PROJE_DURUMU.md`,
 `docs/`, UI strings, and commit messages. Write in Turkish when you write into
-the repo. This file and `.claude/agents/*.md` are English on purpose:
+the repo. This file and the agent definitions are English on purpose:
 instructions to an agent are kept in their original wording so nothing is lost
 in translation.
 
@@ -183,7 +183,10 @@ export by the backend — one process at runtime, zero network.
 
 ## 5. Agents
 
-Eight agents are defined under `.claude/agents/`. The front door is
+Eight agents are defined in the local agent-tooling configuration, which is
+**not tracked in this repository** (it is machine-specific and vendor-specific;
+only the roles and the ownership contract below are part of the project). The
+front door is
 **urun-mimari**; ambiguous work goes there. Implementers (`rag-muhendisi`,
 `backend-muhendisi`, `frontend-muhendisi`, `bilgi-alani-muhendisi`) cannot
 approve their own work — the verifiers (`prompt-eval-muhendisi`,
@@ -193,9 +196,9 @@ permissions and escalation boundaries are written in its own file.
 **Model split:** `urun-mimari` runs on `opus` — it writes specs, arbitrates
 conflicts, and decides what gets built, which is the judgment-heavy work. The
 other seven run on `sonnet`, where the task is bounded by a spec and a
-contract. Set per agent via the `model` frontmatter field. Note that the
-`AGENT_SUBAGENT_MODEL` environment variable, if set, overrides every
-one of these.
+contract. Set per agent via the `model` frontmatter field. Note that a harness-level
+subagent-model environment override, if set, takes precedence over every one
+of these.
 
 ### Ownership map
 
@@ -218,9 +221,9 @@ it lands in, not the owner of the topic it sounds like.
 Be honest about this, because it changes how much the written rules can be
 trusted:
 
-- **Enforced by the harness:** each agent's tool set (`tools:` frontmatter),
-  and the allow/ask/deny rules in `.claude/settings.json`. Those deny rules
-  are **session-wide, not per-agent** — Claude Code has no per-agent path
+- **Enforced by the harness:** each agent's tool set, and the allow/ask/deny
+  permission rules in the local tooling configuration. Those deny rules
+  are **session-wide, not per-agent** — the harness has no per-agent path
   permissions, so a rule like `Edit(rag/**)` would lock out `rag-muhendisi`
   along with everyone else. That is why the ownership map above is not, and
   cannot be, a permission rule.
