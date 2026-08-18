@@ -13,6 +13,7 @@ saf numpy: agglomerative kümeleme, average linkage, benzerlik ölçüsü cosine
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
@@ -38,6 +39,28 @@ def topic_similarity(a: Topic, b: Topic) -> float:
     Merkezler zaten L2-normalize olduğu için nokta çarpımı doğrudan cosine'dır.
     """
     return float(np.dot(a.centroid, b.centroid))
+
+
+def topic_title(topic: Topic, sources_by_chunk: dict[int, str]) -> str:
+    """Kümenin DETERMİNİSTİK adı: en çok chunk katkısı yapan belge + katkı sayısı.
+
+    LLM yok, korpustan türer. İki tüketicisi var ve ikisinin de AYNI adı
+    üretmesi zorunlu:
+      - rapor "Detaylı Analiz" bölüm başlığı (FEATURE_SPEC §10.3),
+      - mind map düğüm etiketinin YEDEĞİ (§11.5) -- modelin önerdiği etiket
+        sadakat kapısından geçemezse düğüm isimsiz kalmaz, korpustan türeyen
+        bu ada düşer.
+
+    Eşitlikte alfabetik en küçük belge adı kazanır (determinizm). Kümenin
+    hiçbir chunk'ı haritada yoksa "Küme {id}" döner.
+    """
+    counts = Counter(
+        sources_by_chunk[cid] for cid in topic.chunk_ids if cid in sources_by_chunk
+    )
+    if not counts:
+        return f"Küme {topic.id}"
+    top_source, n = min(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return f"{top_source} ({n} bölüm)"
 
 
 def _cluster_centroid(matrix: np.ndarray, rows: list[int]) -> np.ndarray:

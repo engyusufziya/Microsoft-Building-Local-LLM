@@ -245,6 +245,65 @@ export interface ReportPayload {
   dropped: DroppedClaim[]
 }
 
+// --------------------------------------------------------------------------- Mind map payload'ı (Faz 3)
+//
+// §11.5'te dondurulmuş şema. Yapı KORPUSTAN gelir (kümeleme); LLM yalnızca
+// `label` yazar -- render hiçbir düğüm/kenar hesaplamaz.
+
+export interface MindMapCitation {
+  chunk_id: number
+  source: string
+  /** 0 = markdown fixture (sayfa eki taşımaz). */
+  page: number
+  citation: string
+}
+
+export interface MindMapNode {
+  id: string
+  label: string
+  kind: "root" | "topic"
+  /** Kök için null. */
+  parent: string | null
+  /** Yalnızca `topic` için dolu. */
+  topic_id: number | null
+  chunk_ids: number[]
+  size: number
+  /**
+   * DÜRÜSTLÜK ALANI (§11.5): etiketi model mi önerdi ("model"), sadakat
+   * kapısından geçemediği için korpustan mı türetildi ("fallback"), yoksa
+   * kökün korpus metadatası mı ("corpus")? Arayüz "fallback"i GÖSTERMEK
+   * ZORUNDA -- yoksa deterministik bir ad model çıktısı gibi görünür.
+   */
+  label_source: "model" | "fallback" | "corpus"
+  citations: MindMapCitation[]
+}
+
+export interface MindMapEdge {
+  from: string
+  to: string
+  relation: "related"
+  /** HAM COSINE (küme merkezleri arası) -- yeniden ölçeklenmez. */
+  weight: number
+}
+
+/** Kapıdan geçemeyen etiket ÖNERİSİ. Haritada gösterilmez; ayrı panelde durur. */
+export interface MindMapDroppedLabel {
+  topic_id: number
+  text: string
+  /** `label_invalid`: model biçimi tutturamadı (boş ya da 5 kelimeden uzun). */
+  reason: "unsupported" | "weak" | "unverified_terms" | "label_invalid"
+  /** HAM COSINE; biçimi bozuk etiket kapıya hiç girmediği için null. */
+  score: number | null
+  terms: string[]
+}
+
+export interface MindMapPayload {
+  kind: "mindmap"
+  nodes: MindMapNode[]
+  edges: MindMapEdge[]
+  dropped: MindMapDroppedLabel[]
+}
+
 // --------------------------------------------------------------------------- Metrics
 //
 // backend/routes/metrics.py eval/results.json'ı OLDUĞU GİBİ servis eder.

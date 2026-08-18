@@ -8,7 +8,7 @@ import { ChatPanel, type ChatLockReason } from "@/components/chat"
 import { LanguageToggle } from "@/components/language-toggle"
 import { AppShell, useAppShell } from "@/components/shell"
 import { KnowledgeSidebar, useKnowledge } from "@/components/sidebar"
-import { ReportView, RightPanelTabs, useArtifacts } from "@/components/studio"
+import { ArtifactViewer, RightPanelTabs, useArtifacts } from "@/components/studio"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -85,10 +85,11 @@ function ChatSlot({
 }
 
 /**
- * `<main>` ya sohbeti ya açık raporu gösterir — FEATURE_SPEC §10.12.
+ * `<main>` ya sohbeti ya açık artefaktı gösterir — FEATURE_SPEC §10.12.
+ * Hangi görüntüleyicinin açılacağına `ArtifactViewer` karar verir (§11.9).
  *
- * Rapor açıkken sohbet UNMOUNT edilmez, `hidden` ile gizlenir: aksi halde
- * rapora bakıp geri dönmek sohbet geçmişini ve akış durumunu sıfırlardı
+ * Artefakt açıkken sohbet UNMOUNT edilmez, `hidden` ile gizlenir: aksi halde
+ * artefakta bakıp geri dönmek sohbet geçmişini ve akış durumunu sıfırlardı
  * (`right-panel-tabs.tsx`'teki sekme kararının aynısı).
  */
 function MainSlot(props: { lock: ChatLockReason | null; documentCount: number | undefined }) {
@@ -98,7 +99,7 @@ function MainSlot(props: { lock: ChatLockReason | null; documentCount: number | 
       <div hidden={open !== null} className="flex min-h-0 flex-1 flex-col">
         <ChatSlot {...props} />
       </div>
-      {open !== null && <ReportView artifact={open} onClose={close} />}
+      {open !== null && <ArtifactViewer artifact={open} onClose={close} />}
     </>
   )
 }

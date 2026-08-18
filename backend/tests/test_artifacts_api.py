@@ -1,9 +1,13 @@
-"""`/api/artifacts` -- CRUD + SSE üretim iskeleti (FEATURE_SPEC.md §9.8).
+"""`/api/artifacts` -- CRUD + SSE üretim yüzeyi (FEATURE_SPEC.md §9.8).
 
-Faz 1'de registry boş olduğu için POST akışı her zaman `stage: selection` ve
-`stage: clustering`'i gerçekten yayıp `GENERATION_FAILED` ile biter (§9.5).
-GET/DELETE testleri `rag/artifacts/store.py::create_artifact` ile doğrudan
-artefakt tohumlayarak `is_stale`/`citation` türetmelerini doğrular.
+Faz 1'de registry BOŞTU ve POST akışı her zaman `GENERATION_FAILED` ile
+bitiyordu; Faz 2-3 ile `report` ve `mindmap` kayıtlandı. Hata yolu artık kırık bir
+üretici stub'ıyla ölçülüyor -- conftest'in "Foundry Local'a HİÇ dokunulmaz"
+sözü korunuyor.
+
+GET/DELETE/export testleri `rag/artifacts/store.py::create_artifact` ile
+doğrudan artefakt tohumlayarak `is_stale`/`citation`/`dropped_count`
+türetmelerini ve `kind` başına markdown seçimini doğrular (quiz Faz 4'te).
 """
 
 from __future__ import annotations
@@ -269,12 +273,24 @@ def test_create_artifact_insufficient_corpus_returns_422(ready_client):
     assert not r.headers["content-type"].startswith("text/event-stream")
 
 
-def test_create_artifact_streams_stage_then_generation_failed(ready_client, app):
+def test_create_artifact_streams_stage_then_generation_failed(ready_client, app, monkeypatch):
     """Kriter 3: `stage:selection` ve `stage:clustering` GERÇEKTEN yayılır,
-    ardından `event:error` + `GENERATION_FAILED` gelir (Faz 1'de registry
-    boş -- rag/artifacts/base.py §9.5)."""
+    ardından `event:error` + `GENERATION_FAILED` gelir.
+
+    Faz 1'de bu yol registry BOŞ olduğu için kendiliğinden bu sonucu veriyordu.
+    Faz 3/4 ile üç kind de kayıtlandı; hata yolunu ölçmek için üretici KIRIK bir
+    stub'la değiştiriliyor. Testin ölçtüğü şey değişmedi -- ve conftest'in
+    "Foundry Local'a HİÇ dokunulmaz" sözü korunuyor: stub model yüklemez."""
     conn = app.state.conn
     _upsert_fake_document(conn, "a.pdf", n_chunks=2)
+
+    class _BrokenGenerator:
+        kind = "mindmap"
+
+        def generate(self, ctx):
+            raise base.GenerationFailedError("üretim ortada kırıldı")
+
+    monkeypatch.setitem(base._registry, "mindmap", _BrokenGenerator())
 
     r = ready_client.post("/api/artifacts", json={"kind": "mindmap", "scope": "corpus"})
     assert r.status_code == 200
@@ -405,6 +421,46 @@ def test_export_markdown_basarili(app, client):
     assert "2 iddia" in md
     # AGENTS.md §1.2: harici kaynak yok.
     assert "http://" not in md and "https://" not in md
+
+
+def test_export_kind_basina_kendi_markdownini_uretir(app, client):
+    """§11.8: her `kind` markdown'ını KENDİ modülünde üretir.
+
+    Faz 2'de rota koşulsuz `report.to_markdown` çağırıyordu; mindmap/quiz
+    üretilebilir olduğu anda o yol sessizce BOŞ dosya döndürürdü (200 + boş
+    gövde -- "sahte sayı göstermeme" ilkesinin aynı ihlali)."""
+    conn = app.state.conn
+    _upsert_fake_document(conn, "a.pdf", n_chunks=1)
+    chunk_id = _chunk_ids(conn, 1)[0]
+
+    mindmap_id = create_artifact(
+        conn, kind="mindmap", scope="corpus", document_id=None,
+        title="Korpus Zihin Haritası", params={},
+        payload={
+            "kind": "mindmap",
+            "nodes": [
+                {"id": "root", "label": "Korpus Zihin Haritası", "kind": "root",
+                 "parent": None, "topic_id": None, "chunk_ids": [], "size": 1,
+                 "label_source": "corpus", "citations": []},
+                {"id": "n0", "label": "Depolama katmanı", "kind": "topic",
+                 "parent": "root", "topic_id": 0, "chunk_ids": [chunk_id], "size": 1,
+                 "label_source": "model",
+                 "citations": [{"chunk_id": chunk_id, "source": "a.pdf", "page": 1,
+                                "citation": "[Kaynak: a.pdf s.1]"}]},
+            ],
+            "edges": [],
+            "dropped": [],
+        },
+        corpus_fingerprint=store.corpus_fingerprint(conn),
+        fidelity_score=1.0, generation_ms=1, claims=[],
+    )
+    mindmap_md = client.get(f"/api/artifacts/{mindmap_id}/export?format=md")
+    assert mindmap_md.status_code == 200
+    assert mindmap_md.headers["content-disposition"].endswith(f'"mindmap-{mindmap_id}.md"')
+    assert "Depolama katmanı" in mindmap_md.text
+    assert "[Kaynak: a.pdf s.1]" in mindmap_md.text
+
+    assert "http://" not in mindmap_md.text and "https://" not in mindmap_md.text
 
 
 def test_export_bilinmeyen_artefakt_404(client):

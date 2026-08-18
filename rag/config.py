@@ -302,3 +302,45 @@ FIDELITY_TERM_DF_MAX_RATIO = 0.15
 # bu, gerçek/kendi bağlamına sahip içeriği toplu düşürmüyor; alt dize
 # eşleşmesi kendi kaynağında her zaman buluyor.
 
+# --- Studio Faz 3: Mind Map ---------------------------------------------------
+
+# rag/artifacts/mindmap.py -- iki küme merkezi arasındaki HAM cosine bu değeri
+# AŞIYORSA haritaya "ilişkili" kenarı çizilir (topics.topic_similarity).
+#
+# DİKKAT: bu MIN_SCORE DEĞİLDİR ve onunla aynı soruyu cevaplamaz. MIN_SCORE
+# "bu chunk bu SORUYA cevap veriyor mu" eşiğidir; bu sabit "bu iki KONU
+# birbirine yakın mı" eşiğidir. İkisini eşitlemek (0.45) haritayı okunmaz
+# yapar -- ölçüm aşağıda.
+#
+# ÖLÇÜLDÜ (model YÜKLEMEZ: kayıtlı embedding'ler + rag/topics.py kümelemesi):
+#   eval.db, 20 chunk ->  7 küme,  21 çift: min 0.2493 medyan 0.4366 max 0.6094
+#   rag.db , 61 chunk -> 10 küme,  45 çift: min 0.2446 medyan 0.4707 max 0.7827
+#
+#   eşik   eval.db kenar (ort. derece)   rag.db kenar (ort. derece)
+#   0.45   ~medyanın üstü: çiftlerin YARISI    ~çiftlerin yarısı   -> hairball
+#   0.50    7/21 (2.0)                        20/45 (4.0)         -> hairball
+#   0.55    2/21 (0.6)                        11/45 (2.2)         <- SEÇİLDİ
+#   0.60    1/21 (0.3)                         8/45 (1.6)
+#   0.65    0/21 (0.0)                         2/45 (0.4)
+#
+# 0.55 seçildi çünkü iki korpusun İKİSİNDE birden okunabilir kalıyor: büyük
+# korpusta ortalama derece 2.2 (her düğümün birkaç komşusu var), küçük
+# korpusta harita boşalmıyor ama yalnızca gerçekten yakın iki çift kalıyor
+# (0.6094 RAG<->prompt engineering, 0.5520 prompt engineering<->chunking --
+# ikisi de elle bakıldığında doğru "ilişkili" çiftler). 0.50'de rag.db'de 10
+# düğüme 20 kenar düşüyor: her düğüm her düğüme bağlı görünür ve kenarın
+# taşıdığı bilgi sıfırlanır. 0.65'te küçük korpus tamamen kenarsız kalır.
+#
+# Kenar yokluğu HATA DEĞİLDİR: kümeler gerçekten uzaksa harita yıldız
+# (yalnızca kök-düğüm kenarları) olarak çizilir.
+MINDMAP_EDGE_MIN_SIMILARITY = 0.55
+
+# Küme etiketini yazan LLM çağrısına verilen chunk sayısı (merkeze en yakın
+# ilk N). SUMMARY_MAX_CHUNKS (12) rapor BÖLÜMÜ içindir; <=5 kelimelik bir
+# etiket için 12 chunk'lık bağlam yalnızca prefill maliyeti demektir (ölçüldü:
+# gecikmenin baskın kaynağı prefill, bkz. MAX_ANSWER_TOKENS yorumu). 3, kümenin
+# merkezini temsil etmeye yeter -- kümeler zaten tek konuya karşılık geliyor
+# (eval.db'de 7 kümenin 7'si de tam olarak bir kaynak belge).
+MINDMAP_LABEL_CONTEXT_CHUNKS = 3
+
+

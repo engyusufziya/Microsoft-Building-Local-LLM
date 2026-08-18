@@ -10,12 +10,17 @@ import {
 } from "@/lib/api"
 import type {
   ApiErrorBody,
+  ArtifactCreateRequest,
   ArtifactDetail,
   ArtifactSummary,
 } from "@/lib/types"
 
+/** Üretilebilir artefakt tipleri — üçünün de kayıtlı üreticisi var (§12.1). */
+export type ArtifactKind = ArtifactCreateRequest["kind"]
+
 /**
- * Studio'nun tek durum sahibi — docs/FEATURE_SPEC.md §10.11/§10.12.
+ * Studio'nun tek durum sahibi — docs/FEATURE_SPEC.md §10.11/§10.12, §11.9,
+ * §12.11.
  *
  * `use-knowledge.ts` ile AYNI desen (React DIŞI store + useSyncExternalStore):
  * bu projede `react-hooks/set-state-in-effect` açık ve kural
@@ -33,8 +38,8 @@ export interface ArtifactsSnapshot {
   /** `null` = ilk istek henüz bitmedi. */
   artifacts: ArtifactSummary[] | null
   listError: ApiErrorBody["code"] | null
-  /** Üretim sürüyor mu (SSE akışı açık). */
-  generating: boolean
+  /** Üretimi süren tip; `null` = üretim yok. Tek seferde tek üretim (§12.11). */
+  generatingKind: ArtifactKind | null
   /** 0–100 TAM SAYI — /api/documents'ın 0.0–1.0 ölçeğiyle KARIŞTIRILMAZ (§9.5). */
   pct: number
   /** `stage` olayının etiketi ya da `progress` olayının detayı. */
@@ -49,7 +54,7 @@ export interface ArtifactsSnapshot {
 const INITIAL: ArtifactsSnapshot = {
   artifacts: null,
   listError: null,
-  generating: false,
+  generatingKind: null,
   pct: 0,
   progressDetail: null,
   generateError: null,
@@ -93,20 +98,26 @@ class ArtifactsStore {
 
   refresh = async (): Promise<void> => {
     try {
-      this.update({ artifacts: await listArtifacts("report"), listError: null })
+      // `kind` süzgeci YOK: Faz 3/4'ten sonra liste üç tipi birden taşır.
+      this.update({ artifacts: await listArtifacts(), listError: null })
     } catch (error) {
       this.update({ listError: errorCode(error) })
     }
   }
 
-  generate = async (): Promise<void> => {
-    if (this.snapshot.generating) return
-    this.update({ generating: true, pct: 0, progressDetail: null, generateError: null })
+  /**
+   * Tek seferde TEK üretim: backend zaten model kilidini üretim boyunca
+   * tutuyor (§9.8), ikinci bir istek kilidin arkasında bekler ve kullanıcıya
+   * donmuş gibi görünürdü.
+   */
+  generate = async (kind: ArtifactKind): Promise<void> => {
+    if (this.snapshot.generatingKind !== null) return
+    this.update({ generatingKind: kind, pct: 0, progressDetail: null, generateError: null })
 
     let failed = false
     try {
       await createArtifact(
-        { kind: "report", scope: "corpus" },
+        { kind, scope: "corpus" },
         {
           onStage: (event) => this.update({ progressDetail: event.label }),
           onProgress: (event) =>
@@ -125,7 +136,7 @@ class ArtifactsStore {
       this.update({ generateError: errorCode(error) })
     }
 
-    this.update({ generating: false, progressDetail: null, pct: failed ? 0 : 100 })
+    this.update({ generatingKind: null, progressDetail: null, pct: failed ? 0 : 100 })
     await this.refresh()
   }
 
