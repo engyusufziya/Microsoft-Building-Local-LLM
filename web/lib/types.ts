@@ -304,6 +304,101 @@ export interface MindMapPayload {
   dropped: MindMapDroppedLabel[]
 }
 
+// --------------------------------------------------------------------------- Quiz payload'ı (Faz 4)
+//
+// §12.2'de dondurulmuş şema. Dört tipin üçü korpustan deterministik kurulur;
+// yalnızca `short_answer` bir LLM çağrısıdır.
+
+export type QuizQuestionType =
+  | "multiple_choice"
+  | "true_false"
+  | "fill_blank"
+  | "short_answer"
+
+export interface QuizQuestion {
+  id: string
+  type: QuizQuestionType
+  topic_id: number
+  /** Kullanıcıya gösterilen soru metni (boşluklu cümle ya da iddia). */
+  prompt: string
+  /** multiple_choice: şıklar · true_false: ["true","false"] · diğerleri: []. */
+  choices: string[]
+  /**
+   * Cevap anahtarı. true_false'ta KANONİK "true"/"false" -- arayüz
+   * yerelleştirir, payload dile bağlanmaz.
+   */
+  answer: string
+  chunk_id: number
+  source: string
+  citation: string
+  /** Cevabın korpustaki dayanağı; sonuç ekranında gösterilir. */
+  evidence: string
+}
+
+/** Cevap anahtarı kapıdan geçemediği için quiz'e ALINMAYAN soru. */
+export interface QuizDroppedQuestion {
+  topic_id: number
+  /**
+   * DOĞRULANAMAYAN metnin kendisi: short_answer'da modelin referans cevabı,
+   * diğer tiplerde dayanak cümlesi (§12.7). Soru gövdesi `prompt`'tadır.
+   */
+  text: string
+  prompt: string
+  reason: "unsupported" | "weak" | "unverified_terms"
+  score: number | null
+  terms: string[]
+}
+
+export interface QuizPayload {
+  kind: "quiz"
+  questions: QuizQuestion[]
+  dropped: QuizDroppedQuestion[]
+}
+
+export interface QuizAnswerResult {
+  question_id: string
+  type: QuizQuestionType
+  given: string | null
+  expected: string
+  /** short_answer'da HER ZAMAN null: o tip eşikle doğru/yanlış'a indirgenmez. */
+  correct: boolean | null
+  /**
+   * YALNIZCA short_answer'da dolu. HAM COSINE ama `ChunkHit.score` DEĞİL: iki
+   * CEVAP arasındaki simetrik benzerlik (§12.8). DESIGN_SYSTEM §1.2 güven
+   * bantlarıyla RENKLENDİRİLEMEZ -- o bantlar sorgu→chunk için kalibre edildi.
+   */
+  similarity: number | null
+  chunk_id: number | null
+  citation: string | null
+  evidence: string
+}
+
+export interface AttemptResult {
+  attempt_id: number
+  artifact_id: number
+  /** YALNIZCA deterministik sorulardan; hiç yoksa null (0.0 "hepsi yanlış" olurdu). */
+  score: number | null
+  correct_count: number
+  deterministic_total: number
+  similarity_total: number
+  completed_at: string
+  results: QuizAnswerResult[]
+}
+
+export interface AttemptSummary {
+  id: number
+  artifact_id: number
+  started_at: string
+  completed_at: string | null
+  score: number | null
+}
+
+export interface QuizAttemptRequest {
+  answers: Record<string, string>
+  /** Quiz'in AÇILDIĞI an; yalnızca istemci bilir. */
+  started_at?: string
+}
+
 // --------------------------------------------------------------------------- Metrics
 //
 // backend/routes/metrics.py eval/results.json'ı OLDUĞU GİBİ servis eder.

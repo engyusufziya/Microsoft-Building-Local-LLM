@@ -346,16 +346,16 @@ def test_generate_artifact_bilinmeyen_belge_id(conn):
     assert events == [("stage", {"stage": "selection", "label": "Kaynaklar seçiliyor"})]
 
 
-def test_registry_kayitli_ureticiler_ve_register_calisir(conn):
+def test_registry_uc_kind_da_kayitli_ve_register_calisir(conn):
     """§9.5: üç üreticinin üçü de kendi modülü yüklenirken kaydolur.
 
-    Faz 1'de registry BOŞTU, Faz 2'de yalnızca `report` doldu; Faz 3 mindmap'i
-    ekledi, `quiz` Faz 4'te gelecek. Kayıt, `rag/artifacts/__init__.py`'nin alt modülleri
+    Faz 1'de registry BOŞTU, Faz 2'de yalnızca `report` doldu; Faz 3 mindmap'i,
+    Faz 4 quiz'i ekledi. Kayıt, `rag/artifacts/__init__.py`'nin alt modülleri
     import etmesiyle gerçekleşir -- bu dosyanın `from rag.artifacts import base`
     satırı paketi zaten yüklüyor."""
     assert base.get_generator("report") is not None
     assert base.get_generator("mindmap") is not None
-    assert base.get_generator("quiz") is None  # Faz 4'te gelecek
+    assert base.get_generator("quiz") is not None
     # Kayıtlı OLMAYAN bir kind hâlâ None döner -- hattın 3. adımdaki hata yolu
     # (test_generate_artifact_kayitsiz_kind_generation_failed) buna dayanıyor.
     assert base.get_generator("kayitsiz-kind") is None

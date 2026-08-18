@@ -91,6 +91,7 @@ export const studio = {
 
   // --- Artefakt tipleri (Faz 3-4) ---
   generateMindMap: { tr: "Zihin haritası üret", en: "Generate mind map" },
+  generateQuiz: { tr: "Quiz üret", en: "Generate quiz" },
   kindReport: { tr: "Rapor", en: "Report" },
   kindMindMap: { tr: "Zihin haritası", en: "Mind map" },
   kindQuiz: { tr: "Quiz", en: "Quiz" },
@@ -144,4 +145,47 @@ export const studio = {
     en: "Select a node to see its sources.",
   },
 
+  // --- Quiz (§12.11) ---
+  quizAria: { tr: "Quiz soruları", en: "Quiz questions" },
+  quizQuestionCount: {
+    tr: (n: number) => `${n} soru`,
+    en: (n: number) => `${n} questions`,
+  },
+  quizIntro: {
+    tr: "Her sorunun cevabı yüklediğiniz belgelerde doğrulanabilir. Cevapladıktan sonra kaynağı görürsünüz.",
+    en: "Every answer is verifiable in your uploaded documents. You see the source after you submit.",
+  },
+  quizTypeMultipleChoice: { tr: "Çoktan seçmeli", en: "Multiple choice" },
+  quizTypeTrueFalse: { tr: "Doğru / Yanlış", en: "True / False" },
+  quizTypeFillBlank: { tr: "Boşluk doldurma", en: "Fill in the blank" },
+  quizTypeShortAnswer: { tr: "Kısa cevap", en: "Short answer" },
+  quizTrue: { tr: "Doğru", en: "True" },
+  quizFalse: { tr: "Yanlış", en: "False" },
+  quizAnswerPlaceholder: { tr: "Cevabınız", en: "Your answer" },
+  quizSubmit: { tr: "Cevapları gönder", en: "Submit answers" },
+  quizSubmitting: { tr: "Değerlendiriliyor…", en: "Scoring…" },
+  quizRetry: { tr: "Tekrar dene", en: "Try again" },
+  quizScoreLabel: { tr: "Puan", en: "Score" },
+  quizScoreHint: {
+    tr: "Yalnızca kesin puanlanabilen sorular (çoktan seçmeli, doğru/yanlış, boşluk) sayılır. Kısa cevaplar bir eşiğe indirgenmez.",
+    en: "Only exactly scorable questions (multiple choice, true/false, fill in the blank) count. Short answers are not reduced to a threshold.",
+  },
+  quizCorrect: { tr: "Doğru", en: "Correct" },
+  quizIncorrect: { tr: "Yanlış", en: "Incorrect" },
+  quizExpectedLabel: { tr: "Beklenen cevap", en: "Expected answer" },
+  quizEvidenceLabel: { tr: "Belgedeki dayanak", en: "Evidence in the document" },
+  quizSimilarityLabel: { tr: "Benzerlik", en: "Similarity" },
+  quizSimilarityHint: {
+    tr: "Cevabınızla referans cevap arasındaki ham cosine benzerliği. Doğru/yanlış kararı VERİLMEZ; kaynağa bakıp kendi değerlendirmenizi yapın.",
+    en: "Raw cosine similarity between your answer and the reference answer. No correct/incorrect verdict is made; check the source and judge for yourself.",
+  },
+  quizUnanswered: { tr: "boş bırakıldı", en: "left blank" },
+  quizDroppedHeading: {
+    tr: "Quiz'e alınmayan sorular",
+    en: "Questions kept out of the quiz",
+  },
+  quizNoQuestions: {
+    tr: "Bu korpustan doğrulanabilir soru üretilemedi.",
+    en: "No verifiable question could be generated from this corpus.",
+  },
 } as const satisfies Namespace

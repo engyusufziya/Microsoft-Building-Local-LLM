@@ -2020,3 +2020,312 @@ koşulur, üretim `rag.db`'sine dokunulmaz.
 | Kenar ağırlığını `ScoreBadge` bantlarıyla renklendirmek | O bantlar sorgu→chunk için kalibre edildi (§11.9) |
 | Küme sayısını kullanıcıya ayarlatmak | `TOPIC_MAX_CLUSTERS`/`TOPIC_MIN_CLUSTER_SIZE` önceliği Faz 1'de karara bağlandı (§9.3); ikinci bir ayar yüzeyi aynı kararı iki yerden yönetirdi |
 
+---
+
+## 12. Studio Katmanı — Faz 4 (Quiz Generator)
+
+> Hattan geçen **üçüncü** artefakt tipi. `base.generate_artifact` yine
+> değişmedi; Faz 4 ayrıca hattın **okuma sonrası** yüzeyini açar
+> (`quiz_attempts`, `/api/quiz/*`).
+
+### 12.0 Kapsam — ve kapsam DIŞI
+
+| İçeride (Faz 4) | Dışarıda |
+|---|---|
+| `rag/artifacts/quiz.py` (üretici + puanlama) | LLM-hakem ile puanlama (`STUDIO_PLAN §6.3`'te reddedildi) |
+| `quiz_attempts` CRUD · `/api/quiz/*` | Eşanlamlı sözlüğü (§12.6) |
+| `web/components/studio/quiz/**` | Zamanlayıcı, sıralama tablosu, tekrar planı |
+| `eval/quiz_proof.py` kapanma ölçümü | `eval_set.json`'a quiz kategorisi (§12.12'de **reddedildi**) |
+
+### 12.1 Temel karar — çeldiriciyi de LLM yazmaz
+
+`STUDIO_PLAN §6.3` doğru teşhis koyuyor: zor kısım soru üretimi değil,
+**çeldirici** üretimidir. Plan "hibrit" öneriyordu (aday havuzu korpustan, LLM
+yalnızca dilbilgisi düzeltir). Faz 4 bir adım daha ileri gidiyor: **LLM
+çeldiriciye hiç dokunmuyor.**
+
+Gerekçe kapının bilinen sınırına dayanır (§9.6): kapı *grounding* ölçer,
+*entailment* değil. LLM'e "makul ama **yanlış** bir şık yaz" demek,
+doğrulanamayan bir iddiayı cevap anahtarına koymaktır — üstelik yanlışlığı
+ölçebilecek bir aracımız yok. Korpustan gelen bir terim ise hem gerçek hem de
+**yanlışlığı kanıtlanabilir** (soru chunk'ında geçmediği kontrol edilir).
+
+Sonuç: dört tipin **üçü tamamen deterministik**, LLM yalnızca `short_answer`
+için çağrılır.
+
+### 12.2 `payload_json` şeması — DONDURULDU
+
+```json
+{
+  "kind": "quiz",
+  "questions": [
+    {"id": "q0", "type": "multiple_choice", "topic_id": 0,
+     "prompt": "Bu projede vektörler _____ motorunda saklanır.",
+     "choices": ["Foundry", "SQLite", "Cosine", "Streamlit"],
+     "answer": "SQLite", "chunk_id": 12, "source": "belge_04.md",
+     "citation": "[Kaynak: belge_04.md]",
+     "evidence": "Bu projede vektörler SQLite motorunda saklanır."}
+  ],
+  "dropped": [{"topic_id": 1, "text": "<doğrulanamayan metin>",
+               "prompt": "<soru gövdesi>", "reason": "unverified_terms",
+               "score": 0.8496, "terms": ["gpt-4", "openaı"]}]
+}
+```
+
+- `answer` `true_false`ta **kanonik** `"true"`/`"false"`tur; arayüz yerelleştirir.
+  Payload'a Türkçe etiket yazmak artefaktı üretildiği dile kilitlerdi.
+- `evidence` cevabın korpustaki dayanağıdır ve sonuç ekranında gösterilir.
+- `dropped[i].text` **doğrulanamayan metnin kendisidir** (soru gövdesi
+  `prompt` alanındadır) — raporun `dropped` alanıyla aynı anlam. Soru gövdesini
+  yazmak hangi metnin düştüğünü kayıttan silerdi (§12.7).
+
+### 12.3 Tip seçimi — küme başına SABİT değil
+
+Her küme için tipler deterministik bir sırada denenir, **kurulabilen ilk tip**
+seçilir. Sıra küme index'inden gelir:
+
+| `index % 4` | Deneme sırası |
+|---|---|
+| 0 | multiple_choice · fill_blank · true_false · short_answer |
+| 1 | fill_blank · multiple_choice · short_answer · true_false |
+| 2 | true_false · multiple_choice · fill_blank · short_answer |
+| 3 | short_answer · fill_blank · multiple_choice · true_false |
+
+> [!warning] Tablo ölçümden doğdu — tek satırlık bir rotasyon YETMEDİ
+> Dört tipin kurulabilirliği çok farklı: `multiple_choice`/`fill_blank` cümlede
+> **ayırt edici terim** ister (eval.db'de 7 kümenin 2'sinde, rag.db'de 10
+> kümenin 6'sında var); `true_false` yalnızca düzgün bir cümle ister;
+> `short_answer` **her zaman** kurulur.
+>
+> Son ikisi "her zaman kurulabilir" sınıfında olduğu için tek bir rotasyonda
+> hangisi önce gelirse MC/FB'nin kurulamadığı **her** kümeyi o kapıyor.
+> Ölçüldü (eval.db, kuru koşum): `true_false` önde → 7 sorunun **5'i**
+> true_false; `short_answer` önde → 7 sorunun **6'sı** short_answer. Tablo,
+> ikisinin yedeklik sırasını küme index'ine göre değiştirerek dengeyi kurar.
+
+### 12.4 Soru gövdesi seçimi — dört eleme, dördü de ölçümden
+
+`_candidate_sentences` bir chunk'tan yalnızca şu cümleleri alır:
+
+1. **Nokta/ünlem/soru ile biter.** Başlık satırları ("SQLite ile Yerel Veri
+   Saklama") bitmiyor; ilk sondada boşluk adayı olarak seçilip "Saklama" gibi
+   anlamsız boşluklar üretiyorlardı.
+2. **Büyük harf ya da rakamla başlar.** Chunking kelime penceresiyle çalışıyor
+   (`CHUNK_WORDS`, sayfa sınırı korunur ama **cümle sınırı korunmaz**), bu
+   yüzden bir chunk'ın ilk "cümlesi" neredeyse her zaman önceki chunk'tan taşan
+   yarım cümledir. Kuru koşumda üretilen soru buydu: «belgeleri aramasını ve
+   bulduğu bilgiyi cevaba dahil etmesini sağlar.»
+3. **8–40 kelime.** Altı madde başlığı, üstü PDF'te noktalama olmadan akan
+   satır çıkıyor.
+4. **`http(s)://` içermez.** İki sebep: PDF'teki URL satırından çıkan boşluk
+   ("4501968", bir blog kimliği) anlamsız bir soru üretiyor **ve** markdown
+   export'una harici bağlantı sızdırırdı — `CLAUDE.md §1.2`'nin grep
+   kontrolünü kıracak tek yol budur.
+
+**Boşluk terimi** cümlenin **en nadir** ayırt edici terimidir; "ayırt edici"
+tanımı `fidelity.distinctive_terms`ten gelir (tek doğruluk kaynağı). Tanım quiz
+için **gevşetilmedi**: sıradan bir Türkçe çekimi ("yaklaştıkça") boşaltmak,
+eşanlamlısı da doğru olan bir soru üretir ve tam eşleşme puanlaması onu haksız
+yere yanlış sayardı. Bilinen sonucu: `FIDELITY_TERM_MIN_LENGTH = 4` yüzünden
+kısa sayılar ("130", "30") boşluk olarak seçilemez.
+
+**`true_false` — kaynak atfı.** İfade korpustan birebir alınır ve bir belgeye
+atfedilir: doğru varyantta gerçek kaynağına, yanlış varyantta **başka** bir
+belgeye. Doğruluk değeri **metadata'dan kesindir** (cümlenin hangi chunk'tan
+geldiğini biliyoruz), bir entailment yargısı değildir; yanlış varyantta cümlenin
+o belgede geçmediği ayrıca doğrulanır.
+
+> [!warning] Elenen kurgu: sayısal mutasyon
+> İlk tasarım "cümledeki sayıyı değiştir, mutasyonun korpusta geçmediğini
+> doğrula" idi. **Ölçüldü ve elendi**: eval.db'de 7 kümenin yalnızca **1'inde**
+> soru üretebiliyordu; rag.db'de ürettiği tek şey bir URL kimliğinin
+> ("4501968" → "9003936") mutasyonuydu. Kaynak atfı aynı korpuslarda **7/7 ve
+> 10/10** kapsıyor — üstelik bu ürünün asıl iddiasını ("hangi belge ne diyor")
+> sınıyor.
+
+### 12.5 Çeldiriciler
+
+Havuz: **bu kümenin dışındaki** chunk'ların ayırt edici terimleri
+(`STUDIO_PLAN §6.3`'ün "embedding uzayında yakın ama farklı chunk'lardan"
+kuralının uygulaması — kümeler zaten embedding uzayının bölütleri). Üç filtre:
+
+1. Cevabın kendisi elenir.
+2. **Soru chunk'ında geçen terim elenir** — çeldiricinin yanlış olduğunun
+   doğrulaması budur (`STUDIO_PLAN §6.3` adım 4).
+3. **Biçim eşleşmesi** tercih edilir: cevap rakam taşıyorsa rakamlı adaylar öne
+   alınır, yoksa tek sayısal şık göze batar ve soru cevabı ele verir.
+
+Sıra: df **artan** (en nadir terim en makul çeldirici), eşitlikte **içerik
+hash'i**.
+
+> [!warning] Alfabetik sıralama ölçümle elendi
+> `(df, alfabetik)` ile sıralanınca df=1 olan onlarca terim arasından ilk üç
+> **hep "A" ile başlıyordu**: şıklar `['After', 'Apple', 'Approach', 'Internet']`
+> çıktı ve doğru cevap tek başına göze battı. Sıralama sha256 tabanlı bir
+> dağıtım anahtarına çevrildi. `hash()` **kullanılmaz**: `PYTHONHASHSEED` süreç
+> başına rastgeledir ve aynı korpus farklı koşumlarda farklı quiz üretirdi
+> (determinizm sözleşmesi, §9.4).
+
+### 12.6 Puanlama
+
+| Tip | Puanlama | Güvenilirlik |
+|---|---|---|
+| `multiple_choice` | normalize tam eşleşme | Deterministik |
+| `true_false` | normalize tam eşleşme | Deterministik |
+| `fill_blank` | normalize tam eşleşme | Deterministik |
+| `short_answer` | referans cevapla **ham cosine** | **Yaklaşık** |
+
+Normalleştirme: `İ→i`, `I→ı` **elle** eşlenir (düz `str.lower()` 'İ' için
+birleşen nokta üretir ve karşılaştırma sessizce başarısız olur — aynı tuzak
+`fidelity._term_lower`'da kayıtlı), sonra noktalama atılır.
+
+**Eşanlamlı listesi reddedildi** (`STUDIO_PLAN §6.3` öneriyordu): dışarıdan
+sözlük getirmek ikinci bir bakım yüzeyi açardı — `§10.15`'te durak-kelime
+sözlüğü aynı gerekçeyle reddedilmişti. Boşluk terimi zaten **ayırt edici** bir
+özel ad/kimlik olduğu için eşanlamlısı pratikte yoktur.
+
+> [!danger] `short_answer` bir eşiğe indirgenmez
+> `correct` **her zaman `null`**dur ve benzerlik **toplam skora katılmaz**.
+> `score` yalnızca deterministik sorulardan hesaplanır; hiç deterministik soru
+> yoksa `null` döner (0.0 yazmak "hepsini yanlış yaptı" demek olurdu).
+> `STUDIO_PLAN §6.3`: "puan bir eşik değil benzerlik skoru olarak gösterilir,
+> kullanıcı kendi doğrulamasını yapar". Bir eşik uydurmak, ölçülmemiş bir kararı
+> ölçülmüş gibi sunmak olurdu.
+>
+> Bu cosine `Hit.score` **değildir**: iki **cevap** arasındaki simetrik
+> benzerliktir (ikisi de `is_query=False` ile embed edilir), sorgu→chunk
+> asimetrik benzerliği değil. `DESIGN_SYSTEM §1.2` bantlarıyla
+> **renklendirilemez**.
+
+### 12.7 Sadakat kapısı — iddia tip başına DEĞİŞİR
+
+Kapı, modelin **uydurmuş olabileceği** metni korumalıdır:
+
+| Tip | `node_path` | İddia metni |
+|---|---|---|
+| `short_answer` | `/questions/{i}/answer` | modelin **referans cevabı** |
+| diğer üçü | `/questions/{i}/evidence` | korpustan **birebir** alınan cümle |
+
+Diğer üçünde bağlama bir **tutarlılık kontrolüdür** (cümle gerçekten korpusta
+mı) ve neredeyse her zaman `grounded` çıkar — yani bir quiz'in `fidelity_score`u
+**yapısı gereği yüksektir** ve asıl oynayan bileşen `short_answer` iddialarıdır.
+Bu, skorun zayıflığı değil, tasarımın sonucudur ve gizlenmez.
+
+`true_false`un **yanlış** varyantında kullanıcıya gösterilen ifade kasten
+yanlıştır; kapıya giden metin o değil, sorunun dayandığı **korpus cümlesidir** —
+yanlış bir iddiayı `grounded` diye kaydetmek olurdu.
+
+Kapıdan geçemeyen sorunun **tamamı** quiz'e alınmaz; sayısı `dropped_count`
+olarak SSE `complete`'te, `ArtifactDetail`'de ve arayüzde görünür (§10.11'in
+türetmesi `dropped` taşıyan her `kind` için çalışır).
+
+### 12.8 config sabitleri
+
+```python
+QUIZ_QUESTIONS_PER_TOPIC = 1    # kapsam kümeden gelir, sorular korpusa dağılır
+QUIZ_MAX_QUESTIONS       = 12   # bir oturumda bitirilebilir kalmalı
+QUIZ_CHOICE_COUNT        = 4    # 1 doğru + 3 çeldirici
+```
+
+`ARTIFACT_QUESTION_MAX_TOKENS = 200` Faz 1'de yazılmıştı ve **ilk kez burada
+tüketiliyor** (`models.get_chat_client(max_tokens=...)`, Faz 2'nin açtığı yol).
+
+### 12.9 Export
+
+`quiz.to_markdown`: **Sorular** ve **Cevap Anahtarı** ayrı bölümlerde — çıktı
+çalışma kâğıdı olarak da kullanılabilsin. `true_false` şıkları çıktıda Türkçe
+("Doğru"/"Yanlış"), payload'da kanonik. Düşürülen sorunun metni gövdeye girmez,
+yalnızca sayısı. `http(s)://` üretilmez (URL taşıyan cümleler §12.4'te zaten
+elendi).
+
+### 12.10 API — `/api/quiz/*`
+
+`backend/` ince kalır: puanlama `rag/artifacts/quiz.py::score_attempt`,
+kalıcılaştırma `rag/artifacts/store.py`.
+
+| Metot | Yol | Yanıt |
+|---|---|---|
+| `POST` | `/api/quiz/{artifact_id}/attempt` | `AttemptResult` |
+| `GET` | `/api/quiz/{artifact_id}/attempts` | `AttemptSummary[]` |
+
+```python
+class QuizAttemptRequest(BaseModel):
+    answers: dict = {}            # {question_id: kullanıcının cevabı}
+    started_at: str | None = None # quiz'in AÇILDIĞI an; yalnızca istemci bilir
+```
+
+- Artefakt yoksa **veya `kind != "quiz"`** ise `404 ARTIFACT_NOT_FOUND`. Rapor
+  kimliğiyle çağırmak "quiz {id}" kaynağının olmadığı anlamına gelir; yeni bir
+  hata kodu açılmaz (§2.2 listesi additive kalır).
+- **Model kilidi yalnızca gerektiğinde.** Quiz'de `short_answer` varsa puanlama
+  embedding çağırır → `503 MODEL_WARMING` kontrolü + `app.state.model_lock`.
+  Tamamen deterministik quiz'de kilit **alınmaz**: süren bir üretimi beklemesi
+  için sebep yok.
+- `quiz_attempts.score` NULL olabilir ve bu eksiklik değildir (§12.6).
+- Puanlama sonucu **saklanmaz**, yalnızca ham cevaplar: payload değişmediği
+  sürece `score_attempt` aynı girdiden aynı sonucu üretir; iki doğruluk kaynağı
+  oluşmaz.
+
+### 12.11 Frontend
+
+`web/components/studio/quiz/{quiz-payload.ts,quiz-runner.tsx}`. Puanlama
+**istemcide yapılmaz** (embedding tarayıcıda yok; ayrıca ikinci bir puanlama
+yolu ikinci bir doğruluk kaynağı olurdu). Sonuç ekranında her soru için beklenen
+cevap, **belgedeki dayanak** ve atıf gösterilir; `short_answer` için benzerlik
+sayısı ve "bu bir doğru/yanlış kararı değildir" açıklaması.
+
+`StudioPanel` artık üç üretim düğmesi taşır ve liste **`kind` süzgeci olmadan**
+gelir. Üretim sürerken **üç düğme de kapalıdır**: backend model kilidini üretim
+boyunca tutuyor, ikinci istek kilidin arkasında donmuş gibi görünürdü.
+
+### 12.12 Faz 4 kapanma ölçümü — `eval/quiz_proof.py`
+
+Rutin kapıya **eklenmez**. `eval.db` üzerinde, `--trap` ile tuzak enjeksiyonu
+(ilk `short_answer`ın **referans cevabına**) açıkça belirtilerek koşulur.
+
+**Ölçüldü (7 küme, 16/16 kontrol PASS):**
+
+| Gösterilen | Tuzaksız | `--trap` |
+|---|---|---|
+| Soru | **7** (3 true_false · 3 short_answer · 1 fill_blank) | 6 |
+| Düşen soru | 0 | **1** (`unverified_terms`, `['gpt-4','openaı']`, 0.8496) |
+| `fidelity_score` | 1.0000 | 1.0000 |
+| Cevap anahtarıyla deneme | **1.0 (4/4)** | 1.0 (4/4) |
+| Alakasız cevapla deneme | **0.0** | 0.0 |
+| `short_answer` `correct` | hepsi `None` | hepsi `None` |
+| Quiz gövdesinde "gpt"/"openai" | — | **0 eşleşme** |
+| Markdown | `http(s)://` yok, cevap anahtarı ayrı bölümde | aynı |
+
+> [!note] `eval_set.json`'a quiz kategorisi EKLENMEDİ
+> `STUDIO_PLAN §9`'un Faz 4 kriteri "quiz üretimi eval setine kendi kategorisi
+> olarak eklendi" diyordu. **Reddedildi**, gerekçesi §10.1.1'in birebir aynısı:
+> `eval_set.json` tek bir hattı (`query_router → retrieve → answer`) ve "cevap"
+> nesnesini ölçüyor; quiz üretimi o şekle sokulursa "23/23"ün ne ölçtüğü
+> **sessizce** genişler. Ayrıca her teslime dakikalar ve bir 7B yüklemesi
+> binerdi. Ölçüm bunun yerine `report_trap.py`/`mindmap_proof.py` ile aynı
+> sınıfta, kendi koşucusuyla yapılır. **Eval seti 23 soruda kaldı.**
+
+### 12.13 Faz 4 tamamlanma kriterleri
+
+- [x] Her sorunun cevabı korpusta **doğrulanabilir** (§12.12 tablosu, ölçüldü)
+- [x] Çeldiriciler makul ama yanlış: gerçek korpus terimleri, soru chunk'ında
+      geçmedikleri **doğrulanmış**, rastgele değil
+- [x] Sorular kümelere dağılmış (küme başına en fazla bir soru)
+- [x] Quiz üretimi kendi koşucusuyla ölçüldü; `eval_set.json` **23'te kaldı**
+- [x] `short_answer` bir eşiğe indirgenmiyor; skora katılmıyor
+- [x] `package.json` ve `requirements.txt` **değişmedi**
+
+### 12.14 Reddedilen alternatifler
+
+| Alternatif | Neden reddedildi |
+|---|---|
+| Çeldiricileri LLM'e yazdırmak | Yanlışlığı ölçülemeyen bir metni cevap anahtarına koymak; kapı entailment ölçmüyor (§12.1) |
+| LLM-hakem ile `short_answer` puanlamak | Soru başına ek çağrı (prefill baskın) ve hakem aynı modelin yanlılığını taşır — `STUDIO_PLAN §6.3` |
+| `short_answer` için benzerlik eşiği | Ölçülmemiş bir kararı ölçülmüş gibi sunardı (§12.6) |
+| Eşanlamlı sözlüğü | Dışarıdan liste ikinci bir bakım yüzeyi (§10.15'in aynı gerekçesi) |
+| `true_false` için sayısal mutasyon | **Ölçüldü**: eval.db'de 1/7 kapsama, rag.db'de URL kimliği mutasyonu (§12.4) |
+| Çeldirici havuzunu alfabetik sıralamak | **Ölçüldü**: şıkların üçü de "A" ile başlıyordu (§12.5) |
+| `hash()` ile dağıtım | `PYTHONHASHSEED` süreç başına rastgele; determinizm sözleşmesini kırar (§12.5) |
+| Quiz'i `eval_set.json`'a eklemek | "23/23"ün ne ölçtüğünü sessizce genişletirdi (§12.12) |
+| `score_attempt`e `conn` parametresi | Cevap anahtarı, atıf ve gerekçe zaten payload'da; kullanılmayan parametre (§10.5'in "payload render'ın tek girdisi" kuralı) |
+| Puanlama sonucunu `quiz_attempts`e yazmak | Payload değişmediği sürece aynı girdiden aynı sonuç çıkar; ikinci doğruluk kaynağı (§12.10) |

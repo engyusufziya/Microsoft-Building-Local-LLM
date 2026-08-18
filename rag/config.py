@@ -343,4 +343,22 @@ MINDMAP_EDGE_MIN_SIMILARITY = 0.55
 # (eval.db'de 7 kümenin 7'si de tam olarak bir kaynak belge).
 MINDMAP_LABEL_CONTEXT_CHUNKS = 3
 
+# --- Studio Faz 4: Quiz -------------------------------------------------------
+
+# Küme başına soru kotası. STUDIO_PLAN §6.3'ün "sorular tek chunk'a sıkışmasın"
+# kuralı: kapsam kümeden gelir, sorular korpusa dağılır. 1 seçildi çünkü LLM
+# çağrısı sayısı doğrudan gecikmedir (prefill baskın) ve 10 kümelik üretim
+# korpusunda 10 soru zaten dolu bir quiz'dir.
+QUIZ_QUESTIONS_PER_TOPIC = 1
+
+# Üst sınır: korpus büyüyüp küme sayısı tavana dayasa bile quiz bir oturumda
+# bitirilebilir kalmalı. TOPIC_MAX_CLUSTERS (12) x QUIZ_QUESTIONS_PER_TOPIC (1)
+# ile aynı değer; ikisi ayrıldığında (kota 2 olursa) bu tavan bağlayıcı olur.
+QUIZ_MAX_QUESTIONS = 12
+
+# Çoktan seçmeli şık sayısı (1 doğru + 3 çeldirici). Çeldiriciler LLM'e
+# uydurtulmaz, BAŞKA kümelerin doğru cevaplarından gelir (§12.5) -- yani havuz
+# küme sayısıyla sınırlı. 4, 7 kümelik korpusta bile her soruya 3 çeldirici
+# bulunabilmesini garanti eder (6 aday > 3 gerek).
+QUIZ_CHOICE_COUNT = 4
 

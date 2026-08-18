@@ -1,11 +1,11 @@
 """
 Studio artefakt hattı: base (protokol + ortak akış), fidelity (sadakat kapısı),
-store (CRUD), report (Faz 2), mindmap (Faz 3). Bu dosya yalnızca alt modülleri
-yeniden dışa açar; mantık içermez.
+store (CRUD), report (Faz 2), mindmap (Faz 3), quiz (Faz 4). Bu dosya yalnızca
+alt modülleri yeniden dışa açar; mantık içermez.
 
-Üreticilerin import edilmesi KENDİSİ kayıtlarını tetikler: her modülün
+Üç üreticinin import edilmesi KENDİSİ kayıtlarını tetikler: her modülün
 sonundaki `register(...)` çağrısı modül yüklenirken çalışır. Registry Faz 1'de
-boştu; Faz 3 sonunda `report` ve `mindmap` dolu, `quiz` Faz 4'te gelecek.
+boştu, Faz 4 sonunda üç kind'in üçü de dolu.
 
 `to_markdown` isim ÇAKIŞMASI kasıtlı olarak çözülmedi: her üreticinin kendi
 markdown'ı var ve doğru olan onu MODÜLÜNDEN çağırmaktır
@@ -36,8 +36,16 @@ from .fidelity import (
     verdict_for,
 )
 from .mindmap import MindMapGenerator
+from .quiz import QuizGenerator, score_attempt
 from .report import ReportGenerator, to_markdown
-from .store import create_artifact, delete_artifact, get_artifact, list_artifacts
+from .store import (
+    create_artifact,
+    create_attempt,
+    delete_artifact,
+    get_artifact,
+    list_artifacts,
+    list_attempts,
+)
 
 __all__ = [
     "ArtifactGenerator",
@@ -56,10 +64,14 @@ __all__ = [
     "unverified_terms",
     "verdict_for",
     "MindMapGenerator",
+    "QuizGenerator",
+    "score_attempt",
     "ReportGenerator",
     "to_markdown",
     "create_artifact",
+    "create_attempt",
     "delete_artifact",
     "get_artifact",
     "list_artifacts",
+    "list_attempts",
 ]

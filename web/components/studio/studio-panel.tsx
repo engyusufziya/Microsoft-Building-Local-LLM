@@ -19,11 +19,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useArtifacts, type ArtifactKind } from "./use-artifacts"
 
 /**
- * Studio sekmesinin içeriği — docs/FEATURE_SPEC.md §9.9.4 · §10.11 · §11.9.
+ * Studio sekmesinin içeriği — docs/FEATURE_SPEC.md §9.9.4 · §10.11 · §11.9 ·
+ * §12.11.
  *
  * Düğmeler üreticiler GERÇEKTEN çalıştıkça geldi: Faz 1'de hiç yoktu (basılamayan
  * düğme, "sahte sayı göstermeme" ilkesinin aynı ihlali), Faz 2'de rapor,
- * Faz 3'te zihin haritası. Quiz Faz 4'te gelecek.
+ * Faz 3'te zihin haritası, Faz 4'te quiz.
  *
  * İlerleme `progress.pct` alanından gelir ve 0–100 TAM SAYIDIR; yükleme
  * akışının 0.0–1.0 ölçeğiyle paylaşılan bir yardımcı YAZILMAZ (§9.5).
@@ -81,6 +82,13 @@ export function StudioPanel({ className }: StudioPanelProps) {
           kind="mindmap"
           label={t.generateMindMap}
           icon={<NetworkIcon aria-hidden="true" />}
+          generatingKind={generatingKind}
+          onGenerate={generate}
+        />
+        <GenerateButton
+          kind="quiz"
+          label={t.generateQuiz}
+          icon={<ListChecksIcon aria-hidden="true" />}
           generatingKind={generatingKind}
           onGenerate={generate}
         />
