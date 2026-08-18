@@ -1,5 +1,6 @@
 """
-Arayüz kanıtı: Studio rapor akışının GERÇEK bir tarayıcıda çalıştığının ölçümü.
+Arayüz kanıtı: Studio'nun ÜÇ görünümünün de GERÇEK bir tarayıcıda çalıştığının
+ölçümü (rapor · zihin haritası · quiz).
 
 `eval/offline_proof.py` ile aynı fikir: iddiayı yoruma bırakmak yerine
 ölçmek. Orada soru "kod ağa çıkıyor mu", burada "React katmanı gerçekten
@@ -10,13 +11,25 @@ MODEL YÜKLEMEZ ve bu kasıtlıdır. İki yer sahtelenir, ikisi de çıktıda
 açıkça yazılır:
 
   1. `RAG_BACKEND_SKIP_WARMUP=1` + `model_status` elle "ready" yapılır.
-  2. `report` üreticisi, SSE aşama/ilerleme olaylarını gerçek hattaki gibi
-     yayan ama LLM çağırmayan bir sahteyle DEĞİŞTİRİLİR.
+  2. `report`, `mindmap` ve `quiz` üreticileri, SSE aşama/ilerleme olaylarını
+     gerçek hattaki gibi yayan ama LLM çağırmayan sahtelerle DEĞİŞTİRİLİR.
 
-Doğrulanan şey ÜRETİM DEĞİL (o `eval/report_trap.py` ve gerçek modelle
-yapılan uçtan uca koşumun işi), TARAYICIDAKİ DAVRANIŞ: sekme gezinmesi,
-artefakt listesi, rapor render'ı, atıf üst simgeleri, düşürülen iddia
-paneli, export bağlantısı, `@media print` sözleşmesi ve sıfır harici istek.
+Doğrulanan şey ÜRETİM DEĞİL (o `report_trap.py` / `mindmap_proof.py` /
+`quiz_proof.py`'nin ve gerçek modelle yapılan uçtan uca koşumun işi),
+TARAYICIDAKİ DAVRANIŞ: sekme gezinmesi, artefakt listesi, rapor render'ı,
+atıf üst simgeleri, düşürülen iddia paneli, export bağlantısı, `@media print`
+sözleşmesi ve sıfır harici istek -- ARTI Faz 3/4 ile gelen iki görünüm:
+
+  - zihin haritası: SVG ağaç semantiği, ok tuşlarıyla düğüm gezinmesi
+    (WCAG AA, §11.9), seçili düğümün kaynak listesi, yedek etiketin
+    "korpustan türetildi" uyarısı, kenarların çizilmesi;
+  - quiz: soru tipleri, şık/serbest metin girdileri, gönderim, sonuç
+    ekranı -- ve §12.8'in görünür kuralı: `short_answer` DOĞRU/YANLIŞ
+    olarak işaretlenmez, yalnızca benzerlik sayısı gösterilir.
+
+Bu iki bölüm Faz 3/4 tesliminde EKSİKTİ: `FEATURE_SPEC §11.11`'in "klavyeyle
+gezilebilir" maddesi kod incelemesine dayanıyordu, ölçüme değil. Bu koşum o
+boşluğu kapatır.
 
 Veritabanı: `rag.db`'nin KOPYASI (üretim veritabanına dokunulmaz). Kopyada
 gerçek bir rapor artefaktı varsa ekranda o render edilir; yoksa o adımlar
@@ -84,6 +97,66 @@ _FAKE_PAYLOAD = {
 }
 
 
+_FAKE_MINDMAP_PAYLOAD = {
+    "kind": "mindmap",
+    "nodes": [
+        {"id": "root", "label": "Arayüz Kanıtı Haritası", "kind": "root", "parent": None,
+         "topic_id": None, "chunk_ids": [], "size": 4, "label_source": "corpus",
+         "citations": []},
+        # label_source="model": kapıdan geçmiş etiket.
+        {"id": "n0", "label": "Depolama katmanı", "kind": "topic", "parent": "root",
+         "topic_id": 0, "chunk_ids": [1, 2], "size": 2, "label_source": "model",
+         "citations": [{"chunk_id": 1, "source": "kanit.md", "page": 0,
+                        "citation": "[Kaynak: kanit.md]"},
+                       {"chunk_id": 2, "source": "kanit.md", "page": 0,
+                        "citation": "[Kaynak: kanit.md]"}]},
+        # label_source="fallback": modelin etiketi düştü, ad korpustan türedi.
+        # Arayüzün bunu GÖSTERMESİ zorunlu (§11.5) -- kontrol buna bakıyor.
+        {"id": "n1", "label": "kanit.md (2 bölüm)", "kind": "topic", "parent": "root",
+         "topic_id": 1, "chunk_ids": [3, 4], "size": 2, "label_source": "fallback",
+         "citations": [{"chunk_id": 3, "source": "kanit.md", "page": 0,
+                        "citation": "[Kaynak: kanit.md]"},
+                       {"chunk_id": 4, "source": "kanit.md", "page": 0,
+                        "citation": "[Kaynak: kanit.md]"}]},
+    ],
+    "edges": [{"from": "n0", "to": "n1", "relation": "related", "weight": 0.7127}],
+    "dropped": [{"topic_id": 1, "text": "GPT-4 mimarisi", "reason": "unverified_terms",
+                 "score": 0.5487, "terms": ["gpt-4"]}],
+}
+
+# Dört tipin dördü de var: iki girdi biçimi (şık / serbest metin) ve §12.8'in
+# "short_answer eşiğe indirgenmez" kuralı aynı ekranda görülebilsin.
+_FAKE_QUIZ_PAYLOAD = {
+    "kind": "quiz",
+    "questions": [
+        {"id": "q0", "type": "multiple_choice", "topic_id": 0,
+         "prompt": "Veriler _____ motorunda saklanır.",
+         "choices": ["Foundry", "SQLite", "Streamlit", "Cosine"], "answer": "SQLite",
+         "chunk_id": 1, "source": "kanit.md", "citation": "[Kaynak: kanit.md]",
+         "evidence": "Veriler SQLite motorunda saklanır."},
+        {"id": "q1", "type": "true_false", "topic_id": 1,
+         "prompt": "«Veriler SQLite motorunda saklanır.» — Bu bilgi kanit.md belgesinde geçiyor.",
+         "choices": ["true", "false"], "answer": "true",
+         "chunk_id": 1, "source": "kanit.md", "citation": "[Kaynak: kanit.md]",
+         "evidence": "Veriler SQLite motorunda saklanır."},
+        {"id": "q2", "type": "fill_blank", "topic_id": 2,
+         "prompt": "Vektörler _____ biçiminde tutulur.", "choices": [], "answer": "float32",
+         "chunk_id": 1, "source": "kanit.md", "citation": "[Kaynak: kanit.md]",
+         "evidence": "Vektörler float32 biçiminde tutulur."},
+        # Bu sorunun cevabı KASITLI olarak "Doğru"/"Yanlış" sözcüklerini içermez:
+        # kontrol, karttaki bu sözcüklerin YOKLUĞUNA bakarak §12.8'i ölçüyor.
+        {"id": "q3", "type": "short_answer", "topic_id": 3,
+         "prompt": "Vektörler nerede saklanır?", "choices": [],
+         "answer": "Vektörler yerel bir veritabanında saklanır.",
+         "chunk_id": 1, "source": "kanit.md", "citation": "[Kaynak: kanit.md]",
+         "evidence": "Vektörler yerel bir veritabanında saklanır."},
+    ],
+    "dropped": [{"topic_id": 4, "text": "Bu sistem GPT-4 kullanır.",
+                 "prompt": "Bu sistem hangi modeli kullanır?",
+                 "reason": "unverified_terms", "score": 0.5487, "terms": ["gpt-4"]}],
+}
+
+
 def _copy_db(source: Path, target_dir: Path) -> Path:
     """rag.db'yi kopyalar. WAL sidecar'ları KOPYALANMAZ ve varsa silinir.
 
@@ -128,7 +201,44 @@ def _start_server(db_path: Path):
                 ],
             )
 
+    class _FakeMindMapGenerator:
+        """Faz 3 üreticisinin SSE davranışını taklit eder, LLM çağırmaz."""
+
+        kind = "mindmap"
+
+        def generate(self, ctx):
+            for i in range(1, 3):
+                time.sleep(0.3)
+                ctx.emit("progress", {"pct": round(i * 100 / 2),
+                                      "detail": f"{i}/2 küme etiketlendi"})
+            return base.GeneratedArtifact(
+                title="Arayüz Kanıtı Haritası",
+                payload=_FAKE_MINDMAP_PAYLOAD,
+                claims=[("/nodes/1/label", "Depolama katmanı"),
+                        ("/dropped/0", "GPT-4 mimarisi")],
+            )
+
+    class _FakeQuizGenerator:
+        """Faz 4 üreticisinin SSE davranışını taklit eder, LLM çağırmaz."""
+
+        kind = "quiz"
+
+        def generate(self, ctx):
+            for i in range(1, 3):
+                time.sleep(0.3)
+                ctx.emit("progress", {"pct": round(i * 100 / 2),
+                                      "detail": f"{i}/2 küme için soru üretildi"})
+            return base.GeneratedArtifact(
+                title="Arayüz Kanıtı Quiz",
+                payload=_FAKE_QUIZ_PAYLOAD,
+                claims=[("/questions/0/evidence", "Veriler SQLite motorunda saklanır."),
+                        ("/questions/3/answer", "Vektörler yerel bir veritabanında saklanır."),
+                        ("/dropped/0", "Bu sistem GPT-4 kullanır.")],
+            )
+
     base.register(_FakeReportGenerator())
+    base.register(_FakeMindMapGenerator())
+    base.register(_FakeQuizGenerator())
     models.embed_texts = lambda texts, is_query=False: [_FAKE_VECTOR for _ in texts]
 
     def _flip_ready():
@@ -310,6 +420,109 @@ def main(argv=None) -> int:
               "gpt-4" in page.locator('[data-print="root"]').inner_text())
         page.get_by_role("button", name="Raporu kapat").click()
         check("rapor kapandı, sohbete dönüldü", page.locator('[data-print="root"]').count() == 0)
+
+        print("\n--- Zihin haritası (§11.9) ---")
+        page.get_by_role("button", name="Zihin haritası üret").click()
+        page.wait_for_selector('[data-slot="mindmap-view"]', timeout=30000)
+        mindmap = page.locator('[data-slot="mindmap-view"]')
+        nodes = _FAKE_MINDMAP_PAYLOAD["nodes"]
+        tree = mindmap.locator('svg[role="tree"]')
+        items = mindmap.locator('g[role="treeitem"]')
+        check("üretim bitince harita otomatik açıldı", tree.count() == 1)
+        check("her düğüm bir treeitem", items.count() == len(nodes),
+              f"{items.count()}/{len(nodes)}")
+        check("kök aria-level=1, konular aria-level=2",
+              items.first.get_attribute("aria-level") == "1"
+              and items.nth(1).get_attribute("aria-level") == "2")
+        # Kenarlar: 1 "related" + kök->konu bağlantıları.
+        check("kenarlar çizildi",
+              mindmap.locator("svg line").count()
+              == len(_FAKE_MINDMAP_PAYLOAD["edges"]) + len(nodes) - 1,
+              f"{mindmap.locator('svg line').count()} çizgi")
+
+        # Roving tabindex + ok tuşu: §11.9'un WCAG AA iddiası BURADA ölçülüyor.
+        check("yalnızca seçili düğüm tabindex=0",
+              items.first.get_attribute("tabindex") == "0"
+              and items.nth(1).get_attribute("tabindex") == "-1")
+        items.first.focus()
+        page.keyboard.press("ArrowRight")
+        check("ArrowRight bir sonraki düğüme geçiyor",
+              items.nth(1).get_attribute("aria-selected") == "true")
+        check("seçilen düğümün kaynakları yanda listelendi",
+              "[Kaynak: kanit.md]" in mindmap.inner_text())
+        page.keyboard.press("End")
+        check("End son düğüme atlıyor",
+              items.last.get_attribute("aria-selected") == "true")
+        page.keyboard.press("Home")
+        check("Home köke dönüyor",
+              items.first.get_attribute("aria-selected") == "true")
+
+        fallback = mindmap.locator('g[data-label-source="fallback"]')
+        # SVG düğümünde inner_text() çalışmaz ("Node is not an HTMLElement",
+        # ölçüldü) -- SVG metni text_content() ile okunur.
+        check("yedek etiketli düğüm 'korpustan türetildi' uyarısı taşıyor",
+              fallback.count() == 1
+              and "korpustan türetildi" in (fallback.text_content() or ""))
+        check("düşürülen etiket önerisi ayrı panelde",
+              "Haritaya alınmayan etiket önerileri" in mindmap.inner_text()
+              and "gpt-4" in mindmap.inner_text())
+        export_href = mindmap.get_by_role("link", name="Markdown indir").get_attribute("href") or ""
+        check("harita export bağlantısı aynı origin'de",
+              export_href.startswith("/api/") and export_href.endswith("/export?format=md"),
+              export_href)
+        page.screenshot(path=str(shots / "mindmap.png"), full_page=True)
+        page.get_by_role("button", name="Raporu kapat").click()
+
+        print("\n--- Quiz (§12.11) ---")
+        page.get_by_role("button", name="Quiz üret").click()
+        page.wait_for_selector('[data-slot="quiz-runner"]', timeout=30000)
+        quiz = page.locator('[data-slot="quiz-runner"]')
+        questions = _FAKE_QUIZ_PAYLOAD["questions"]
+        check("üretim bitince quiz otomatik açıldı", quiz.count() == 1)
+        check("her soru render edildi",
+              quiz.locator("li[data-question-id]").count() == len(questions),
+              f"{quiz.locator('li[data-question-id]').count()}/{len(questions)}")
+        check("çoktan seçmeli 4 şık taşıyor",
+              quiz.locator('li[data-question-id="q0"] input[type="radio"]').count() == 4)
+        check("true_false şıkları yerelleştirildi (payload kanonik kalıyor)",
+              "Doğru" in quiz.locator('li[data-question-id="q1"]').inner_text()
+              and "true" not in quiz.locator('li[data-question-id="q1"]').inner_text())
+        check("serbest metin soruları girdi kutusu taşıyor",
+              quiz.locator('li[data-question-id="q2"] input[type="text"]').count() == 1
+              and quiz.locator('li[data-question-id="q3"] input[type="text"]').count() == 1)
+
+        # Üç deterministik soru DOĞRU cevaplanır; kısa cevap serbest yazılır.
+        quiz.locator('li[data-question-id="q0"] input[value="SQLite"]').check()
+        quiz.locator('li[data-question-id="q1"] input[value="true"]').check()
+        quiz.locator('li[data-question-id="q2"] input[type="text"]').fill("float32")
+        quiz.locator('li[data-question-id="q3"] input[type="text"]').fill("yerel veritabanında")
+        page.get_by_role("button", name="Cevapları gönder").click()
+        page.wait_for_selector("text=Beklenen cevap", timeout=15000)
+
+        check("skor YALNIZCA deterministik sorulardan (3/3)",
+              "3/3" in quiz.inner_text(), quiz.inner_text()[:0])
+        q0 = quiz.locator('li[data-question-id="q0"]')
+        check("doğru cevap 'Doğru' olarak işaretlendi", "Doğru" in q0.inner_text())
+        check("sonuçta belgedeki dayanak ve atıf gösteriliyor",
+              "Belgedeki dayanak" in q0.inner_text()
+              and "[Kaynak: kanit.md]" in q0.inner_text())
+
+        # §12.8'in GÖRÜNÜR kuralı: short_answer bir eşiğe indirgenmez.
+        q3 = quiz.locator('li[data-question-id="q3"]')
+        q3_text = q3.inner_text()
+        check("short_answer benzerlik SAYISI gösteriyor", "Benzerlik" in q3_text)
+        check("short_answer DOĞRU/YANLIŞ olarak işaretlenmiyor (§12.8)",
+              "Doğru" not in q3_text and "Yanlış" not in q3_text, q3_text.replace("\n", " | "))
+        check("quiz'e alınmayan soru ayrı panelde",
+              "Quiz'e alınmayan sorular" in quiz.inner_text()
+              and "gpt-4" in quiz.inner_text())
+        attempts = json.loads(urllib.request.urlopen(
+            f"{BASE}/api/quiz/{json.loads(urllib.request.urlopen(f'{BASE}/api/artifacts?kind=quiz').read())[0]['id']}/attempts"
+        ).read())
+        check("deneme sunucuya kaydedildi", len(attempts) == 1 and attempts[0]["score"] == 1.0,
+              str(attempts[:1]))
+        page.screenshot(path=str(shots / "quiz.png"), full_page=True)
+        page.get_by_role("button", name="Raporu kapat").click()
 
         print("\n--- Offline ve konsol denetimi ---")
         check("konsol hatası yok", not console_errors, str(console_errors[:3]))

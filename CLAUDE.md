@@ -135,6 +135,8 @@ don't fully understand, and multi-step work with unclear requirements.
 .venv/bin/python eval/offline_proof.py                # + network audit log
 .venv/bin/python eval/fidelity_trap.py                # pinned known limit of the gate
 .venv/bin/python eval/report_trap.py                  # Faz 2 closing measurement, NOT a routine gate
+.venv/bin/python eval/mindmap_proof.py                # Faz 3 closing measurement, NOT a routine gate
+.venv/bin/python eval/quiz_proof.py [--trap]          # Faz 4 closing measurement, NOT a routine gate
 .venv/bin/python eval/ui_proof.py                     # browser proof (needs requirements-dev.txt); no model
 .venv/bin/python docs/check_contrast.py               # verify contrast claims
 .venv/bin/python -m rag.ingest --pdf dosya.pdf        # ingest a document
@@ -268,6 +270,8 @@ anything else on this list:
 | `eval/offline_proof.py` | 7B + embedding | ~180 s |
 | `eval/fidelity_trap.py` | embedding | ~10 s |
 | `eval/report_trap.py` | 7B + embedding | ~4 min (9 LLM calls on eval.db) |
+| `eval/mindmap_proof.py` | 7B + embedding | ~1 min (7 LLM calls on eval.db) |
+| `eval/quiz_proof.py` | 7B + embedding | ~1 min (LLM only for short_answer) |
 | `python -m rag.ingest` | embedding | per document |
 | **Running an artifact generator** | 7B + embedding | per LLM call |
 
