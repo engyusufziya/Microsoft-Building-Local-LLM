@@ -128,7 +128,25 @@ BM25_CANDIDATE_LIMIT = 20
 RRF_K = 60
 
 # Qwen3 embedding modelleri retrieval'da asimetrik çalışır: sorguya talimat
-# öneki eklenir, pasajlara eklenmez. Faz 5'te eval setiyle A/B test edilecek.
+# öneki eklenir, pasajlara eklenmez.
+#
+# ÖLÇÜLDÜ (A/B, eval.db üzerinde 13 kaynak-doğrulanan soru: answerable +
+# cross_lingual). Tam eval iki kolda da 23/23 verdi -- geçme/kalma ayırt
+# etmiyor, çünkü ölçtüğü şey sıralama, oysa değişen şey skorun BÜYÜKLÜĞÜ:
+#
+#   ortalama top-1 skor : AÇIK 0.7249 | KAPALI 0.6713   (fark -0.0536)
+#   top-1 kaynağı değişen: 0/13  -- NE getirdiği değil, ne KADAR benzediği değişiyor
+#   eşiğe en yakın soru : Q21 (diller arası) AÇIK 0.5368 | KAPALI 0.4858
+#
+# Karar: AÇIK kalıyor. Getirisi sıralama değil PAYI: MIN_SCORE=0.45'e olan
+# mesafe diller arası sorularda 0.087'den 0.036'ya iniyor -- yani ölçülen tek
+# etki, payın zaten en ince olduğu yerde yarıya inmesi. Kapatmanın karşılığında
+# ölçülmüş bir kazanç yok.
+#
+# DİKKAT: bu bayrak bir tercih değil, MIN_SCORE'un kalibrasyon ZEMİNİ. Eşik
+# (ve DESIGN_SYSTEM §1.2'nin güven bantları) bu önek AÇIKKEN ölçülmüş skorlara
+# göre seçildi; kapatmak tek satırlık bir değişiklik değil, yeniden
+# kalibrasyondur.
 USE_QUERY_INSTRUCTION = True
 QUERY_INSTRUCTION = (
     "Instruct: Bir soruya cevap veren belge parçalarını bul\nQuery: "

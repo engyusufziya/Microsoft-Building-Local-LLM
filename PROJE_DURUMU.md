@@ -846,10 +846,79 @@ düzeltme geçici olarak geri alındığında
 `test_generate_artifact_belge_kapsami_ureticiye_daraltilmis_topics_verir`
 **kırmızıya döndü**, geri konduğunda yeşile.
 
+## `USE_QUERY_INSTRUCTION` A/B'si — açıkta duran sözün kapatılması
+
+`rag/config.py` "Faz 5'te eval setiyle A/B test edilecek" diye söz vermişti ve
+o söz açıkta duruyordu: bayrak ölçülmemiş bir varsayım olarak `True`'ydu.
+Ölçüldü.
+
+**Tam eval iki kolda da 23/23.** Bu, "fark yok" demek DEĞİL — eval'in ölçtüğü
+şey hangi kaynağın bulunduğu, oysa önekin değiştirdiği şey skorun büyüklüğü.
+Ayırt edici ölçüm embedding-only ikinci koşumdan geldi (13 kaynak-doğrulanan
+soru: `answerable` + `cross_lingual`, 7B YÜKLENMEDİ):
+
+| | AÇIK | KAPALI | fark |
+|---|---|---|---|
+| ortalama top-1 skor | 0.7249 | 0.6713 | −0.0536 |
+| en düşük skor | 0.5368 (Q21) | 0.4858 (Q21) | −0.0510 |
+| top-1 kaynağı değişen | — | — | **0/13** |
+| MIN_SCORE altında kalan | 0/13 | 0/13 | — |
+
+13 sorunun 12'sinde önek skoru yükseltiyor, biri (Q08) hariç. Ama **hiçbirinde
+getirilen chunk değişmiyor**: önek NE bulunduğunu değil, ne KADAR benzediğini
+değiştiriyor.
+
+**Karar: `True` kalıyor, değişiklik YOK.** Getirisi sıralama değil paydır ve
+pay, zaten en ince olduğu yerde önemli: diller arası sorularda MIN_SCORE=0.45'e
+mesafe 0.087'den 0.036'ya iniyor. Kapatmanın karşılığında ölçülmüş bir kazanç
+yok.
+
+**Ölçümün açığa çıkardığı asıl şey.** Bu bayrak bir tercih değil, `MIN_SCORE`'un
+kalibrasyon zemini. Eşik — ve `DESIGN_SYSTEM §1.2`'nin güven bantları — bu önek
+AÇIKKEN alınmış skorlara göre seçildi. Yani "KAPALI daha iyi çıksaydı" bile
+benimsemek tek satırlık bir bayrak çevirme olmazdı, yeniden kalibrasyon
+gerektirirdi. Deney bu yüzden baştan "açık bir varsayımı ölçüye bağlamak"
+olarak tanımlandı, "retrieval'ı iyileştirmek" olarak değil.
+
+Konu dışı sorular bu A/B'ye alınmadı: önek onların skorunu da düşürür, yani
+eleme yönünde çalışır ve karşılaştırmayı tek yönlü olarak kolaylaştırırdı.
+
+## Bu turun kapı sayıları (bakım turu)
+
+Tek ölçüm oturumunda, üst üste binme olmadan alındı: eval **23/23** (163 sn,
+ortalama 7.1 sn/soru) · backend **206 passed** · offline kanıtı **23/23,
+0 soket** · `eval/fidelity_trap.py` **PASS (0.5487 / grounded)** ·
+`eval/ui_proof.py` **49/49** · `web` build + lint temiz (5/5 statik sayfa) ·
+`package.json` ve `requirements.txt` **değişmedi**. Baseline damgası:
+`eval/baselines/59af499.json`.
+
+Ölçüm sırasında not düşülen bir gözlem: `rag.db`'nin WAL dosyası bir
+checkpoint ile ana dosyaya yazıldı (yan etkisiz bir SQLite işlemi, mantıksal
+içerik değişmedi) ve bu, `eval/ui_proof.py`'de sessiz bir kırılganlığı görünür
+kıldı. `_copy_db` yalnızca ANA dosyayı kopyalıyor ve WAL'i kasıtlı olarak
+atıyor — gerekçesi hedefteki bayat WAL'in replay edilmesini önlemek. Ama
+kaynakta bekleyen bir WAL varsa aynı kural koşumun **bayat bir korpusu**
+ölçmesine yol açıyor: checkpoint öncesi 8 belge, sonrası 1 belge görüldü.
+`rag.db` ölçüme girmiyor (eval `eval/eval.db` kullanıyor) ve bu turda hiçbir
+sonucu etkilemedi; kayda geçiriliyor, düzeltilmedi.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
-işlerin tamamı ölçümle teslim edildi. Açık iş yok.
+işlerin tamamı ölçümle teslim edildi.
+
+Bu bakım turunda kapananlar: MIT lisansı · model yüklemeyen kapıların CI'a
+devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
+(motor düzeltmesi + arayüz girişi) · `USE_QUERY_INSTRUCTION` A/B'si.
+
+Açıkta kalan, gerekçesi kayıtlı işler:
+- **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;
+  bu ölçekte (20–40 chunk) ölçülmüş getirisi yok (23/23 → 22/23).
+- **Data Table artefaktı** (STUDIO_PLAN §8): hat üç tiple kanıtlandı,
+  dördüncüsü değerlendirilebilir.
+- **Windows/CUDA host davranışı** ölçülmedi; yalnızca macOS/M4 ölçüldü. CI'ın
+  `ubuntu-latest`'te yeşil olması yalnızca paketin kurulup import edilebildiğini
+  gösterir, ürünün orada çalıştığını DEĞİL.
 
 Kapsam dışı bırakılan ve gerekçesi kayıtlı olanlar (STUDIO_PLAN §8): Audio/Video
 Overview (kaliteli yerel TTS Foundry Local katalogunda yok; bulut TTS ürünün tek

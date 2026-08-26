@@ -3,7 +3,7 @@
 > Bu dosya `python eval/offline_proof.py` tarafından otomatik üretilir.
 > El ile düzenlenmez -- yeniden çalıştırıp üzerine yazın.
 
-**Koşum zamanı:** 2026-08-18T11:18:50+00:00
+**Koşum zamanı:** 2026-08-26T09:09:26+00:00
 **Model:** qwen2.5-7b (qwen2.5-7b-instruct-generic-gpu:4)
 **Eval sonucu:** 23/23 (TÜMÜ GEÇTİ)
 
