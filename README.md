@@ -6,8 +6,7 @@
 ![Offline](https://img.shields.io/badge/network_calls-0_sockets_(audited)-success)
 ![Tests](https://img.shields.io/badge/backend_tests-201_passing-success)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-
-<!-- TODO: Add a CI status badge once a GitHub Actions workflow runs the gate suite. -->
+[![Gates](https://github.com/engyusufziya/Microsoft-Building-Local-LLM/actions/workflows/gates.yml/badge.svg)](https://github.com/engyusufziya/Microsoft-Building-Local-LLM/actions/workflows/gates.yml)
 
 Built for the **Microsoft Türkiye AI Innovators** program. Runs entirely on
 [Foundry Local](https://github.com/microsoft/foundry-local) — no cloud, no API key, no telemetry.
@@ -219,11 +218,14 @@ Documented rather than hidden — this is the project's core discipline.
   ordinary words capitalised mid-sentence can enter the pool.
 - **`scope="document"`** (single-document artifacts) works and is tested at the API level, but has
   no UI entry point — the panel always requests corpus-wide artifacts.
+- **CI covers only the model-free half of the gate suite** (`pytest` + frontend build + lint).
+  The evaluation run and the offline proof load a 7B model through Foundry Local, which is a *local*
+  runtime — a hosted runner does not have it. Those gates stay local, run once per delivery, and are
+  stamped into `eval/baselines/`. A deliberate choice, not an omission: an unattended automated
+  evaluation run would break this project's "one run, one runner, named in the delivery" rule.
 
 **Roadmap**
 
-- CI workflow running the gate suite (`pytest` + frontend build + lint) on every push.
-  <!-- TODO: Decide whether model-loading gates (eval, offline proof) run in CI or stay local-only. -->
 - Enable hybrid retrieval once the corpus outgrows the scale where dense retrieval dominates.
 - Data Table artifact: extract genuine numeric tables from documents (charts are deliberately **not**
   generated from prose — inventing numbers would violate the fidelity principle).

@@ -154,6 +154,12 @@ were the gate.
 Minimum gate before delivery: **eval 23/23 · `pytest backend/tests -q` with
 zero failures · `eval/fidelity_trap.py` PASS · clean frontend build**.
 
+`.github/workflows/gates.yml` runs the model-free half of that gate (pytest ·
+frontend build · lint) on every push. The model-loading half — eval, offline
+proof, the trap runners — stays local by design (see `PROJE_DURUMU.md`,
+"Kapıların model yüklemeyen yarısı CI'a devredildi"). CI passing is therefore
+necessary, never sufficient.
+
 The pytest gate is deliberately *not* a fixed number. It was written as
 `91/91` while the real count was 93, then 123, then 124 — a stale count
 reports a lost test as green, which is the exact failure the gate exists to

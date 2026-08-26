@@ -728,6 +728,50 @@ ve denemenin sunucuya kaydedilmesi. Sıfır konsol hatası, sıfır harici istek
 > kuralı bu koşumda pratikte doğrulandı. Model koşumları tek tek, araya bellek
 > boşalması bırakılarak tekrarlandı ve ikisi de temiz geçti.
 
+## Kapıların model yüklemeyen yarısı CI'a devredildi
+
+`.github/workflows/gates.yml` (yeni). Her push ve PR'da iki iş koşuyor:
+`pytest backend/tests -q` ve `web` tarafında `npm ci && npm run build &&
+npm run lint`. Üçü de **model yüklemiyor**, toplam maliyet saniyeler.
+
+Gerekçe kayıtta zaten duruyordu: kapı listesi doğruydu ama uygulanması
+**insan hafızasına** bağlıydı. Bu bir kez pratikte de patladı — kapıya
+"91/91" yazılmıştı, gerçek taban 93'tü ve bayat sayı kaybolan bir testi
+yeşil gösterirdi (bkz. AGENTS.md §3). CI, o listeyi yazılı kuraldan
+**uygulanan** kurala çeviriyor. Test sayısı yine hiçbir yere yazılmadı;
+kapı "sıfır başarısızlık".
+
+**Model yükleyen kapılar CI'a KONMADI** ve bu kasıtlı. Foundry Local yerel
+bir runtime; barındırılan runner'da yok, olsaydı bile 7B'yi her push'ta
+indirmek gerekirdi. Asıl gerekçe ikincisi: bu projenin ölçüm kuralı "tek
+koşum, tek koşucu, teslimde kim koştuysa adı geçer" (AGENTS.md §5).
+Gözetimsiz otomatik bir eval koşumu o kaydı bozardı. eval, offline kanıtı
+ve faz kapanma ölçümleri elle koşulmaya ve `eval/baselines/`'a
+damgalanmaya devam ediyor.
+
+### Denenen ve elenen alternatif: `macos-latest` runner
+
+İlk tasarım `macos-latest`'ti — ölçülmüş tek platform macOS/M4 olduğu için
+"koştuğumuz yerde test edelim" savunulabilir görünüyordu. Ölçümle gerek
+kalmadığı görüldü: `foundry-local-core` 1.2.4'ün PyPI'da
+`manylinux_2_28_x86_64` wheel'i **var** (26 MB, indirilip doğrulandı) ve
+`foundry_local_sdk` saf Python (`py3-none-any`) — native ikiliyi import
+anında değil, `core_interop.py` içinde çağrı anında `ctypes` ile yüklüyor.
+Testler modeli hiç yüklemediği için (`conftest.py`,
+`RAG_BACKEND_SKIP_WARMUP=1`) `ubuntu-latest` yetiyor.
+
+Bu, "Linux'ta da çalışır" iddiası DEĞİL. Kanıtlanan tek şey paketin
+kurulup **import edilebildiği**; ürünün Linux/Windows'ta çalıştığı hâlâ
+ölçülmedi ve README'nin bilinen sınırı olarak duruyor.
+
+Reddedilen ikinci alternatif: `rag/models.py`'deki SDK import'unu tembel
+hale getirmek. CI'ı kolaylaştırırdı ama motoru altyapı uğruna değiştirmek
+olurdu (AGENTS.md §2.3) ve offline yüzeyine dokunurdu.
+
+`pytest` bu turda `requirements-dev.txt`'e eklendi; daha önce yalnızca
+yerel `.venv`'de kuruluydu ve hiçbir dosyada anılmıyordu. `requirements.txt`
+ve `package.json` **değişmedi** (`npm ci` lock dosyasına birebir uyar).
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan

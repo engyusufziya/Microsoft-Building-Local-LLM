@@ -1,0 +1,88 @@
+# Rutin kapı seti -- MODEL YÜKLEMEYEN kısmı.
+#
+# AGENTS.md §3'teki teslim kapısı dört parçadan oluşur; bu workflow yalnızca
+# ikisini koşar:
+#
+#   burada  : pytest backend/tests · web build · web lint   (model YÜKLEMEZ)
+#   yerelde : eval/run_eval.py (23/23) · eval/offline_proof.py (0 soket)
+#             ve faz kapanma ölçümleri                      (7B + embedding)
+#
+# Model yükleyen kapılar KASITLI olarak burada değil. Foundry Local yerel bir
+# runtime; barındırılan runner'da yok, olsaydı bile 7B modeli her push'ta
+# indirmek gerekirdi. Daha önemlisi bu projenin ölçüm kuralı "tek koşum, tek
+# koşucu, teslimde kim koştuysa adı geçer" (AGENTS.md §5) -- otomatik ve
+# gözetimsiz bir eval koşumu o kaydı bozar. Bu bir eksiklik değil, kısıta
+# sadakat: CI "sıfır başarısızlık + temiz build" kapısını tutar, ölçümler
+# elle koşulup eval/baselines'a damgalanır.
+#
+# Test SAYISI kapıya yazılmaz (AGENTS.md §3): bayat bir sayı, kaybolan bir
+# testi yeşil gösterir -- kapının var olma sebebi tam olarak budur.
+
+name: Gates
+
+on:
+  push:
+  pull_request:
+
+# Aynı dal üzerinde üst üste binen koşumlar iptal edilir; kapı her zaman
+# dalın SON halini ölçer.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: pytest (model yüklemez)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      # requirements.txt ürünün çalışma anı listesidir ve DEĞİŞTİRİLMEZ;
+      # pytest ayrı tutulan requirements-dev.txt'ten gelir (offline
+      # garantisinin kapsam ayrımı, bkz. o dosyanın başlığı).
+      #
+      # foundry-local-sdk Linux'ta da kurulur ve import edilir: paketin
+      # kendisi saf Python (py3-none-any), native ikiliyi ctypes ile ANCAK
+      # çağrı anında yüklüyor. Testler modeli hiç yüklemez (conftest.py
+      # RAG_BACKEND_SKIP_WARMUP=1 kullanır), ama rag/models.py SDK'yı modül
+      # seviyesinde import ettiği için paketin kurulabilir olması şart.
+      - name: Bağımlılıkları kur
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: pytest
+        run: python -m pytest backend/tests -q
+
+  frontend:
+    name: build + lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      # Geliştirme makinesi Node 26 kullanıyor; CI, projenin bağımlılık
+      # tabanının (Next 16) desteklediği LTS'e sabitlenir. İkisi ayrışırsa
+      # bunu bilmek istenir -- sabitlemenin amacı da bu.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # npm ci: package-lock.json'a birebir uyar ve package.json'ı
+      # DEĞİŞTİRMEZ. "package.json değişmedi" iddiası Faz 2-4 boyunca
+      # ölçülerek korundu; CI onu bozan taraf olamaz.
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run lint
