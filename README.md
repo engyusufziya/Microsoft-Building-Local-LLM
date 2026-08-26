@@ -5,8 +5,8 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16.3-000000?logo=nextdotjs&logoColor=white)
 ![Offline](https://img.shields.io/badge/network_calls-0_sockets_(audited)-success)
 ![Tests](https://img.shields.io/badge/backend_tests-201_passing-success)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-<!-- TODO: Add a license badge once a LICENSE file is chosen and added to the repo root. -->
 <!-- TODO: Add a CI status badge once a GitHub Actions workflow runs the gate suite. -->
 
 Built for the **Microsoft Türkiye AI Innovators** program. Runs entirely on
@@ -227,4 +227,13 @@ Documented rather than hidden — this is the project's core discipline.
 - Enable hybrid retrieval once the corpus outgrows the scale where dense retrieval dominates.
 - Data Table artifact: extract genuine numeric tables from documents (charts are deliberately **not**
   generated from prose — inventing numbers would violate the fidelity principle).
-- <!-- TODO: Add a LICENSE file; the repository currently has none. -->
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) — © 2026 Yusuf Ziya Demirel.
+
+The Foundry Local SDK this project runs on is MIT-licensed as well. Model weights are **not**
+distributed here; they are pulled by Foundry Local from its own catalogue and keep their own
+licences.

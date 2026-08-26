@@ -32,6 +32,10 @@ Foundry_Local_Plan.pdf
 # Üretilen bilgi grafiği çıktısı — korpustan yeniden üretilebilir.
 graphify-out/
 
-# Diğer yerel ajan araçlarının çalışma durumu (mutlak makine yolları içerir).
+# Yerel ajan araçlarının yapılandırması ve çalışma durumu. Depo vendor-nötr
+# tutuluyor: talimatların tek kaynağı AGENTS.md'dir (bkz. AGENTS.md §5 --
+# ajan tanımları makineye ve araca özgüdür, depoda tutulmaz).
+.claude/
+CLAUDE.md
 .codex/
 .loopx/
