@@ -1150,21 +1150,39 @@ token'ları. Yeni renk token'ı, yeni font, harici görsel yok.
 
 ### 9.10 Faz 1 tamamlanma kriterleri
 
-- [ ] `_SCHEMA`'ya üç tablo + üç indeks eklendi; mevcut tablolar/trigger'lar
+- [x] `_SCHEMA`'ya üç tablo + üç indeks eklendi; mevcut tablolar/trigger'lar
       **birebir** aynı; var olan `rag.db` yeniden ingest gerektirmeden açılıyor
-- [ ] `store.corpus_fingerprint(conn)` deterministik; aynı korpusta iki çağrı
+      (`test_sema_yeni_tablolar_ve_indeksler_eklendi`)
+- [x] `store.corpus_fingerprint(conn)` deterministik; aynı korpusta iki çağrı
       aynı dizeyi, belge silinince farklı dizeyi veriyor
-- [ ] `topics.cluster_corpus()` 7 belgelik korpusta **elle doğrulanmış anlamlı
-      konular** üretiyor (küme listesi ve içerdikleri kaynaklar raporlanır)
-- [ ] Kümeleme iki ardışık çağrıda birebir aynı sonucu veriyor (determinizm)
-- [ ] Sadakat kapısı **bilinçli bozuk bir iddiayı** `unsupported` işaretliyor —
-      ölçülmüş skorla gösterilir
-- [ ] Dört endpoint'in (POST iskelet dahil) testleri var; `ARTIFACT_NOT_FOUND`
+      (`test_corpus_fingerprint_deterministik_ve_degisir`)
+- [x] `topics.cluster_corpus()` 7 belgelik korpusta **elle doğrulanmış anlamlı
+      konular** üretiyor (küme listesi ve içerdikleri kaynaklar raporlanır) —
+      7 küme, her biri tam olarak bir kaynak belge, belgeler arası karışma yok
+- [x] Kümeleme iki ardışık çağrıda birebir aynı sonucu veriyor (determinizm)
+      (`test_cluster_corpus_determinizm`)
+- [x] Sadakat kapısı **bilinçli bozuk bir iddiayı** `unsupported` işaretliyor —
+      ölçülmüş skorla gösterilir: ham cosine **0.3293** (korpustan birebir
+      alınan cümle karşılaştırma için **0.9240 / grounded**)
+- [x] Dört endpoint'in (POST iskelet dahil) testleri var; `ARTIFACT_NOT_FOUND`
       ve `INSUFFICIENT_CORPUS` ayrı ayrı doğrulanmış
-- [ ] `web` build ve lint temiz; `package.json` **değişmemiş**
-- [ ] `requirements.txt` **değişmemiş**
-- [ ] Değişmeyen kapı: eval **23/23** · backend **93/93 + yeni testler** ·
-      offline kanıtı **0 soket**
+      (`test_artifacts_api.py`; §9.8 ön kontrolü akış açılmadan önce)
+- [x] `web` build ve lint temiz; `package.json` **değişmemiş**
+- [x] `requirements.txt` **değişmemiş**
+- [x] Değişmeyen kapı: eval **23/23** (212 sn) · backend **123 passed**
+      (93 taban + Faz 1'in 30 yeni testi) · offline kanıtı **0 soket**
+
+> [!note] Bu kutular Faz 1 teslim edilirken işaretlenmemişti — sonradan,
+> ölçüm kaydına karşı işaretlendi
+> Dokuz kriterin dokuzu da Faz 1 kapanırken gerçekten ölçülmüştü; ölçümler
+> `PROJE_DURUMU.md` "Studio Katmanı — Faz 1" bölümünde sayılarıyla duruyor
+> ve her biri adı yukarıda anılan bir teste bağlı. İşaretlenmemiş olmaları
+> Faz 2, 3 ve 4'ün (§10.14, §11.11, §12.13) tersine bir doküman kaymasıydı:
+> boş kutu, ölçülmemiş kriterle ölçülmüş-ama-yazılmamış kriteri **aynı**
+> gösterir — projenin "bayat sayı kaybolan testi yeşil gösterir" kaygısının
+> kutu versiyonu. Son kriterdeki **123 passed**, o günkü ölçümdür ve
+> bilerek dondurulmuştur; güncel sayı değildir (kapı zaten sayıya değil
+> "sıfır başarısızlık"a bağlıdır, `AGENTS.md §3`).
 
 > [!warning] Backend test tabanı 91 değil **93** — doküman kayması
 > `AGENTS.md §3` ve `STUDIO_PLAN §10` "91/91" yazıyor; Faz 1 öncesi ölçülen
