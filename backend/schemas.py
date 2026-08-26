@@ -26,6 +26,10 @@ class HealthResponse(BaseModel):
 
 
 class DocumentInfo(BaseModel):
+    # `documents.id` -- POST /api/artifacts'in `document_id` alanı bunu bekler
+    # (§9.7). Silme yolu hâlâ filename ile çalışır; kimlik ikiye ayrılmadı,
+    # yalnızca artefakt yolunun ihtiyaç duyduğu kimlik yüzeye çıkarıldı.
+    id: int
     filename: str
     page_count: int
     chunk_count: int

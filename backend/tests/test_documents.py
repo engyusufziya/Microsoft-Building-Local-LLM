@@ -50,6 +50,31 @@ def test_list_documents_derives_has_ocr_chunks(app, client):
     assert by_name["clean_doc.pdf"]["has_ocr_chunks"] is False
 
 
+def test_list_documents_belge_kimligini_yuzeye_cikarir(app, client):
+    """`id` olmadan arayüz scope="document" isteğini KURAMIYORDU.
+
+    POST /api/artifacts `document_id` (tamsayı) bekliyor; liste yalnızca
+    filename döndürdüğü sürece Studio paneli belge kapsamlı artefakt
+    isteyemezdi. Kimliğin gerçekten `documents.id` olduğu, üretilmiş bir
+    değer olmadığı burada doğrulanır.
+    """
+    conn = app.state.conn
+    _upsert_fake_document(conn, "a.pdf", via_ocr=False)
+    _upsert_fake_document(conn, "b.pdf", via_ocr=False)
+
+    r = client.get("/api/documents")
+    assert r.status_code == 200
+    by_name = {d["filename"]: d for d in r.json()}
+
+    for filename, payload in by_name.items():
+        row = conn.execute(
+            "SELECT id FROM documents WHERE filename = ?", (filename,)
+        ).fetchone()
+        assert payload["id"] == row["id"]
+
+    assert by_name["a.pdf"]["id"] != by_name["b.pdf"]["id"]
+
+
 # --------------------------------------------------------------------------- DELETE
 
 

@@ -78,8 +78,16 @@ def cluster_corpus(
     conn,
     max_clusters: int | None = None,
     min_cluster_size: int | None = None,
+    document_id: int | None = None,
 ) -> list[Topic]:
-    """Korpustaki tüm chunk'ları anlamsal kümelere ayırır.
+    """Korpustaki chunk'ları anlamsal kümelere ayırır.
+
+    `document_id` verilirse yalnızca O BELGENİN chunk'ları kümelenir
+    (`scope="document"`, FEATURE_SPEC §9.8 1. adım: "scope -> chunk kümesi").
+    Süzme `load_matrix`'in DÖNDÜRDÜĞÜ meta üzerinde yapılır, sorguda değil:
+    matris `db_path` anahtarıyla önbelleklidir ve belge başına ayrı bir
+    önbellek anahtarı açmak, tek belgelik bir istek için tüm korpusun
+    yeniden okunmasına yol açardı.
 
     Algoritma (deterministik, saf numpy):
       1. store.load_matrix(conn) -> (N x D L2-normalize matris, meta).
@@ -103,6 +111,23 @@ def cluster_corpus(
     )
 
     matrix, meta = store.load_matrix(conn)
+
+    if document_id is not None:
+        row = conn.execute(
+            "SELECT filename FROM documents WHERE id = ?", (document_id,)
+        ).fetchone()
+        if row is None:
+            raise InsufficientCorpusError(f"document_id={document_id} bulunamadı.")
+        # chunks.source belgenin dosya adıdır (store.upsert_document); ilişki
+        # id üzerinden değil ad üzerinden kurulur -- has_ocr_chunks türetmesi
+        # de aynı birleştirmeyi kullanıyor (backend/routes/documents.py).
+        keep = [i for i, m in enumerate(meta) if m["source"] == row["filename"]]
+        # Fantezi indeksleme YENİ bir dizi üretir; salt okunur matrise
+        # dokunulmaz. Boş `keep` durumunda shape (0, D) kalır ve aşağıdaki
+        # yetersizlik kontrolü onu yakalar.
+        matrix = matrix[keep]
+        meta = [meta[i] for i in keep]
+
     n = matrix.shape[0]
     if n == 0 or n < min_cluster_size:
         raise InsufficientCorpusError(

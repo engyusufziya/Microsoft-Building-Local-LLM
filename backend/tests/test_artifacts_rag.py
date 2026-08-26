@@ -346,6 +346,98 @@ def test_generate_artifact_bilinmeyen_belge_id(conn):
     assert events == [("stage", {"stage": "selection", "label": "Kaynaklar seçiliyor"})]
 
 
+def test_cluster_corpus_belge_kapsami_yalnizca_o_belgeyi_kumeler(conn):
+    """§9.8 1. adım: `scope="document"` chunk KÜMESİNİ daraltır.
+
+    Bu davranış eskiden YOKTU: `document_id` yalnızca doğrulanıp kaydediliyor,
+    kümeleme her zaman korpusun tamamı üzerinde koşuyordu. Sonuç, belge adını
+    taşıyan başlığın altında korpus geneli bir artefakttı.
+    """
+    store.upsert_document(
+        conn, "a.md", 1, [_Chunk(f"a{i}", source="a.md") for i in range(3)],
+        [_unit(a) for a in (0, 5, 10)],
+    )
+    store.upsert_document(
+        conn, "b.md", 1, [_Chunk(f"b{i}", source="b.md") for i in range(3)],
+        [_unit(a) for a in (90, 95, 100)],
+    )
+
+    a_id = conn.execute("SELECT id FROM documents WHERE filename = 'a.md'").fetchone()["id"]
+    a_chunk_ids = {
+        r["id"] for r in conn.execute("SELECT id FROM chunks WHERE source = 'a.md'")
+    }
+
+    scoped = topics.cluster_corpus(conn, document_id=a_id)
+    clustered = {cid for t in scoped for cid in t.chunk_ids}
+    assert clustered == a_chunk_ids
+    assert sum(t.size for t in scoped) == 3
+
+    # Kapsamsız çağrı DEĞİŞMEDİ: altı chunk'ın altısı da kümelenir.
+    assert sum(t.size for t in topics.cluster_corpus(conn)) == 6
+
+
+def test_cluster_corpus_belge_kapsami_yetersiz_chunk(conn):
+    """Tek chunk'lık bir belge, korpus kalabalık olsa bile kümelenemez.
+
+    Dürüst davranış budur: kapsam belgeyse yeterlilik de belge üzerinden
+    ölçülür. Rota bunu akış açılmadan ÖNCE 422 INSUFFICIENT_CORPUS'a çevirir.
+    """
+    store.upsert_document(
+        conn, "buyuk.md", 1, [_Chunk(f"x{i}", source="buyuk.md") for i in range(4)],
+        [_unit(a) for a in (0, 5, 90, 95)],
+    )
+    store.upsert_document(
+        conn, "tek.md", 1, [_Chunk("y", source="tek.md")], [_unit(180)]
+    )
+    tek_id = conn.execute("SELECT id FROM documents WHERE filename = 'tek.md'").fetchone()["id"]
+
+    with pytest.raises(topics.InsufficientCorpusError):
+        topics.cluster_corpus(conn, document_id=tek_id)
+
+    # Korpus geneli hâlâ kümelenebiliyor -- yetersizlik KAPSAMA ait.
+    assert topics.cluster_corpus(conn)
+
+
+def test_generate_artifact_belge_kapsami_ureticiye_daraltilmis_topics_verir(conn):
+    """Hattın uçtan uca kilidi: üretici, YALNIZCA seçili belgenin chunk'larını görür."""
+    store.upsert_document(
+        conn, "a.md", 1, [_Chunk(f"a{i}", source="a.md") for i in range(3)],
+        [_unit(a) for a in (0, 5, 10)],
+    )
+    store.upsert_document(
+        conn, "b.md", 1, [_Chunk(f"b{i}", source="b.md") for i in range(3)],
+        [_unit(a) for a in (90, 95, 100)],
+    )
+    a_id = conn.execute("SELECT id FROM documents WHERE filename = 'a.md'").fetchone()["id"]
+    a_chunk_ids = {
+        r["id"] for r in conn.execute("SELECT id FROM chunks WHERE source = 'a.md'")
+    }
+
+    seen: dict = {}
+
+    class _KapsamKaydeden:
+        kind = "kayitsiz-kind"
+
+        def generate(self, ctx):
+            seen["chunk_ids"] = {cid for t in ctx.topics for cid in t.chunk_ids}
+            seen["scope"] = ctx.scope
+            seen["document_id"] = ctx.document_id
+            return base.GeneratedArtifact(title="t", payload={}, claims=[])
+
+    base.register(_KapsamKaydeden())
+    try:
+        base.generate_artifact(
+            conn, kind="kayitsiz-kind", scope="document", document_id=a_id,
+            params={}, emit=lambda name, payload: None,
+        )
+    finally:
+        base._registry.pop("kayitsiz-kind", None)
+
+    assert seen["chunk_ids"] == a_chunk_ids
+    assert seen["scope"] == "document"
+    assert seen["document_id"] == a_id
+
+
 def test_registry_uc_kind_da_kayitli_ve_register_calisir(conn):
     """§9.5: üç üreticinin üçü de kendi modülü yüklenirken kaydolur.
 

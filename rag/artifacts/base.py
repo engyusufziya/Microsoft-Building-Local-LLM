@@ -88,18 +88,24 @@ def generate_artifact(
 
     # 1) Seçim: scope -> hangi belge(ler) kümelenecek.
     emit("stage", {"stage": "selection", "label": "Kaynaklar seçiliyor"})
+    selected_document_id = None
     if scope == "document" and document_id is not None:
         row = conn.execute(
             "SELECT id FROM documents WHERE id = ?", (document_id,)
         ).fetchone()
         if row is None:
             raise ValueError(f"document_id={document_id} bulunamadı.")
+        selected_document_id = document_id
 
     # 2) Yapı: embedding kümeleme (rag/topics.py). N < TOPIC_MIN_CLUSTER_SIZE
     # veya boş korpusta InsufficientCorpusError fırlar -- çağıran taraf
     # (backend) bunu akış açılmadan ÖNCE ayrıca kontrol eder.
+    #
+    # `selected_document_id` kümelemeye GEÇİRİLİR: aksi halde 1. adımın
+    # seçimi yalnızca doğrulama olurdu ve artefakt, belge adını taşıyan
+    # başlığın altında korpusun tamamını anlatırdı.
     emit("stage", {"stage": "clustering", "label": "Konular çıkarılıyor"})
-    topics = cluster_corpus(conn)
+    topics = cluster_corpus(conn, document_id=selected_document_id)
 
     ctx = GenerationContext(
         conn=conn,

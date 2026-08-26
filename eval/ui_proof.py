@@ -25,7 +25,9 @@ sözleşmesi ve sıfır harici istek -- ARTI Faz 3/4 ile gelen iki görünüm:
     "korpustan türetildi" uyarısı, kenarların çizilmesi;
   - quiz: soru tipleri, şık/serbest metin girdileri, gönderim, sonuç
     ekranı -- ve §12.8'in görünür kuralı: `short_answer` DOĞRU/YANLIŞ
-    olarak işaretlenmez, yalnızca benzerlik sayısı gösterilir.
+    olarak işaretlenmez, yalnızca benzerlik sayısı gösterilir;
+  - kapsam seçici: `scope="document"` isteğinin arayüzden GERÇEKTEN kurulduğu,
+    kod incelemesiyle değil POST gövdesiyle ölçülür (§9.7).
 
 Bu iki bölüm Faz 3/4 tesliminde EKSİKTİ: `FEATURE_SPEC §11.11`'in "klavyeyle
 gezilebilir" maddesi kod incelemesine dayanıyordu, ölçüme değil. Bu koşum o
@@ -522,6 +524,46 @@ def main(argv=None) -> int:
         check("deneme sunucuya kaydedildi", len(attempts) == 1 and attempts[0]["score"] == 1.0,
               str(attempts[:1]))
         page.screenshot(path=str(shots / "quiz.png"), full_page=True)
+        page.get_by_role("button", name="Raporu kapat").click()
+
+        # Kapsam seçici EN SONA konur: gerçek bir üretim tetikliyor ve yeni bir
+        # artefakt satırı yazıyor. Daha erken koşsaydı yukarıdaki bölümlerin
+        # "listenin ilki" varsayımını bozardı.
+        print("\n--- Kapsam seçici (§9.7 · scope=\"document\") ---")
+        documents = json.loads(urllib.request.urlopen(f"{BASE}/api/documents").read())
+        scope_select = page.get_by_label("Kapsam")
+        check("kapsam seçici render edildi", scope_select.count() == 1)
+        check("etiketle ilişkili (klavye + ekran okuyucu)",
+              page.locator('[data-slot="studio-scope"]').count() == 1)
+        check("varsayılan kapsam korpus -- mevcut davranış değişmedi",
+              scope_select.input_value() == "corpus")
+        check("her belge bir seçenek + 'Tüm belgeler'",
+              scope_select.locator("option").count() == len(documents) + 1,
+              f"{scope_select.locator('option').count()} seçenek / {len(documents)} belge")
+
+        # İSTEK GÖVDESİ ölçülür: seçicinin gerçekten scope="document" kurduğu,
+        # kod incelemesiyle değil ağ trafiğiyle gösterilir.
+        posted: list[dict] = []
+        page.on("request", lambda r: posted.append(json.loads(r.post_data or "{}"))
+                if r.method == "POST" and r.url.endswith("/api/artifacts") else None)
+
+        target = documents[0]
+        scope_select.select_option(str(target["id"]))
+        check("seçim sonrası ipucu belge kapsamını anlatıyor",
+              "yalnızca seçili belgeden" in page.locator('[data-slot="studio-panel"]').inner_text())
+
+        page.get_by_role("button", name="Rapor üret").click()
+        page.wait_for_selector('[data-print="root"]', timeout=30000)
+        check("istek scope=\"document\" ve document_id ile gitti",
+              posted and posted[-1].get("scope") == "document"
+              and posted[-1].get("document_id") == target["id"],
+              str(posted[-1] if posted else None))
+
+        created = json.loads(urllib.request.urlopen(f"{BASE}/api/artifacts?kind=report").read())[0]
+        check("üretilen artefakt belge kapsamında kaydedildi",
+              created["scope"] == "document" and created["document_id"] == target["id"],
+              f"scope={created['scope']} document_id={created['document_id']}")
+        page.screenshot(path=str(shots / "scope.png"), full_page=True)
         page.get_by_role("button", name="Raporu kapat").click()
 
         print("\n--- Offline ve konsol denetimi ---")

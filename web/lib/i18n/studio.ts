@@ -31,6 +31,18 @@ export const studio = {
   },
   progressAria: { tr: "Rapor üretim ilerlemesi", en: "Report generation progress" },
   artifactListLabel: { tr: "Üretilen artefaktlar", en: "Generated artifacts" },
+
+  // --- Kapsam seçimi (§9.7: scope="corpus" | "document") ---
+  scopeLabel: { tr: "Kapsam", en: "Scope" },
+  scopeCorpus: { tr: "Tüm belgeler", en: "All documents" },
+  scopeHintDocument: {
+    tr: "Artefakt yalnızca seçili belgeden üretilir.",
+    en: "The artifact is generated from the selected document only.",
+  },
+  errorDocumentNotFound: {
+    tr: "Seçili belge artık yüklü değil; kapsamı yeniden seçin.",
+    en: "The selected document is no longer loaded; pick the scope again.",
+  },
   openArtifact: { tr: "Aç", en: "Open" },
   closeArtifact: { tr: "Raporu kapat", en: "Close report" },
   staleBadge: { tr: "korpus değişti", en: "corpus changed" },

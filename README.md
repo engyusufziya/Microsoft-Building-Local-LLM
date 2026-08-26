@@ -216,8 +216,10 @@ Documented rather than hidden — this is the project's core discipline.
 - **Turkish grammar is imperfect** in `qwen2.5-7b` output; one generated label carried an accent typo.
 - **Quiz distractor quality** is bounded by the same lexical heuristic the fidelity layer uses;
   ordinary words capitalised mid-sentence can enter the pool.
-- **`scope="document"`** (single-document artifacts) works and is tested at the API level, but has
-  no UI entry point — the panel always requests corpus-wide artifacts.
+- **A single-document artifact needs at least two chunks.** With `scope="document"` the corpus
+  is narrowed to that document *before* clustering, so a one-chunk document returns
+  `422 INSUFFICIENT_CORPUS` before the stream opens. Honest behaviour rather than a corpus-wide
+  artifact wearing a document's name — see `PROJE_DURUMU.md` for the drift this replaced.
 - **CI covers only the model-free half of the gate suite** (`pytest` + frontend build + lint).
   The evaluation run and the offline proof load a 7B model through Foundry Local, which is a *local*
   runtime — a hosted runner does not have it. Those gates stay local, run once per delivery, and are

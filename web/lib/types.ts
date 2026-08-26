@@ -15,6 +15,8 @@ export interface HealthResponse {
 }
 
 export interface DocumentInfo {
+  /** `documents.id` — POST /api/artifacts'in `document_id` alanı bunu bekler. */
+  id: number
   filename: string
   page_count: number
   chunk_count: number

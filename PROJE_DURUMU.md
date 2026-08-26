@@ -772,6 +772,80 @@ olurdu (AGENTS.md §2.3) ve offline yüzeyine dokunurdu.
 yerel `.venv`'de kuruluydu ve hiçbir dosyada anılmıyordu. `requirements.txt`
 ve `package.json` **değişmedi** (`npm ci` lock dosyasına birebir uyar).
 
+## `scope="document"` arayüze bağlandı — ve bağlanırken sessiz bir sapma bulundu
+
+Amaç küçüktü: Studio paneline bir kapsam seçici koymak. `scope="document"`
+API'de vardı, testliydi ve README "arayüz girişi yok" diye kaydetmişti.
+
+**Bulgu.** Alan çalışmıyordu — daha doğrusu, çalıştığı sanılan şeyi
+yapmıyordu. `base.generate_artifact` 2. adımda koşulsuz `cluster_corpus(conn)`
+çağırıyordu; `document_id` yalnızca 1. adımda doğrulanıp 5. adımda
+kaydediliyordu. Üç üretici de (`report.py::_report_title`,
+`mindmap.py::_map_title`, `quiz.py::_quiz_title`) `scope`/`document_id`'yi
+**yalnızca başlık yazmak** için okuyor. Sonuç: `scope="document"` ile üretilen
+artefakt *"dosya.pdf Raporu"* başlığını taşıyor ama içeriği **korpusun
+tamamından** geliyordu.
+
+`FEATURE_SPEC §9.8`'in hat tablosu 1. adımı "Seçim (scope → **chunk kümesi**)"
+diye tanımlıyor. Yani spec doğruydu, kod ondan sapmıştı ve hiçbir test bunu
+yakalamıyordu — testler alanın **taşındığını** doğruluyordu, **etki
+ettiğini** değil. Faz 1'in "boş kutu" kayması ile aynı sınıf hata: bir şeyin
+var olduğunu kanıtlamak, işe yaradığını kanıtlamak değildir.
+
+Seçiciyi bu haliyle göndermek, kullanıcının "yalnızca bu belge" dediği yerde
+ona korpus geneli bir artefaktı belge adıyla vermek olurdu — "sahte sayı
+göstermeme" ilkesinin aynı ihlali. Bu yüzden önce motor düzeltildi.
+
+**Düzeltme.** `topics.cluster_corpus(conn, document_id=...)` süzgeci aldı ve
+`base.generate_artifact` seçili belgeyi kümelemeye geçiriyor. Süzme
+`load_matrix`'in DÖNDÜRDÜĞÜ meta üzerinde yapılıyor, SQL'de değil: matris
+`db_path` anahtarıyla önbellekli ve belge başına ayrı bir önbellek anahtarı
+açmak tek belgelik bir istek için tüm korpusu yeniden okuturdu. `store.py`'ye
+ve önbelleğe **dokunulmadı**.
+
+Rotanın ön kontrolü de istenen kapsamla yapılıyor artık: korpus geneli
+kümelenebiliyor diye tek chunk'lık bir belgeye "yeterli" demek, akışı açıp
+hatayı SSE'nin içinde vermek olurdu. Tek chunk'lık belge artık akış
+açılmadan **422 INSUFFICIENT_CORPUS** alıyor — bu bir kısıtlama değil, dürüst
+davranış: kapsam belgeyse yeterlilik de belge üzerinden ölçülür.
+
+**Belge kimliği yüzeye çıkarıldı.** `/api/documents` yalnızca `filename`
+döndürüyordu, oysa `POST /api/artifacts` tamsayı `document_id` bekliyor —
+arayüzün elinde gönderecek bir kimlik **yoktu**, boşluğun asıl sebebi buydu.
+`DocumentInfo.id` eklendi ve `has_ocr_chunks` ile **birebir aynı desenle**
+türetiliyor (ek sorgu, `store.py`'ye dokunulmadan). Silme yolu hâlâ filename
+ile çalışıyor; kimlik ikiye ayrılmadı.
+
+**Arayüz.** Kapsam seçici üç düğmenin de üstünde, tek yerde: kapsam üretilen
+tipe değil korpusa ait bir karar. Varsayılan "Tüm belgeler" — mevcut davranış
+değişmedi. Seçili belge silinirse kapsam sessizce korpusa döner (alternatif —
+seçimi tutup isteği `DOCUMENT_NOT_FOUND` ile düşürmek — kullanıcıya kendi
+silmiş olduğu belgeyi hata olarak geri gösterirdi). Belge yokken seçici hiç
+render edilmez.
+
+**Reddedilen alternatifler.**
+- `components/ui/select.tsx` primitifi → **reddedildi**: yerel `<select>`
+  klavye gezinmesini, ekran okuyucu desteğini ve mobil yerel listeyi bedelsiz
+  veriyor. Faz 1'in `tabs.tsx` kararının aynısı; `package.json` değişmedi.
+- Korpusu kümeleyip sonra seçili belgenin chunk'larını süzmek →
+  **reddedildi**: kümelerin merkezleri diğer belgelerin chunk'larıyla
+  hesaplanmış olurdu, yani "bu belgenin konuları" değil "korpus konularının
+  bu belgeye düşen kısmı" çıkardı. Sessizce farklı bir şey.
+- `store.load_matrix`'e belge süzgeci eklemek → **reddedildi**: önbellek
+  `db_path` anahtarlı; belge başına anahtar açmak tek belgelik istekte tüm
+  korpusu yeniden okuturdu.
+- Seçiciyi motor düzeltilmeden göndermek → **reddedildi** (yukarıda).
+
+**Ölçüm.** backend **206 passed** (Faz 4 tabanı 201 + 5 yeni test) ·
+`eval/ui_proof.py` **49/49** (önceki taban 42; yedi yeni kontrol kapsam
+seçicinin POST gövdesini ve kaydedilen artefaktın kapsamını ölçüyor) ·
+`web` build + lint temiz · `package.json` ve `requirements.txt` değişmedi.
+
+Yeni testlerin gerçekten kilit olduğu doğrulandı: `base.py`'deki tek satırlık
+düzeltme geçici olarak geri alındığında
+`test_generate_artifact_belge_kapsami_ureticiye_daraltilmis_topics_verir`
+**kırmızıya döndü**, geri konduğunda yeşile.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan

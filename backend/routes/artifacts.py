@@ -213,8 +213,14 @@ async def create_artifact_endpoint(
     # zaten 2. adımda cluster_corpus'u kendi içinde tekrar çağırıyor; bu ön
     # kontrol yalnızca hata sinyalini akış açılmadan önce yakalamak için var
     # (bu korpus ölçeğinde -- ~20 chunk -- tekrar hesaplamanın maliyeti önemsiz).
+    #
+    # Ön kontrol İSTENEN KAPSAMLA yapılır: belge kapsamında korpus geneli
+    # kümelenebiliyor diye "yeterli" demek, tek chunk'lık bir belge için akışı
+    # açıp hatayı akışın içinde vermek olurdu.
     try:
-        cluster_corpus(conn)
+        cluster_corpus(
+            conn, document_id=body.document_id if body.scope == "document" else None
+        )
     except InsufficientCorpusError as exc:
         raise ApiError(422, "INSUFFICIENT_CORPUS", str(exc)) from exc
 

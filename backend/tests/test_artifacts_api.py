@@ -273,6 +273,26 @@ def test_create_artifact_insufficient_corpus_returns_422(ready_client):
     assert not r.headers["content-type"].startswith("text/event-stream")
 
 
+def test_create_artifact_belge_kapsami_yetersizse_422(ready_client, app):
+    """Ön kontrol İSTENEN KAPSAMLA yapılır.
+
+    Korpus geneli rahatça kümelenebilirken tek chunk'lık bir belge seçilirse
+    hata AKIŞ AÇILMADAN gelir. Ön kontrol korpus geneli kalsaydı bu istek
+    "yeterli" sayılır, akış açılır ve hata SSE'nin içinde verilirdi.
+    """
+    conn = app.state.conn
+    _upsert_fake_document(conn, "buyuk.pdf", n_chunks=4)
+    tek_id = _upsert_fake_document(conn, "tek.pdf", n_chunks=1)
+
+    r = ready_client.post(
+        "/api/artifacts",
+        json={"kind": "mindmap", "scope": "document", "document_id": tek_id},
+    )
+    assert r.status_code == 422
+    assert r.json()["code"] == "INSUFFICIENT_CORPUS"
+    assert not r.headers["content-type"].startswith("text/event-stream")
+
+
 def test_create_artifact_streams_stage_then_generation_failed(ready_client, app, monkeypatch):
     """Kriter 3: `stage:selection` ve `stage:clustering` GERÇEKTEN yayılır,
     ardından `event:error` + `GENERATION_FAILED` gelir.

@@ -8,10 +8,13 @@ import {
   SparklesIcon,
 } from "lucide-react"
 
+import * as React from "react"
+
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { studio } from "@/lib/i18n/studio"
-import type { ApiErrorBody, ArtifactSummary } from "@/lib/types"
+import type { ApiErrorBody, ArtifactSummary, DocumentInfo } from "@/lib/types"
+import { useKnowledge } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -28,6 +31,10 @@ import { useArtifacts, type ArtifactKind } from "./use-artifacts"
  *
  * İlerleme `progress.pct` alanından gelir ve 0–100 TAM SAYIDIR; yükleme
  * akışının 0.0–1.0 ölçeğiyle paylaşılan bir yardımcı YAZILMAZ (§9.5).
+ *
+ * Kapsam seçimi (§9.7) üç düğümün de ÜSTÜNDE duruyor, düğüm başına değil:
+ * kapsam üretilen tipe değil korpusa ait bir karar ve üçü için de aynı.
+ * Varsayılan "Tüm belgeler" — mevcut davranış değişmedi.
  */
 export interface StudioPanelProps {
   className?: string
@@ -46,6 +53,19 @@ export function StudioPanel({ className }: StudioPanelProps) {
     openArtifact,
   } = useArtifacts()
 
+  // Kenar çubuğunun store'u PAYLAŞILIYOR: `useKnowledge()` varsayılan kaynakla
+  // aynı örneği döndürür, yani belge listesi için ikinci bir istek atılmaz.
+  const { documents } = useKnowledge()
+
+  const [documentId, setDocumentId] = React.useState<number | null>(null)
+
+  // Seçili belge silinirse kapsam sessizce korpusa döner. Alternatif --
+  // seçimi tutup isteği DOCUMENT_NOT_FOUND ile düşürmek -- kullanıcıya
+  // kendi silmiş olduğu belgeyi hata olarak geri gösterirdi.
+  const documentStillLoaded =
+    documentId !== null && (documents ?? []).some((d) => d.id === documentId)
+  const effectiveDocumentId = documentStillLoaded ? documentId : null
+
   const generating = generatingKind !== null
 
   const errorText = (code: ApiErrorBody["code"] | null): string | null => {
@@ -58,6 +78,8 @@ export function StudioPanel({ className }: StudioPanelProps) {
         return t.errorModelWarming
       case "GENERATION_FAILED":
         return t.errorGenerationFailed
+      case "DOCUMENT_NOT_FOUND":
+        return t.errorDocumentNotFound
       default:
         return t.errorGeneric
     }
@@ -70,12 +92,20 @@ export function StudioPanel({ className }: StudioPanelProps) {
       data-slot="studio-panel"
       className={cn("flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4", className)}
     >
+      <ScopeSelect
+        documents={documents}
+        value={effectiveDocumentId}
+        disabled={generating}
+        onChange={setDocumentId}
+      />
+
       <div className="flex flex-col gap-1.5">
         <GenerateButton
           kind="report"
           label={t.generateReport}
           icon={<FileTextIcon aria-hidden="true" />}
           generatingKind={generatingKind}
+          documentId={effectiveDocumentId}
           onGenerate={generate}
         />
         <GenerateButton
@@ -83,6 +113,7 @@ export function StudioPanel({ className }: StudioPanelProps) {
           label={t.generateMindMap}
           icon={<NetworkIcon aria-hidden="true" />}
           generatingKind={generatingKind}
+          documentId={effectiveDocumentId}
           onGenerate={generate}
         />
         <GenerateButton
@@ -90,6 +121,7 @@ export function StudioPanel({ className }: StudioPanelProps) {
           label={t.generateQuiz}
           icon={<ListChecksIcon aria-hidden="true" />}
           generatingKind={generatingKind}
+          documentId={effectiveDocumentId}
           onGenerate={generate}
         />
       </div>
@@ -102,7 +134,9 @@ export function StudioPanel({ className }: StudioPanelProps) {
           <ProgressValue className="text-caption tabular-nums" />
         </Progress>
       ) : (
-        <p className="text-caption text-text-tertiary">{t.generateHint}</p>
+        <p className="text-caption text-text-tertiary">
+          {effectiveDocumentId === null ? t.generateHint : t.scopeHintDocument}
+        </p>
       )}
 
       {generateFailure !== null && (
@@ -145,13 +179,16 @@ function GenerateButton({
   label,
   icon,
   generatingKind,
+  documentId,
   onGenerate,
 }: {
   kind: ArtifactKind
   label: string
   icon: React.ReactNode
   generatingKind: ArtifactKind | null
-  onGenerate: (kind: ArtifactKind) => Promise<void>
+  /** `null` = korpus kapsamı. */
+  documentId: number | null
+  onGenerate: (kind: ArtifactKind, documentId: number | null) => Promise<void>
 }) {
   const t = useT(studio)
   const isThis = generatingKind === kind
@@ -159,7 +196,7 @@ function GenerateButton({
     <Button
       type="button"
       variant={kind === "report" ? "default" : "secondary"}
-      onClick={() => void onGenerate(kind)}
+      onClick={() => void onGenerate(kind, documentId)}
       // Üretim sürerken ÜÇÜ de kapalı: backend model kilidini üretim boyunca
       // tutuyor, ikinci istek kilidin arkasında donmuş gibi görünürdü (§9.8).
       disabled={generatingKind !== null}
@@ -169,6 +206,67 @@ function GenerateButton({
       {isThis ? <LoaderIcon aria-hidden="true" className="animate-spin" /> : icon}
       {isThis ? t.generating : label}
     </Button>
+  )
+}
+
+/**
+ * Kapsam seçici — §9.7'nin `scope="corpus" | "document"` alanının arayüz
+ * girişi.
+ *
+ * Yerel bir `<select>`: klavye gezinmesi, ekran okuyucu desteği ve mobil
+ * yerel seçim listesi bedelsiz gelir. `components/ui/`'ya bir Select
+ * primitifi EKLENMEDİ -- Faz 1'in `tabs.tsx` kararının aynısı, tek
+ * kullanımlık soyutlama yazılmaz.
+ *
+ * Belge yokken hiç render EDİLMEZ: seçilecek tek şeyin "Tüm belgeler" olduğu
+ * bir seçim kutusu, kullanıcıya olmayan bir seçenek varmış gibi gösterir.
+ */
+function ScopeSelect({
+  documents,
+  value,
+  disabled,
+  onChange,
+}: {
+  /** `null` = liste henüz yüklenmedi. */
+  documents: DocumentInfo[] | null
+  value: number | null
+  disabled: boolean
+  onChange: (documentId: number | null) => void
+}) {
+  const t = useT(studio)
+  const selectId = React.useId()
+
+  if (documents === null || documents.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={selectId} className="text-caption text-text-secondary">
+        {t.scopeLabel}
+      </label>
+      <select
+        id={selectId}
+        data-slot="studio-scope"
+        value={value === null ? "corpus" : String(value)}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(event.target.value === "corpus" ? null : Number(event.target.value))
+        }
+        className={cn(
+          "w-full rounded-lg border border-border-strong bg-surface-raised px-2 py-1.5",
+          "text-body-sm text-foreground",
+          "transition-colors duration-(--duration-hover) ease-(--ease-standard)",
+          "focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          "disabled:cursor-not-allowed disabled:opacity-60"
+        )}
+      >
+        <option value="corpus">{t.scopeCorpus}</option>
+        {documents.map((document) => (
+          <option key={document.id} value={document.id}>
+            {document.filename}
+          </option>
+        ))}
+      </select>
+    </div>
   )
 }
 

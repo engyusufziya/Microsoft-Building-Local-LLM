@@ -44,8 +44,15 @@ async def list_documents(request: Request) -> List[schemas.DocumentInfo]:
     ).fetchall()
     ocr_map = {row["source"]: bool(row["has_ocr"]) for row in ocr_rows}
 
+    # `id` de motorda yok -- has_ocr_chunks'ın AYNI deseniyle türetilir,
+    # store.py'ye dokunulmaz. Artefakt yolunun `document_id`'si buradan gelir
+    # (§9.7): onsuz arayüz scope="document" isteğini kuramıyordu.
+    id_rows = conn.execute("SELECT id, filename FROM documents").fetchall()
+    id_map = {row["filename"]: row["id"] for row in id_rows}
+
     return [
         schemas.DocumentInfo(
+            id=id_map[d["filename"]],
             filename=d["filename"],
             page_count=d["page_count"],
             chunk_count=d["chunk_count"],

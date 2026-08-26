@@ -109,15 +109,23 @@ class ArtifactsStore {
    * Tek seferde TEK üretim: backend zaten model kilidini üretim boyunca
    * tutuyor (§9.8), ikinci bir istek kilidin arkasında bekler ve kullanıcıya
    * donmuş gibi görünürdü.
+   *
+   * `documentId === null` korpus kapsamıdır ve VARSAYILAN olarak kalır --
+   * belge kapsamı ek bir seçim, mevcut davranışın yerine geçen bir şey değil.
    */
-  generate = async (kind: ArtifactKind): Promise<void> => {
+  generate = async (kind: ArtifactKind, documentId: number | null = null): Promise<void> => {
     if (this.snapshot.generatingKind !== null) return
     this.update({ generatingKind: kind, pct: 0, progressDetail: null, generateError: null })
 
     let failed = false
     try {
       await createArtifact(
-        { kind, scope: "corpus" },
+        // `document_id` yalnızca scope="document" iken gönderilir; backend
+        // corpus kapsamında onu zaten yok sayar, ama isteği iki alanın
+        // çeliştiği bir halde göndermemek daha dürüst (§9.7).
+        documentId === null
+          ? { kind, scope: "corpus" }
+          : { kind, scope: "document", document_id: documentId },
         {
           onStage: (event) => this.update({ progressDetail: event.label }),
           onProgress: (event) =>
