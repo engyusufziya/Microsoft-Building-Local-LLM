@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -160,16 +160,34 @@ _FAKE_QUIZ_PAYLOAD = {
 
 
 def _copy_db(source: Path, target_dir: Path) -> Path:
-    """rag.db'yi kopyalar. WAL sidecar'ları KOPYALANMAZ ve varsa silinir.
+    """rag.db'nin TUTARLI bir kopyasını üretir (SQLite backup API'si).
 
-    Ölçülen tuzak: yalnızca ana dosyayı kopyalamak yetmiyor -- hedefte önceki
-    koşumdan kalmış bir `-wal` dosyası varsa SQLite onu replay edip silinmiş
-    sanılan artefaktları geri getiriyor ve test yanlış veriye bakıyor.
+    Ölçülen tuzak 1: hedefte önceki koşumdan kalmış bir `-wal` dosyası varsa
+    SQLite onu replay edip silinmiş sanılan artefaktları geri getiriyor ve
+    test yanlış veriye bakıyor. Bu yüzden hedefin sidecar'ları önce silinir.
+
+    Ölçülen tuzak 2 (SONRADAN bulundu): `shutil.copyfile` yalnızca ANA dosyayı
+    kopyalıyordu ve KAYNAKTA bekleyen bir WAL varsa onun içeriği kopyaya hiç
+    girmiyordu -- yani koşum BAYAT bir korpusu ölçüyordu. Gerçekten görüldü:
+    checkpoint öncesi kopya 8 belge, sonrası 1 belge gösterdi (PROJE_DURUMU.md,
+    "Bu turun kapı sayıları").
+
+    Çözüm `PRAGMA wal_checkpoint` DEĞİL -- o, kullanıcının üretim
+    veritabanına yazardı. `sqlite3.Connection.backup` kaynağı salt okunur
+    açar, WAL dahil tutarlı bir anlık görüntü üretir ve kaynağa DOKUNMAZ.
     """
     target = target_dir / "ui_proof.db"
     for suffix in ("", "-wal", "-shm"):
         Path(str(target) + suffix).unlink(missing_ok=True)
-    shutil.copyfile(source, target)
+    src = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    try:
+        dst = sqlite3.connect(target)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
     return target
 
 

@@ -900,7 +900,17 @@ atıyor — gerekçesi hedefteki bayat WAL'in replay edilmesini önlemek. Ama
 kaynakta bekleyen bir WAL varsa aynı kural koşumun **bayat bir korpusu**
 ölçmesine yol açıyor: checkpoint öncesi 8 belge, sonrası 1 belge görüldü.
 `rag.db` ölçüme girmiyor (eval `eval/eval.db` kullanıyor) ve bu turda hiçbir
-sonucu etkilemedi; kayda geçiriliyor, düzeltilmedi.
+sonucu etkilemedi.
+
+**Sonradan düzeltildi.** `_copy_db` artık `shutil.copyfile` yerine SQLite'ın
+`Connection.backup` API'sini kullanıyor: kaynağı salt okunur açıyor, WAL dahil
+tutarlı bir anlık görüntü üretiyor ve kaynağa DOKUNMUYOR. `PRAGMA
+wal_checkpoint` alternatifi reddedildi -- kullanıcının üretim veritabanına
+yazardı. Üç regresyon testi eklendi (`backend/tests/test_ui_proof_copy.py`,
+model yüklemez, tarayıcı açmaz) ve eski `shutil.copyfile` haline dönüldüğünde
+bekleyen-WAL testinin kırmızıya döndüğü doğrulandı. Düzeltmeden sonraki
+koşum korpusu artık DOĞRU raporluyor: 1 belge / 41 chunk (önce 8 belge
+görüyordu), `ui_proof` **49/49** PASS.
 
 ## Entailment katmanı — deney yapıldı ve REDDEDİLDİ
 
