@@ -4,8 +4,22 @@ numpy>=2.0.0
 streamlit>=1.40.0
 
 # v2 backend (Faz 4) — Streamlit üzerinden aynı motoru HTTP'ye açan ince
-# katman. uvicorn/starlette/python-multipart/pydantic zaten kuruluydu.
+# katman.
 fastapi>=0.141.0
+
+# uvicorn ve python-multipart BEYAN EDİLMEMİŞTİ; yorumda "zaten kuruluydu"
+# yazıyordu ve bu doğruydu ama SEBEBİ yanlıştı: ikisi de streamlit'in
+# bağımlılığı olarak geliyor, fastapi'nin değil (fastapi yalnızca
+# annotated-doc/pydantic/starlette/typing-extensions'a bağlı; uvicorn
+# `fastapi[standard]` ekstrasında).
+#
+# Yani v2 ürününün sunucusu ve çok parçalı form ayrıştırıcısı, v1
+# arayüzünün bağımlılığından geliyordu. Streamlit bu listeden çıkarıldığı
+# gün README'nin `uvicorn backend.main:app` komutu ve PDF yükleme yolu
+# sessizce kırılırdı. Kurulan paket kümesi DEĞİŞMİYOR -- yalnızca
+# ürünün kendi bağımlılığı artık kendi adına yazılı.
+uvicorn>=0.52.1
+python-multipart>=0.0.32
 
 # Taranmış PDF sayfaları için OCR (macOS Vision). İsteğe bağlı: kurulu değilse
 # metin katmanı olmayan sayfalar atlanır ve kullanıcıya bildirilir.

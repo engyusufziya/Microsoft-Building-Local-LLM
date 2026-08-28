@@ -1003,6 +1003,28 @@ Gelecekte denenebilecek ama BU turda denenmeyen yol: doğrulayıcı olarak
 biçim sözleşmesine uyabilen ayrı bir model. Foundry Local kataloğunda böyle
 bir model olup olmadığı ölçülmedi; ölçülmeden önerilmiyor.
 
+## v2'nin çalışma anı bağımlılıkları kendi adına yazıldı
+
+`requirements.txt` yorumu "uvicorn/starlette/python-multipart/pydantic zaten
+kuruluydu" diyordu. İfade DOĞRUYDU ama gerekçesi yanlıştı: `pip show`
+ölçümü ikisinin de **streamlit'in** bağımlılığı olarak geldiğini gösterdi,
+fastapi'nin değil (`fastapi` yalnızca annotated-doc/pydantic/starlette/
+typing-extensions'a bağlı; uvicorn `fastapi[standard]` ekstrasında).
+
+Yani v2 ürününün HTTP sunucusu ve PDF yüklemesinin çok parçalı form
+ayrıştırıcısı, **v1 arayüzünün** bağımlılığından geliyordu. Streamlit
+listeden çıkarıldığı gün README'nin `uvicorn backend.main:app` komutu ve
+`POST /api/documents` yolu sessizce kırılırdı -- ve hiçbir test bunu
+yakalamazdı, çünkü geliştirme ortamında paketler zaten kurulu.
+
+`uvicorn>=0.52.1` ve `python-multipart>=0.0.32` açıkça beyan edildi. Kurulan
+paket kümesi **değişmiyor** (ikisi de zaten geliyordu); değişen tek şey,
+ürünün kendi bağımlılığının artık kendi adına yazılı olması.
+
+Bu, Studio fazlarının "requirements.txt değişmedi" ölçümleriyle çelişmez: o
+iddialar ilgili fazın yeni bir çalışma anı bağımlılığı EKLEMEDİĞİNİ söylüyor,
+listenin kalıcı olarak donduğunu değil.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
