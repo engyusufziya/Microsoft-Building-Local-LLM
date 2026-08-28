@@ -902,6 +902,97 @@ kaynakta bekleyen bir WAL varsa aynı kural koşumun **bayat bir korpusu**
 `rag.db` ölçüme girmiyor (eval `eval/eval.db` kullanıyor) ve bu turda hiçbir
 sonucu etkilemedi; kayda geçiriliyor, düzeltilmedi.
 
+## Entailment katmanı — deney yapıldı ve REDDEDİLDİ
+
+Sadakat kapısının bilinen sınırını (kapı *grounding* ölçer, *entailment*
+değil) üçüncü bir katmanla daraltmak denendi: rapora girecek her cümleyi,
+bağlandığı bölümün kaynak metnine karşı `qwen2.5-7b`'ye doğrulatmak.
+`FIDELITY_MIN_SCORE` yükseltilmedi, `bind_claims` değiştirilmedi.
+
+**Deney reddedildi.** Kod geri alındı; kalan tek şey bu kayıt.
+
+### Ret kriteri KODDAN ÖNCE yazılmıştı
+
+1. Korpus sözcük dağarcığıyla yazılmış, korpusla çelişen bir cümle rapordan
+   **düşürülecek**.
+2. `report_trap.py`'nin koruduğu **44 iddia 44 kalacak**.
+3. `fidelity_trap.py` **PASS kalacak** (0.5487 / grounded).
+4. Süre artışı ölçülecek.
+
+### Band kurulamayacağı ÖNCE ölçüldü
+
+`eval.db`'deki iki gerçek rapor koşumunun 88 korunan iddiası şu skorlara
+dağılıyor: 0.49→4 · 0.56→20 · 0.64→14 · 0.78→24 · 0.81→26. Tuzağın 0.5487'si
+**20 gerçek iddianın bulunduğu kovanın içinde** — `MIN_SCORE`
+kalibrasyonundaki örtüşmenin birebir aynısı. Yani "riskli band" diye bir şey
+yok; katman korunan TÜM iddialara bakmak zorundaydı. Bu ölçüm hâlâ geçerli ve
+gelecekteki her band önerisini baştan çürütüyor.
+
+### Tuzak: korpusun KENDİ sözcükleriyle yazılmış çelişki
+
+Faz 2'nin sözcüksel katmanı `fidelity_trap`'in tuzağını yakalıyor, ama
+**entailment sayesinde değil**: tuzakta korpusta hiç geçmeyen iki özel ad var
+("GPT-4", "OpenAI"). Arkada kalan boşluğu ölçmek için özel adsız bir çelişki
+yazıldı:
+
+- **Tuzak:** "Embedding vektörleri veritabanında saklanmaz; her sorguda
+  yeniden hesaplanır." (korpus bunun TERSİNİ söylüyor)
+- **Kontrol:** "Embedding vektörleri belge parçalarıyla birlikte bir tabloda
+  saklanır." (çelişmiyor — düşmemeli)
+
+İlk iki katmanın bu boşluğu gerçekten göremediği **ölçüldü**: tuzak
+**0.7389 / grounded**, `unverified_terms` **[]** (katman sessiz). Kontrol
+0.7362 / grounded.
+
+### İki koşum, iki farklı başarısızlık kipi
+
+| Bağlam | Doğrulayıcının ham cevabı | Sonuç |
+|---|---|---|
+| 1 chunk (bağlanan) | `1: HAYIR\n2: HAYIR` | Tuzak düştü ama **kontrol de düştü** — yanlış pozitif |
+| 5 chunk (belgelerin tamamı) | `2\nEvet` | Biçim çöktü → **fail-open**, katman hiçbir şey düşürmedi |
+
+**İlk koşumun kurgusu yanlıştı ve düzeltildi** (kayda geçiriliyor, §1.6):
+bağlam olarak yalnızca bağlanan tek chunk verilmişti. Model haksız değildi —
+kontrolü destekleyen cümle belge_04'ün BAŞKA bir chunk'ındaydı, yani gördüğü
+bağlama göre "HAYIR" **doğru** cevaptı. Rapor hattında katman bölümün tüm
+bağlam chunk'larını alır; tuzak da onu yansıtmalıydı.
+
+Ama düzeltilmiş kurgu daha kötü bir şey gösterdi: 5 chunk'lık bağlamda model
+istenen satır biçimini (`1: EVET`) **tamamen bıraktı** ve `2\nEvet` yazdı.
+Ayrıştırıcı bunu okuyamadığı için katman fail-open davrandı — yani **sessizce
+kapandı**.
+
+### Neden reddedildi
+
+Kriter 1 temsili kurguda sağlanmadı. Kriter 2 (`report_trap` 44→44)
+**ölçülmedi**: kriter 1 zaten kararı verdiğinden 4 dakikalık koşum
+harcanmadı — bu, kriter 2'nin sağlandığı anlamına GELMEZ.
+
+Asıl gerekçe tek bir başarısız kriterden daha ağır: **fail-open bir katman,
+güvenilmez olduğunda bunu göstermez.** Rapor tıpatıp aynı görünür, `dropped`
+listesi boştur, kullanıcı üçüncü bir savunmanın çalıştığını sanır. Hiç
+katman olmamasından daha kötüdür, çünkü var olmayan bir güvenceyi var gibi
+gösterir. Fail-closed alternatifi de reddedildi: doğrulayıcı sustuğunda
+raporu sessizce boşaltırdı (mindmap'in §11.5 kararının aynı gerekçesi).
+
+Biçim çöküşü bu projede **ikinci kez** ölçülüyor: Faz 3'te de prompt'a
+eklenen "cümle düzeni kullan" kuralı ölçülmüş ve işe yaramamıştı
+(`_entity_like` docstring'i, FEATURE_SPEC §11.4). O zaman çözüm prompt'u
+zorlamak değil, kararı **koda** taşımaktı. Aynı ders burada da geçerli:
+`qwen2.5-7b`'ye biçim sözleşmesi dayatılamıyor, dolayısıyla üzerine bir kapı
+kurulamıyor.
+
+### Bilinen sınır olarak DURUYOR
+
+Entailment boşluğu kapanmadı ve gizlenmiyor. Telafi hâlâ Faz 2'nin sözcüksel
+katmanı: ürün, özel ad taşıyan çelişkili iddiayı **yayımlamıyor**. Özel ad
+taşımayan çelişki için ölçülmüş bir savunma **yok** — bu, `fidelity_trap`'in
+pinlediğinden daha geniş bir sınırdır ve artık sayılarıyla kayıtlı.
+
+Gelecekte denenebilecek ama BU turda denenmeyen yol: doğrulayıcı olarak
+biçim sözleşmesine uyabilen ayrı bir model. Foundry Local kataloğunda böyle
+bir model olup olmadığı ölçülmedi; ölçülmeden önerilmiyor.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -911,7 +1002,11 @@ Bu bakım turunda kapananlar: MIT lisansı · model yüklemeyen kapıların CI'a
 devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
 (motor düzeltmesi + arayüz girişi) · `USE_QUERY_INSTRUCTION` A/B'si.
 
+Bu turda DENENİP REDDEDİLEN: entailment katmanı (yukarıda, sayılarıyla).
+
 Açıkta kalan, gerekçesi kayıtlı işler:
+- **Entailment boşluğu**, artık daha geniş biçimde kayıtlı: özel ad taşımayan
+  çelişki için ölçülmüş savunma yok. LLM doğrulayıcı denendi ve reddedildi.
 - **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;
   bu ölçekte (20–40 chunk) ölçülmüş getirisi yok (23/23 → 22/23).
 - **Data Table artefaktı** (STUDIO_PLAN §8): hat üç tiple kanıtlandı,

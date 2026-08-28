@@ -209,6 +209,12 @@ Documented rather than hidden — this is the project's core discipline.
   topic but contradicts it ("this system uses GPT-4 and sends data to OpenAI servers") still scores
   `0.5487 / grounded`. Compensated by a second, lexical layer that **removes such claims from the
   published artifact** — the gate's limit is pinned by `eval/fidelity_trap.py` so it cannot drift.
+  That compensation is lexical, so it only catches contradictions carrying a proper noun absent from
+  the corpus. A contradiction written entirely in corpus vocabulary (measured: `0.7389 / grounded`,
+  lexical layer silent) has **no measured defence**. An LLM-verifier third layer was built and
+  **rejected** — with a one-chunk context it flagged a supported sentence as false, and with a
+  five-chunk context `qwen2.5-7b` abandoned the required output format entirely, so the layer
+  silently disabled itself. Numbers and reasoning: `PROJE_DURUMU.md`.
 - **Hardware bound:** 16 GB RAM; concurrent model runs will OOM. Foundry Local GPU model variants
   are assumed. <!-- TODO: Confirm behaviour on Windows/CUDA hosts; only macOS/M4 has been measured. -->
 - **`expected_keywords` in the evaluation harness reports loosely** (a correct answer can look
