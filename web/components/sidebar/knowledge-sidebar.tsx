@@ -14,7 +14,6 @@ import { DocumentList } from "./document-list"
 import { DocumentUploader } from "./document-uploader"
 import { failureText } from "./error-messages"
 import type { KnowledgeSource } from "./knowledge-source"
-import { SystemStatus } from "./system-status"
 import { useKnowledge } from "./use-knowledge"
 
 type SidebarTabKey = "sources" | "outputs"
@@ -117,7 +116,6 @@ function KnowledgeSidebar({
     documentsLoading,
     documentsFailure,
     health,
-    healthFailure,
     deletingFilename,
     deleteFailure,
     refreshDocuments,
@@ -158,9 +156,6 @@ function KnowledgeSidebar({
 
   const documentsErrorText = documentsFailure
     ? failureText(documentsFailure, t, tc)
-    : undefined
-  const healthErrorText = healthFailure
-    ? failureText(healthFailure, t, tc)
     : undefined
   const deleteErrorText = deleteFailure
     ? `${t.deleteFailed} ${failureText(deleteFailure.failure, t, tc)}`
@@ -303,13 +298,6 @@ function KnowledgeSidebar({
           documentCount={documents?.length ?? null}
           pageCount={totals?.pages ?? null}
           chunkCount={totals?.chunks ?? null}
-        />
-        <SystemStatus
-          health={health}
-          errorText={healthErrorText}
-          onRetry={() => {
-            void refreshAll()
-          }}
         />
       </div>
     </div>

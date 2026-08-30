@@ -15,3 +15,10 @@
 pytest>=9.1
 
 playwright>=1.40
+
+# Gömülü fontların Türkçe kapsamını denetleyen regresyon testi için
+# (backend/tests/test_font_coverage.py). Faz 1 Archivo'ya latin+latin-ext
+# birleştirmesini yapmış ama JetBrains Mono'ya yapmamıştı; sonuç, mono
+# metinlerde "ş/ğ/İ" harflerinin sistem fontuna düşmesiydi (ölçüldü).
+# Ürün yolunda HİÇ import edilmez -- font birleştirme dev-zamanı bir iş.
+fonttools>=4.60

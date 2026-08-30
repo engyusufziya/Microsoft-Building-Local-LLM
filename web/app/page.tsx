@@ -2,19 +2,33 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { BarChart3Icon } from "lucide-react"
+import { BarChart3Icon, XIcon } from "lucide-react"
 
 import { ChatPanel, type ChatLockReason } from "@/components/chat"
 import { CitationDrawer } from "@/components/inspector"
 import { LanguageToggle } from "@/components/language-toggle"
 import { AppShell, useAppShell } from "@/components/shell"
-import { KnowledgeSidebar, useKnowledge } from "@/components/sidebar"
+import {
+  EmptyWorkspace,
+  KnowledgeSidebar,
+  SettingsPanel,
+  useKnowledge,
+} from "@/components/sidebar"
 import { ArtifactViewer, StudioPanel, useArtifacts } from "@/components/studio"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { common } from "@/lib/i18n/common"
+import { sidebar as sidebarStrings } from "@/lib/i18n/sidebar"
 import { metrics as metricsStrings } from "@/lib/i18n/metrics"
 
 function Brand() {
@@ -30,11 +44,77 @@ function Brand() {
   )
 }
 
+/**
+ * Başlıktaki motor çipi + salt-okunur ayarlar çekmecesi (§13.5 Faz 5).
+ *
+ * Mockup'ın çipi "qwen2.5-7b · 18 tok/s · 6.2 GB" yazıyordu; tok/s ve RAM
+ * cihaz telemetrisi ve §13.6'da kapsam dışı bırakıldı. Çip yalnızca
+ * BACKEND'İN GERÇEKTEN BİLDİĞİNİ taşıyor: durum noktası + sohbet modeli.
+ */
+function EngineChip() {
+  const t = useT(sidebarStrings)
+  const { health } = useKnowledge()
+  const [open, setOpen] = React.useState(false)
+
+  const tone =
+    health === null
+      ? "bg-text-tertiary"
+      : health.status === "ready"
+        ? "bg-success"
+        : health.status === "warming"
+          ? "bg-warning"
+          : "bg-danger"
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-label={t.openSettings}
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true" className={cn("size-1.5 shrink-0", tone)} />
+        <span className="font-mono text-mono">
+          {health?.chat_model ?? "—"}
+        </span>
+      </Button>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          data-print="hide"
+          side="right"
+          showCloseButton={false}
+          className="gap-0 p-0 data-[side=right]:w-[86vw] data-[side=right]:sm:max-w-100"
+        >
+          <SheetHeader className="flex-row items-center justify-between gap-2 border-b-2 border-border p-3">
+            <SheetTitle>{t.settingsTitle}</SheetTitle>
+            <SheetClose
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t.closeSettings}
+                />
+              }
+            >
+              <XIcon />
+            </SheetClose>
+          </SheetHeader>
+          <SettingsPanel />
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
 function HeaderActions() {
   const c = useT(common)
   const m = useT(metricsStrings)
   return (
     <div className="flex items-center gap-1">
+      <EngineChip />
       <Tooltip>
         <TooltipTrigger
           render={
@@ -140,6 +220,13 @@ export default function Home() {
       }
       chat={<MainSlot lock={lock} documentCount={documents?.length} />}
       inspector={<CitationDrawer />}
-    />
+    >
+      {/* Korpus boşken tam-ekran ilk açılış (§13.5 Faz 5). `documents === null`
+          iken GÖSTERİLMEZ: liste henüz yüklenmedi, o anda basmak açılışta bir
+          an "boş" yanıp sönmesine yol açardı. */}
+      {documents !== null && documents.length === 0 && (
+        <EmptyWorkspace onUploadingChange={setUploading} />
+      )}
+    </AppShell>
   )
 }

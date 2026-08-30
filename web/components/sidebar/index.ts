@@ -18,3 +18,5 @@ export {
   toFailure,
   type Failure,
 } from "./error-messages"
+export { SettingsPanel, type SettingsPanelProps } from "./settings-panel"
+export { EmptyWorkspace, type EmptyWorkspaceProps } from "./empty-workspace"

@@ -293,7 +293,11 @@ function DocumentUploader({
   const numberLocale = locale === "tr" ? "tr-TR" : "en-US"
 
   return (
-    <section aria-label={t.uploadArea} className={cn("flex flex-col gap-2", className)}>
+    <section
+      data-slot="document-uploader"
+      aria-label={t.uploadArea}
+      className={cn("flex flex-col gap-2", className)}
+    >
       <div
         data-dragging={dragging || undefined}
         aria-disabled={disabled || undefined}

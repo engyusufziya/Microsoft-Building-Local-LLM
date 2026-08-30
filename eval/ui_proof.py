@@ -913,6 +913,73 @@ def main(argv=None) -> int:
             check(f"{label} ({width}px): alıntı çekmecesi kalıcı değil",
                   page.locator('[data-slot="retrieval-inspector"]').count() == 0)
 
+        # ---------------------------------------------------------------
+        # Faz 5 — salt-okunur ayarlar + tam-ekran boş durum (§13.5)
+        # ---------------------------------------------------------------
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.wait_for_function(
+            "() => document.querySelector('[data-slot=\"app-shell\"]')"
+            ".dataset.breakpoint === 'desktop'"
+        )
+
+        print("\n--- Ayarlar: salt-okunur, backend'den (§13.5) ---")
+        live_health = json.loads(urllib.request.urlopen(f"{BASE}/api/health").read())
+        page.get_by_role("button", name="Ayarları aç").click()
+        page.wait_for_selector('[data-slot="settings-panel"]')
+        settings = page.locator('[data-slot="settings-panel"]')
+        settings_text = settings.inner_text()
+
+        # Sayılar UI'da LİTERAL değil; ekranda göreni backend'in söylediğiyle
+        # karşılaştırıyoruz. Eşleşmezse ya bir literal sızmış ya da bağ kopmuş.
+        check("eşik backend'deki değerle aynı",
+              f"{live_health['min_score']:.2f}" in settings_text,
+              f"health={live_health['min_score']} | panel={settings_text[:90]}")
+        check("getirilen bölüm sayısı backend'den",
+              str(live_health["top_k"]) in settings_text)
+        check("modeller gösteriliyor",
+              live_health["chat_model"] in settings_text
+              and live_health["embedding_model"] in settings_text)
+        # §13.6: cihaz telemetrisi kapsam DIŞI. Mockup'ta vardı, bizde yok --
+        # ve olmadığı ölçülüyor ki sonradan sessizce sızmasın.
+        check("cihaz telemetrisi YOK (§13.6)",
+              "tok/s" not in settings_text and "GPU" not in settings_text,
+              settings_text.replace("\n", " | ")[:120])
+        # §13.0: ayarlar salt-okunur. Değiştirilebilir hiçbir denetim olmamalı.
+        check("panelde değiştirilebilir denetim yok (salt-okunur)",
+              settings.locator("input, select, [role='switch'], [role='slider']").count() == 0)
+        page.screenshot(path=str(shots / "settings.png"), full_page=True)
+        page.get_by_role("button", name="Ayarları kapat").click()
+
+        print("\n--- Boş korpus: tam-ekran ilk açılış (§13.5) ---")
+        # Bu geçiş BUGÜNE KADAR HİÇ ölçülmemişti: ui_proof her zaman dolu bir
+        # korpusla koşuyordu, yani boş durum ekranı kanıtın dışındaydı.
+        # EN SONA konur: belgeleri siliyor.
+        check("boş durum korpus doluyken GÖRÜNMÜYOR",
+              page.locator('[data-slot="empty-workspace"]').count() == 0)
+        for document in json.loads(urllib.request.urlopen(f"{BASE}/api/documents").read()):
+            request = urllib.request.Request(
+                f"{BASE}/api/documents/{urllib.parse.quote(document['filename'])}",
+                method="DELETE",
+            )
+            urllib.request.urlopen(request).read()
+
+        page.reload(wait_until="networkidle")
+        page.wait_for_selector('[data-slot="empty-workspace"]', timeout=15000)
+        empty = page.locator('[data-slot="empty-workspace"]')
+        box = empty.bounding_box()
+        viewport = page.viewport_size
+        check("boş durum TAM EKRAN",
+              box is not None and box["x"] == 0 and box["y"] == 0
+              and box["width"] == viewport["width"], str(box))
+        check("yükleme alanı boş durumun İÇİNDE",
+              empty.locator('[data-slot="document-uploader"]').count() == 1)
+        check("üç adım anlatısı var",
+              all(step in empty.inner_text() for step in ("01", "02", "03")))
+        # Mockup'ta vardı, ALINMADI -- olmadığı ölçülüyor.
+        check("'Örnek defteri aç' YOK (kapsam dışı)",
+              "Örnek defteri" not in empty.inner_text())
+        page.screenshot(path=str(shots / "empty.png"), full_page=True)
+
         print("\n--- Offline ve konsol denetimi ---")
         check("konsol hatası yok", not console_errors, str(console_errors[:3]))
         check("harici ağ isteği YOK (AGENTS.md §1.2)", not external, str(external[:3]))

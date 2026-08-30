@@ -39,6 +39,13 @@ export interface AppShellProps {
   /** Kontrollü kullanım: inspector drawer'ı dışarıdan yönetmek için. */
   inspectorOpen?: boolean
   onInspectorOpenChange?: (open: boolean) => void
+  /**
+   * Kabuğun TAMAMININ üstüne çıkan içerik (§13.5 Faz 5 tam-ekran boş durum).
+   * Slot olarak alınır: `AppShell` ne gösterileceğini bilmez, yalnızca
+   * provider'ın İÇİNDE render edileceğini garanti eder — böylece içerik
+   * `useAppShell()` ve store'ları kullanabilir.
+   */
+  children?: React.ReactNode
   className?: string
 }
 
@@ -71,6 +78,7 @@ function AppShell({
   inspectorTitle,
   inspectorOpen: inspectorOpenProp,
   onInspectorOpenChange,
+  children,
   className,
 }: AppShellProps) {
   const t = useT(sidebarText)
@@ -244,6 +252,8 @@ function AppShell({
             </div>
           </SheetContent>
         </Sheet>
+
+        {children}
       </div>
     </AppShellProvider>
   )

@@ -2618,9 +2618,65 @@ alınmadı: çekmece sohbetin retrieval anlık görüntüsüne bağlı
 yolu — düzen işi değil. Yapraklar sayfa etiketiyle gösteriliyor, tıklanabilir
 değil.
 
-**Faz 5 — Boş durum + ayarlar (salt-okunur)**
-- [ ] Boş durum Modernist; ayarlar `MIN_SCORE`/topK'yı backend'den **salt-okunur** gösterir
-- [ ] `MIN_SCORE` literal grep'i **boş** · build + lint · `ui_proof` PASS
+**Faz 5 — Boş durum + ayarlar (salt-okunur)** — plan revize edildi
+
+Analizde çıkan altı nokta, kriterler yazılmadan önce bilinmiyordu:
+
+1. **"Ayarlar salt-okunur gösterir" büyük ölçüde ZATEN YAPILMIŞ.**
+   `SystemStatus` (sidebar altbilgisi) `chat_model`, `embedding_model`,
+   `top_k`, `min_score` ve OCR durumunu `/api/health`'ten okuyup gösteriyor;
+   hiçbiri literal değil. Faz 5'in işi yeni bir yetenek eklemek değil,
+   mockup'ın **yerleşimine** taşımak. Değerler İKİ YERE KOPYALANMAZ —
+   `SystemStatus` çekmeceye TAŞINIR, yoksa aynı sayılar iki yerde yaşar ve
+   ayrışabilir.
+2. **Mockup'ın cihaz telemetrisi (18 tok/s · 6.2 GB RAM · %41 GPU)
+   §13.6'da zaten REDDEDİLMİŞTİ.** Çekmecenin "Cihaz" bölümü kurulmaz;
+   başlıktaki çip yalnızca model adı + durum noktası taşır.
+3. **Mockup'ın OCR anahtarı MUTABLE bir toggle.** §13.0 ayarları salt-okunur
+   sayıyor ve `ocr_available` zaten bir *ayar* değil, host hakkında bir
+   *olgu*. Anahtar değil, durum olarak basılır.
+4. **İlerleme çubukları: biri dürüst, biri değil.** `min_score` 0–1 aralığında
+   gerçek bir ölçek olduğu için çubukla gösterilebilir. `top_k = 4`'ü %32
+   dolu göstermek ise **var olmayan bir tavan** (yaklaşık 12.5) uydurmak
+   olurdu. Çubuk yalnızca eşikte kullanılır.
+5. **Boş durum mockup'ta TAM EKRAN** (`inset:0`), sidebar dahil kaplıyor.
+   Bu alınır — ama kendi yükleyicisini kurarak DEĞİL, var olan
+   `DocumentUploader` bileşenini render ederek: iki ayrı yükleme yolu
+   olmamalı. §5 matrisinin "Belge yok" satırı buna göre güncellenir.
+6. **"Örnek defteri aç" REDDEDİLDİ.** Depoda paketlenmiş bir örnek korpus
+   yok; eklemek yeni bir yetenek, düzen işi değil (§13.0 kapsamı).
+
+**Tamamlanma kriterleri (revize)** ✅ (kapandı)
+- [x] Boş durum tam-ekran Modernist; yükleme yolu TEK (`DocumentUploader`
+      bileşeni render ediliyor, ikinci bir yükleyici kurulmadı)
+- [x] Ayarlar çekmecesi: Modeller + Erişim (`top_k`, `min_score`) + OCR,
+      hepsi `/api/health`'ten, **salt-okunur**; telemetri YOK, toggle YOK —
+      ikisinin de yokluğu `ui_proof`'ta ÖLÇÜLÜYOR
+- [x] `SystemStatus` çekmeceye taşındı (kopyalanmadı); ısınma/hata durumu ve
+      yeniden dene düğmesi kayıpsız
+- [x] Literal denetimi temiz: her okuma `health.` / `data.config.` üzerinden,
+      tek bir ham eşik yok
+- [x] `ui_proof` boş korpus geçişini de ölçüyor (96 kontrol, PASS) ·
+      `pytest` **229 passed** · build + lint 0 · `eval 23/23`
+
+**Faz 5'in açığa çıkardığı iki hata — ikisi de faz kapsamı dışından**
+
+1. **`chunks_fts` şema kayması (veri bütünlüğü).** Boş korpus geçişi belge
+   silmeyi gerektirdi ve silme `database disk image is malformed` ile
+   patladı. Kök neden: `chunks_fts` bir zamanlar external-content
+   (`content='chunks'`) kurulmuştu; şema kararı değişince
+   `CREATE VIRTUAL TABLE IF NOT EXISTS` var olan veritabanlarında HİÇBİR ŞEY
+   YAPMADI, yani `rag.db` eski tanımla kaldı. `rag/store.py` artık göç
+   ediyor (`_migrate_fts_schema`), 5 test kırmızı→yeşil. Aynı kayma, şema
+   yorumunun anlattığı "hibrit retrieval sessizce dense-only'ye düşüyor"
+   bozulmasını da hâlâ yürürlükte tutuyordu; göç ikisini birden kapattı.
+2. **Mono fontta Türkçe glifler YOKTU.** Faz 1 Archivo'ya `latin` +
+   `latin-ext` birleştirmesini yaptı, **JetBrains Mono'ya yapmadı**:
+   `ş Ş İ ğ Ğ` hiç yoktu ve tarayıcı sistem fontuna düşüyordu. Boş durum
+   ekranındaki "çevrimdışı" satırında gözle görüldü, `fontTools` ile
+   ölçüldü, aynı birleştirme uygulandı. Regresyon koruması eklendi
+   (`backend/tests/test_font_coverage.py`): depoya gömülen HER woff2 artık
+   Türkçe alfabenin tamamını taşımak zorunda.
 
 **Faz 6 — Kapanış**
 - [ ] `/onizleme` prototipi kaldırıldı; karar kaydı `PROJE_DURUMU.md`'de

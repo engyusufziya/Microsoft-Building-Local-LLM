@@ -1377,6 +1377,76 @@ karşılaştırmanın gösterildiğini ölçen yeni bir kontrol eklendi ve yarg�
 sonucun ekran görüntüsü artık kanıt çıktılarına kaydediliyor
 (`short-answer-result.png`).
 
+## Modernist yeniden tasarım — Faz 5 (boş durum + salt-okunur ayarlar)
+
+Faz 5'in kriterleri yazıldığında bilinmeyen bir şey vardı: **"ayarlar
+salt-okunur gösterir" işinin büyük kısmı zaten yapılmıştı.** `SystemStatus`
+`chat_model`, `embedding_model`, `top_k`, `min_score` ve OCR durumunu
+`/api/health`'ten okuyup gösteriyordu; hiçbiri literal değildi. Faz 5'in işi
+yeni bir yetenek eklemek değil, mockup'ın yerleşimine **taşımaktı** — ve
+taşırken kopyalamamaktı: aynı sayılar iki yerde yaşasaydı ayrışabilirlerdi.
+
+Mockup'tan alınmayanlar ve gerekçeleri: **cihaz telemetrisi** (tok/s · RAM ·
+GPU) §13.6'da zaten reddedilmişti ve backend böyle bir ölçüm üretmiyor —
+bölüm hiç açılmadı, yokluğu `ui_proof`'ta ölçülüyor. **OCR anahtarı** mutable
+bir toggle'dı; `ocr_available` bir ayar değil host hakkında bir olgu, durum
+olarak basılıyor. **Örnek defteri** reddedildi: depoda paketlenmiş örnek
+korpus yok, eklemek düzen işi değil yeni yetenek olurdu.
+
+İlerleme çubuğu konusunda ikiye ayrıldı: `min_score` 0–1 aralığında **gerçek
+bir ölçek** olduğu için çubukla gösteriliyor; `top_k = 4`'ü mockup'taki gibi
+%32 dolu göstermek ise **var olmayan bir tavan** (yaklaşık 12.5) uydurmak
+olurdu — orada çubuk yok, sayı var.
+
+### Faz 5'in açığa çıkardığı iki hata, ikisi de faz kapsamı dışından
+
+**1. `chunks_fts` şema kayması — veri bütünlüğü hatası.** Boş korpus geçişini
+ölçmek belge silmeyi gerektirdi ve silme `sqlite3.DatabaseError: database
+disk image is malformed` ile patladı.
+
+Kök neden ölçüldü: `chunks_fts` bir zamanlar external-content
+(`content='chunks'`) olarak kurulmuştu. Şema kararı sonradan bağımsız tabloya
+çevrildi — ama `CREATE VIRTUAL TABLE IF NOT EXISTS` ve
+`CREATE TRIGGER IF NOT EXISTS` **var olan bir veritabanında hiçbir şey
+yapmaz**. Yani mevcut veritabanları hiç göç etmedi; depodaki `rag.db` dahil
+eski tanımla yaşamaya devam etti. Eski silme tetikleyicisi FTS5'in `'delete'`
+komutunu kullanıyor ve indekste karşılığı olmayan bir satırı geri sarmaya
+çalışınca veritabanını bozuk sayıyor.
+
+İkinci katman daha sinsi: aynı şema yorumunun *anlattığı* sessiz bozulma —
+external-content modda `COUNT(*)` gerçek indeks satırlarını değil `chunks`'ı
+sayıyor, bu yüzden `_backfill_fts`'in "boş mu?" kontrolü anlamsız kalıyor ve
+hibrit retrieval fark edilmeden dense-only'ye düşüyor — **hâlâ yürürlükteydi**.
+Yorum sorunu tarif ediyordu, düzeltme mevcut veritabanlarına hiç ulaşmamıştı.
+
+`rag/store.py` artık `_migrate_fts_schema` ile göç ediyor. Beş test
+kırmızı→yeşil; bunlardan biri hatanın kendisini yeniden üretiyor
+(`pytest.raises(..., match="malformed")`), biri de göç kaldırılırsa kırmızıya
+dönüyor. **Not:** göç idempotenttir ve ilk `store.connect()` çağrısında
+çalışır — yani `rag.db` bir sonraki koşumda kendiliğinden düzelir.
+
+**2. Mono fontta Türkçe glifler yoktu.** Boş durum ekranının alt satırındaki
+"çevrimdışı" yazısı yanlış bir yüzle basılıyordu. `fontTools` ile ölçüldü:
+`jetbrains-mono-400/500.woff2` içinde **`ş Ş İ ğ Ğ` HİÇ YOK**.
+
+Faz 1 Archivo'yu `latin` + `latin-ext` altkümelerini birleştirerek gömmüş ve
+Türkçe'yi tam kapsamıştı; **aynı işlem mono fonta uygulanmamıştı**. Hata
+sessizdi çünkü tarayıcı eksik glifi sistem fontundan getiriyor — metin
+okunuyor ama tipografi tutarsız, ve uygun fallback'i olmayan bir makinede
+tofu çıkardı. Mono metin her yerde: motor çipi, alıntı künyesi, metrikler.
+
+Aynı birleştirme uygulandı (405 glif, Türkçe tam) ve regresyon koruması
+eklendi: `backend/tests/test_font_coverage.py` artık depoya gömülen HER
+woff2'nin Türkçe alfabeyi tam taşımasını şart koşuyor. `fontTools`
+`requirements-dev.txt`'e gerekçesiyle yazıldı — ürün yolunda hiç import
+edilmiyor, offline iddiası bozulmuyor.
+
+**Kapılar (Faz 5).** eval **23/23** (172 sn) · `pytest` **229 passed** ·
+`ui_proof` **PASS** (96 kontrol) · `check_contrast` PASS · build + lint 0.
+
+Sırada Faz 6 (kapanış): `/onizleme` prototipi ve artık kullanılmayan Inter
+fontları kaldırılacak, tam kapı bir kez koşulacak.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -1389,8 +1459,8 @@ devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
 Bu turda DENENİP REDDEDİLEN: entailment katmanı (yukarıda, sayılarıyla).
 
 Açıkta kalan, gerekçesi kayıtlı işler:
-- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0–4 kapandı (kararlar
-  `FEATURE_SPEC §13`); sırada Faz 5 (boş durum + salt-okunur ayarlar).
+- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0–5 kapandı (kararlar
+  `FEATURE_SPEC §13`); sırada Faz 6 (kapanış).
   Faz 2'nin devralınan kırmızısı Faz 3'te kapandı. İzole prototip
   `web/app/onizleme/` referans olarak duruyor, Faz 6'da kaldırılacak.
 - **Entailment boşluğu**, artık daha geniş biçimde kayıtlı: özel ad taşımayan

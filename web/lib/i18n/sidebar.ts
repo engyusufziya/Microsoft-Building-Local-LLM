@@ -33,6 +33,47 @@ export const sidebar = {
   // v3'te sol kolon yalnızca belgeleri değil, artefakt listesini de taşıyor;
   // sekme metinleri bu yüzden `sidebar` namespace'inde, `studio`'da değil:
   // anahtarın kendisi kabuğa ait, içeriği Studio'ya.
+  // --- Ayarlar çekmecesi (FEATURE_SPEC §13.5 Faz 5) ---
+  // Mockup'ın başlığı "Motor ve cihaz"dı; "cihaz" kısmı telemetri demekti ve
+  // §13.6'da reddedilmişti. Başlık taşımadığımız bölümü VAAT ETMEMELİ.
+  settingsTitle: { tr: "Motor ve yapılandırma", en: "Engine and configuration" },
+  openSettings: { tr: "Ayarları aç", en: "Open settings" },
+  closeSettings: { tr: "Ayarları kapat", en: "Close settings" },
+  /** Eşik çubuğunun ekran okuyucu etiketi; 0–1 GERÇEK bir ölçek. */
+  minScoreScale: {
+    tr: (value: number) => `benzerlik eşiği ${value.toFixed(2)} / 1.00`,
+    en: (value: number) => `similarity threshold ${value.toFixed(2)} / 1.00`,
+  },
+
+  // --- Tam-ekran boş durum / ilk açılış (§13.5 Faz 5) ---
+  firstRunKicker: { tr: "Yeni defter", en: "New notebook" },
+  firstRunTitle: { tr: "Kaynaklarını ekle.", en: "Add your sources." },
+  firstRunBody: {
+    tr: "PDF'lerini bırak; asistan yalnızca onların içinden cevap verir. Hiçbir dosya cihazından çıkmaz, internet gerekmez.",
+    en: "Drop your PDFs; the assistant answers only from them. No file leaves your device, no internet needed.",
+  },
+  firstRunStepsTitle: { tr: "Sonra ne olur", en: "What happens next" },
+  firstRunStep1Title: { tr: "Soru sor", en: "Ask a question" },
+  firstRunStep1Body: {
+    tr: "Her cevap, hangi sayfadan geldiğini numarayla gösterir.",
+    en: "Every answer shows which page it came from, by number.",
+  },
+  firstRunStep2Title: { tr: "Kaynağı doğrula", en: "Verify the source" },
+  firstRunStep2Body: {
+    tr: "Numaraya bas, alıntılanan bölüm sayfa görüntüsüyle açılır.",
+    en: "Press the number and the cited passage opens with its page image.",
+  },
+  firstRunStep3Title: { tr: "Çalışmaya dök", en: "Turn it into study material" },
+  firstRunStep3Body: {
+    tr: "Rapor, zihin haritası ve quiz üret; Markdown olarak dışa aktar.",
+    en: "Generate a report, mind map and quiz; export as Markdown.",
+  },
+  /** Alt satır. Mockup'ta "6.2 GB RAM" de vardı; telemetri §13.6'da reddedildi. */
+  firstRunEngineLine: {
+    tr: (model: string) => `${model} · çevrimdışı`,
+    en: (model: string) => `${model} · offline`,
+  },
+
   tabListLabel: { tr: "Sol panel sekmeleri", en: "Left panel tabs" },
   tabSources: { tr: "Kaynaklar", en: "Sources" },
   tabOutputs: { tr: "Çıktılar", en: "Outputs" },

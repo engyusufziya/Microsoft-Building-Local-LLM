@@ -241,10 +241,52 @@ def connect(db_path: Optional[str | Path] = None) -> sqlite3.Connection:
         except sqlite3.Error:
             pass
 
+    _migrate_fts_schema(conn)
     conn.executescript(_SCHEMA)
     conn.commit()
     _backfill_fts(conn)
     return conn
+
+
+def _migrate_fts_schema(conn: sqlite3.Connection) -> None:
+    """ESKİ external-content `chunks_fts`'i bağımsız tabloya göç ettirir.
+
+    NEDEN GEREKLİ -- ölçülmüş bir hata, teorik bir ihtimal değil:
+    `chunks_fts` bir zamanlar `content='chunks'` (external content) olarak
+    kurulmuştu; yukarıdaki şema yorumu bunun neden terk edildiğini anlatıyor.
+    Ama `CREATE VIRTUAL TABLE IF NOT EXISTS` ve `CREATE TRIGGER IF NOT EXISTS`
+    VAR OLAN bir veritabanında HİÇBİR ŞEY YAPMAZ. Yani şema kararı
+    değiştiğinde mevcut veritabanları göç ETMEDİ ve eski tanımla yaşamaya
+    devam etti -- depodaki `rag.db` dahil.
+
+    Sonuç iki katmanlı:
+      1. Eski `chunks_ad` tetikleyicisi FTS5'in `'delete'` komutunu kullanıyor.
+         External-content indekse düz `INSERT` ile içerik yazılmış olduğu için
+         bu komut indeksi geri saramıyor ve silme
+         `sqlite3.DatabaseError: database disk image is malformed` ile
+         PATLIYOR. (Ölçüldü: belge yükle, sonra sil.)
+      2. Aynı şema yorumunun anlattığı sessiz bozulma da hâlâ yürürlükteydi:
+         external-content modda `COUNT(*)` gerçek indeks satırlarını değil
+         `chunks`'ı sayıyor, bu yüzden `_backfill_fts`'in "boş mu?" kontrolü
+         anlamsız kalıyor ve hibrit retrieval fark edilmeden dense-only'ye
+         düşüyor.
+
+    Göç idempotenttir: tablo zaten bağımsızsa hiçbir şey yapılmaz.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
+    ).fetchone()
+    if row is None or "content='chunks'" not in (row[0] or ""):
+        return
+
+    # Tetikleyiciler ÖNCE düşürülür: FTS tablosu giderken üzerlerinde
+    # çalışmasınlar. Sonra _SCHEMA ikisini de yeni tanımıyla kurar ve
+    # _backfill_fts indeksi doldurur.
+    with conn:
+        conn.execute("DROP TRIGGER IF EXISTS chunks_ai")
+        conn.execute("DROP TRIGGER IF EXISTS chunks_ad")
+        conn.execute("DROP TRIGGER IF EXISTS chunks_au")
+        conn.execute("DROP TABLE IF EXISTS chunks_fts")
 
 
 def _backfill_fts(conn: sqlite3.Connection) -> None:
