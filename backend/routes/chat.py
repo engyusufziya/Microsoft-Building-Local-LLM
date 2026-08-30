@@ -42,6 +42,9 @@ def _hit_to_dict(hit: Hit, threshold: float) -> dict:
         "via_ocr": hit.via_ocr,
         "citation": hit.citation(),
         "passed_threshold": hit.score >= threshold,
+        "chunk_id": hit.chunk_id,
+        "chunk_index": hit.chunk_index,
+        "chunk_total": hit.chunk_total,
     }
 
 

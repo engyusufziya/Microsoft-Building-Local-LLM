@@ -5,17 +5,17 @@ import Link from "next/link"
 import { BarChart3Icon } from "lucide-react"
 
 import { ChatPanel, type ChatLockReason } from "@/components/chat"
+import { CitationDrawer } from "@/components/inspector"
 import { LanguageToggle } from "@/components/language-toggle"
 import { AppShell, useAppShell } from "@/components/shell"
 import { KnowledgeSidebar, useKnowledge } from "@/components/sidebar"
-import { ArtifactViewer, RightPanelTabs, useArtifacts } from "@/components/studio"
+import { ArtifactViewer, StudioPanel, useArtifacts } from "@/components/studio"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useT } from "@/lib/i18n"
 import { common } from "@/lib/i18n/common"
 import { metrics as metricsStrings } from "@/lib/i18n/metrics"
-import { studio as studioStrings } from "@/lib/i18n/studio"
 
 function Brand() {
   return (
@@ -73,13 +73,14 @@ function ChatSlot({
   lock: ChatLockReason | null
   documentCount: number | undefined
 }) {
-  const { openInspector, isInspectorOverlay } = useAppShell()
+  const { openInspector } = useAppShell()
   return (
     <ChatPanel
       lock={lock}
       documentCount={documentCount}
-      // Kalıcı kolon modunda düğmeye gerek yok; Inspector zaten görünür.
-      onOpenInspector={isInspectorOverlay ? openInspector : undefined}
+      // v3'te çekmece her kırılımda bağlama duyarlı (§13.2), yani düğme
+      // her zaman gerekli — kalıcı kolon kalmadı.
+      onOpenInspector={openInspector}
     />
   )
 }
@@ -90,7 +91,7 @@ function ChatSlot({
  *
  * Artefakt açıkken sohbet UNMOUNT edilmez, `hidden` ile gizlenir: aksi halde
  * artefakta bakıp geri dönmek sohbet geçmişini ve akış durumunu sıfırlardı
- * (`right-panel-tabs.tsx`'teki sekme kararının aynısı).
+ * (sol panelin sekme kararının aynısı).
  */
 function MainSlot(props: { lock: ChatLockReason | null; documentCount: number | undefined }) {
   const { open, close } = useArtifacts()
@@ -111,7 +112,6 @@ export default function Home() {
   // `useKnowledge()` aynı örneğe bağlanır, ek istek üretmez.
   const { documents, health } = useKnowledge()
   const [uploading, setUploading] = React.useState(false)
-  const s = useT(studioStrings)
 
   // FEATURE_SPEC §5 durum matrisi. Sıra önemli: model hazır değilse belge
   // sayısından bağımsız olarak "warming" gösterilmeli.
@@ -130,10 +130,16 @@ export default function Home() {
     <AppShell
       brand={<Brand />}
       headerActions={<HeaderActions />}
-      sidebar={<KnowledgeSidebar onUploadingChange={setUploading} />}
+      sidebar={
+        <KnowledgeSidebar
+          onUploadingChange={setUploading}
+          // Artefakt listesi §13.2 ile sağ kolondan sol "Çıktılar"
+          // sekmesine taşındı; sağ kolon artık alıntı çekmecesi.
+          outputs={<StudioPanel />}
+        />
+      }
       chat={<MainSlot lock={lock} documentCount={documents?.length} />}
-      inspector={<RightPanelTabs />}
-      inspectorTitle={s.panelDrawerTitle}
+      inspector={<CitationDrawer />}
     />
   )
 }

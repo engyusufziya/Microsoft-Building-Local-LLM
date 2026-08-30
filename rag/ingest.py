@@ -50,6 +50,7 @@ def _embed_and_store(
     chunks: Sequence[chunking.Chunk],
     skipped_pages: list[int],
     progress_cb: ProgressCb,
+    pdf_bytes: Optional[bytes] = None,
 ) -> IngestResult:
     """Chunk'ları gruplar halinde embed edip tek transaction'da veritabanına yazar."""
     if not chunks:
@@ -72,7 +73,7 @@ def _embed_and_store(
             done = min(start + batch, len(contents))
             progress_cb(done / len(contents), f"{done}/{len(contents)} chunk embed edildi")
 
-    store.upsert_document(conn, filename, page_count, chunks, vectors)
+    store.upsert_document(conn, filename, page_count, chunks, vectors, pdf_bytes=pdf_bytes)
 
     if progress_cb:
         progress_cb(1.0, "Veritabanına yazıldı.")
@@ -110,15 +111,31 @@ def ingest_pdf(
             raise ValueError("filename çıkarılamadı, açıkça verin.")
     filename = Path(filename).name
 
+    # Kaynak baytları BİR KEZ çözülür ve iki yere birden gider: metin çıkarma
+    # ve saklama (§13.4). Dosya benzeri nesne iki kez okunamayacağı için
+    # normalize etmek şart; ayrıca `extract_pages` de baytlarla çalışabiliyor.
+    if isinstance(source, (str, Path)):
+        pdf_bytes = Path(source).read_bytes()
+    elif isinstance(source, (bytes, bytearray)):
+        pdf_bytes = bytes(source)
+    else:
+        pdf_bytes = source.read()
+
     own_conn = conn is None
     conn = conn or store.connect()
     try:
         if progress_cb:
             progress_cb(0.0, f"{filename} okunuyor...")
-        result = pdf_loader.extract_pages(source, ocr=ocr)
+        result = pdf_loader.extract_pages(pdf_bytes, ocr=ocr)
         chunks = chunking.chunk_pages(result.pages, filename)
         return _embed_and_store(
-            conn, filename, result.page_count, chunks, result.skipped_pages, progress_cb
+            conn,
+            filename,
+            result.page_count,
+            chunks,
+            result.skipped_pages,
+            progress_cb,
+            pdf_bytes=pdf_bytes,
         )
     finally:
         if own_conn:

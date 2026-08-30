@@ -7,3 +7,4 @@ export {
   type RetrievalInspectorProps,
 } from "./retrieval-inspector"
 export { ChunkCard, type ChunkCardProps } from "./chunk-card"
+export { CitationDrawer, type CitationDrawerProps } from "./citation-drawer"

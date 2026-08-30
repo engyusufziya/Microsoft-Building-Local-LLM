@@ -218,19 +218,33 @@ Kart/panel iç boşluğu 24, bölüm arası 32, sıkışık liste öğesi 8–12
 
 ## 4. Breakpoint ve Layout Davranışı
 
-| | Genişlik | Sidebar | Chat | Inspector |
+| | Genişlik | Sol panel | Chat | Alıntı çekmecesi |
 |---|---|---|---|---|
 | Mobile | < 768px | Drawer (`Sheet`) | Tam genişlik | Drawer (`Sheet`) |
-| Tablet | 768–1279px | Kalıcı, 240px | Esnek | Overlay drawer |
-| Desktop | ≥ 1280px | Kalıcı, 260px | Esnek (min 480px) | **Kalıcı, 380px** |
+| Tablet | 768–1279px | Kalıcı, 272px | Esnek | Drawer (`Sheet`) |
+| Desktop | ≥ 1280px | Kalıcı, 272px | Esnek (min 480px) | Drawer (`Sheet`), 400px |
 
-> [!important] Inspector masaüstünde neden kalıcı?
-> Açıklanabilirlik bu ürünün farkıdır. Gizlenmiş bir panel "opsiyonel özellik"
-> okunur; kalıcı kolon "ürünün kendisi" okunur. Sohbet alanını daraltma
-> bedeline değer.
+Sol panel iki sekme taşır — **Kaynaklar** (belgeler) ve **Çıktılar**
+(artefaktlar); genişliği bu yüzden 240/260px'ten tek bir 272px'e çıktı
+(`FEATURE_SPEC §13.2`).
 
-Mobilde Inspector'a erişim: her asistan mesajının altındaki "Kaynakları
-incele" butonu drawer'ı açar.
+> [!important] Inspector masaüstünde artık neden kalıcı DEĞİL?
+> Bu bir **geri alınan karardır**, kaydı duruyor. v2'nin gerekçesi şuydu:
+> "açıklanabilirlik bu ürünün farkıdır; gizlenmiş panel opsiyonel özellik
+> okunur, kalıcı kolon ürünün kendisi okunur." Modernist yeniden tasarım
+> (§13.2) bunu şu nedenle tersine çevirdi: v3'te açıklanabilirlik **kalıcı
+> bir kolonda değil, cümlenin İÇİNDE** duruyor — her iddianın yanındaki
+> numaralı üst simge. Kaynak, okurken göz önündedir; çekmece ise o
+> numaraya basılınca o alıntıyı açar. Yani sinyal zayıflamadı, taşındı:
+> kalıcı kolon "her zaman görünür ama hangi cümleye ait olduğu belirsiz"
+> bir listeydi. Kazanç, sohbete geri verilen genişlik.
+>
+> Kalıcı kolonu korumak §13.6'da değerlendirilmedi çünkü §13.2 yerleşimiyle
+> bağdaşmıyor: aynı anda hem kalıcı kolon hem bağlama duyarlı çekmece iki
+> ayrı kaynak görünümü demek olurdu.
+
+Çekmeceye erişim: başlık çubuğundaki "Kaynak panelini aç" düğmesi ve her
+asistan mesajının altındaki "Kaynakları incele" butonu — her kırılımda.
 
 ---
 

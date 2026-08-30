@@ -1,12 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, DownloadIcon, PrinterIcon, XIcon } from "lucide-react"
+import { CheckIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { ArtifactScreen } from "../artifact-screen"
 import { useT } from "@/lib/i18n"
 import { studio } from "@/lib/i18n/studio"
-import { ApiRequestError, artifactExportUrl, submitQuizAttempt } from "@/lib/api"
+import { ApiRequestError, submitQuizAttempt } from "@/lib/api"
 import type {
   ApiErrorBody,
   ArtifactDetail,
@@ -85,45 +86,26 @@ export function QuizRunner({ artifact, onClose, className }: QuizRunnerProps) {
   }
 
   return (
-    <div
-      data-print="root"
-      data-slot="quiz-runner"
-      className={cn("flex h-full min-h-0 flex-col overflow-y-auto", className)}
+    <ArtifactScreen
+      artifact={artifact}
+      onClose={onClose}
+      slot="quiz-runner"
+      meta={t.quizQuestionCount(payload.questions.length)}
+      className={className}
     >
-      <header className="flex flex-col gap-3 border-b border-border px-5 py-4">
-        <div className="flex items-start gap-2">
-          <h1 className="flex-1 text-h1 font-semibold text-text-primary">
-            {artifact.title}
-          </h1>
-          <div data-print="hide" className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              render={
-                <a href={artifactExportUrl(artifact.id)} download aria-label={t.exportMarkdown} />
-              }
-            >
-              <DownloadIcon aria-hidden="true" />
-              {t.exportMarkdown}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <PrinterIcon aria-hidden="true" />
-              {t.print}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t.closeArtifact}
-              onClick={onClose}
-            >
-              <XIcon aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-6 gap-y-1">
-          <dd className="text-caption text-text-secondary">
-            {t.quizQuestionCount(payload.questions.length)}
-          </dd>
+      {/* Gövde ortada ölçülü bir sütun, sağda ilerleme rayı — mockup'ın
+          660 px + 240 px düzeni.
+
+          Mockup soruları TEK TEK gösteriyor (sayfalama). Bu ALINMADI:
+          §12 dondurulmuş bir sözleşme ve tek denemede tüm cevapların
+          gönderilmesi (`submitQuizAttempt`) puanlama ile deneme kaydının
+          temeli. Sayfalama, düzen değil ETKİLEŞİM değişikliği olurdu.
+          Rayın kare ızgarası mockup'ın ilerleme sinyalini sayfalama
+          olmadan veriyor. */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto print:overflow-visible">
+          <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-7">
+            <dl className="flex flex-wrap items-center gap-x-6 gap-y-1">
           <div className="flex items-baseline gap-1.5">
             <Tooltip>
               <TooltipTrigger
@@ -144,11 +126,10 @@ export function QuizRunner({ artifact, onClose, className }: QuizRunnerProps) {
             </dd>
           </div>
         </dl>
-        <p className="text-caption text-text-tertiary">{t.quizIntro}</p>
+        <p className="mt-3 text-caption text-text-tertiary">{t.quizIntro}</p>
         {result !== null && <ScoreSummary result={result} />}
-      </header>
 
-      <ol aria-label={t.quizAria} className="flex flex-col gap-4 px-5 py-5">
+      <ol aria-label={t.quizAria} className="mt-6 flex flex-col gap-4">
         {payload.questions.length === 0 && (
           <p className="text-body-sm text-text-secondary">{t.quizNoQuestions}</p>
         )}
@@ -166,7 +147,7 @@ export function QuizRunner({ artifact, onClose, className }: QuizRunnerProps) {
         ))}
       </ol>
 
-      <div data-print="hide" className="flex flex-col gap-2 px-5 pb-5">
+      <div data-print="hide" className="mt-5 flex flex-col gap-2">
         {errorText(error) !== null && (
           <p role="alert" className="text-body-sm text-danger">
             {errorText(error)}
@@ -190,11 +171,94 @@ export function QuizRunner({ artifact, onClose, className }: QuizRunnerProps) {
       </div>
 
       {payload.dropped.length > 0 && (
-        <div className="px-5 pb-5">
+        <div className="mt-5">
           <DroppedQuestions dropped={payload.dropped} />
         </div>
       )}
-    </div>
+          </div>
+        </div>
+
+        <QuizRail
+          questions={payload.questions}
+          answers={answers}
+          resultById={resultById}
+        />
+      </div>
+    </ArtifactScreen>
+  )
+}
+
+/**
+ * Sağ ilerleme rayı — mockup'ın 240 px'lik kolonu (§13.5 Faz 4).
+ *
+ * İki sinyal: hangi soruların cevaplandığı (kare ızgara) ve şu ana kadarki
+ * doğru sayısı. Skor YALNIZCA sonuç geldikten sonra ve YALNIZCA
+ * deterministik sorulardan sayılır -- `short_answer` doğru/yanlış olarak
+ * işaretlenmez (§12.8) ve bu ray o kuralı bozmaz: sayaç sunucunun
+ * döndürdüğü `correct` alanına bakar, kendi kararını vermez.
+ */
+function QuizRail({
+  questions,
+  answers,
+  resultById,
+}: {
+  questions: QuizQuestion[]
+  answers: Record<string, string>
+  resultById: Map<string, QuizAnswerResult>
+}) {
+  const t = useT(studio)
+  const graded = questions.filter((q) => resultById.get(q.id)?.correct !== null)
+  const correct = graded.filter((q) => resultById.get(q.id)?.correct === true)
+  const hasResult = resultById.size > 0
+
+  return (
+    <aside
+      data-print="hide"
+      data-slot="quiz-rail"
+      aria-label={t.quizProgressLabel}
+      className="hidden w-60 shrink-0 flex-col gap-5 overflow-y-auto border-l-2 border-border px-5 py-6 lg:flex"
+    >
+      <div>
+        <p className="mb-3 text-caption font-medium tracking-[0.08em] text-text-secondary uppercase">
+          {t.quizProgressLabel}
+        </p>
+        <ol className="grid grid-cols-4 border-t border-l border-border">
+          {questions.map((question, index) => {
+            const result = resultById.get(question.id)
+            const answered = (answers[question.id] ?? "") !== ""
+            return (
+              <li
+                key={question.id}
+                className={cn(
+                  "flex aspect-square items-center justify-center border-r border-b border-border",
+                  "font-mono text-mono tabular-nums",
+                  result?.correct === true
+                    ? "bg-primary text-primary-foreground"
+                    : result?.correct === false
+                      ? "bg-danger text-primary-foreground"
+                      : answered
+                        ? "bg-surface-raised text-text-primary"
+                        : "text-text-tertiary"
+                )}
+              >
+                {index + 1}
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+
+      {hasResult && (
+        <div className="border-t-2 border-border pt-4">
+          <p className="text-h1 font-semibold text-text-primary tabular-nums">
+            {correct.length}/{graded.length}
+          </p>
+          <p className="mt-0.5 text-body-sm text-text-secondary">{t.quizScoreSoFar}</p>
+        </div>
+      )}
+
+      <p className="text-caption text-text-tertiary">{t.quizIntro}</p>
+    </aside>
   )
 }
 
@@ -351,10 +415,35 @@ function AnswerFeedback({
           </span>
         </div>
       )}
-      <p className="text-body-sm text-text-secondary">
-        <span className="text-caption text-text-tertiary">{t.quizExpectedLabel}: </span>
-        {choiceLabel(result.expected, labels)}
-      </p>
+      {/* Yargı YOKSA (short_answer) kararı kullanıcı veriyor -- iki metni
+          yan yana koymak o kararı kolaylaştırır. Yargı VARSA (üç
+          deterministik tip) böyle bir karşılaştırmaya gerek yok: sonuç zaten
+          "Doğru/Yanlış" diyor ve seçilen şık işaretli duruyor. */}
+      {result.correct === null && result.given !== null ? (
+        <div className="grid border-2 border-text-primary sm:grid-cols-2">
+          <div className="border-b border-border p-2.5 sm:border-r sm:border-b-0">
+            <p className="text-caption font-medium tracking-[0.08em] text-text-tertiary uppercase">
+              {t.quizGivenLabel}
+            </p>
+            <p className="mt-1 text-body-sm text-text-primary">
+              {choiceLabel(result.given, labels)}
+            </p>
+          </div>
+          <div className="bg-surface p-2.5">
+            <p className="text-caption font-medium tracking-[0.08em] text-text-tertiary uppercase">
+              {t.quizExpectedLabel}
+            </p>
+            <p className="mt-1 text-body-sm text-text-primary">
+              {choiceLabel(result.expected, labels)}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-body-sm text-text-secondary">
+          <span className="text-caption text-text-tertiary">{t.quizExpectedLabel}: </span>
+          {choiceLabel(result.expected, labels)}
+        </p>
+      )}
       <p className="text-body-sm text-text-secondary">
         <span className="text-caption text-text-tertiary">{t.quizEvidenceLabel}: </span>
         {result.evidence}

@@ -39,3 +39,38 @@ export function middleTruncate(value: string, max = 32): string {
   const tail = budget - head
   return `${value.slice(0, head)}…${value.slice(value.length - tail)}`
 }
+
+/**
+ * Cevap metnindeki atıf işaretçilerini TARAR — `[Kaynak: dosya.pdf s.4]`.
+ *
+ * `CITATION_PATTERN` tek bir stringin TAMAMINI eşler (chip'ler için);
+ * bu ise metnin içindeki işaretçileri bulur. Motor bu işaretçileri cevabın
+ * içine gömüyor (`rag/answer.py` SYSTEM_PROMPT), yani numaralandırma için
+ * ayrı bir veri yoluna gerek yok.
+ */
+const CITATION_SCAN_PATTERN = /\[[^:\]\n]*:[^\]\n]+\]/g
+
+export function scanCitations(text: string): string[] {
+  return text.match(CITATION_SCAN_PATTERN) ?? []
+}
+
+/**
+ * Atıf işaretçisi -> üst simge numarası eşlemesi (FEATURE_SPEC §13.4).
+ *
+ * Numara METİNDE İLK GÖRÜLME sırasından gelir, `hits` dizisinin skor
+ * sırasından DEĞİL: okur numarayı cümlede gördüğü sırayla bekler. Aynı
+ * kaynak ikinci kez geçtiğinde AYNI numarayı alır — numara kaynağı
+ * gösterir, geçişi değil.
+ */
+export function numberCitations(text: string): Map<string, number> {
+  const numbers = new Map<string, number>()
+  for (const marker of scanCitations(text)) {
+    if (!numbers.has(marker)) numbers.set(marker, numbers.size + 1)
+  }
+  return numbers
+}
+
+/** `numberCitations` haritasını ters çevirir: numara -> işaretçi. */
+export function citationByNumber(numbers: Map<string, number>): Map<number, string> {
+  return new Map([...numbers].map(([citation, n]) => [n, citation]))
+}

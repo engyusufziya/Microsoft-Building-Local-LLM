@@ -22,6 +22,13 @@ export interface DocumentInfo {
   chunk_count: number
   ingested_at: string
   has_ocr_chunks: boolean
+  /**
+   * Kaynak PDF saklı mı (FEATURE_SPEC §13.4). Sayfa görüntüsü YALNIZCA bu
+   * true iken istenir — aksi halde her alıntı tarayıcı konsoluna 404 hatası
+   * yazar ve sunucu boşuna rasterlemeye kalkar. Bu özellikten önce yüklenmiş
+   * belgelerde false.
+   */
+  has_page_images: boolean
 }
 
 export interface ChunkHit {
@@ -33,6 +40,16 @@ export interface ChunkHit {
   via_ocr: boolean
   citation: string
   passed_threshold: boolean
+  /**
+   * Alıntı çekmecesinin künyesi (FEATURE_SPEC §13.4) — `s.4 · bölüm 12/94`.
+   *
+   * YALNIZCA gösterim: sıralamaya, eşiğe (`passed_threshold`) ve güven bandı
+   * rengine GİRMEZ. `score` ham cosine olarak dokunulmadan kalır.
+   * Markdown fixture'larında ve künyesiz Hit'lerde `null`.
+   */
+  chunk_id: number | null
+  chunk_index: number | null
+  chunk_total: number | null
 }
 
 export interface RetrieveResponse {

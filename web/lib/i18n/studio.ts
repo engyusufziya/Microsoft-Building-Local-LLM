@@ -4,21 +4,11 @@ import type { Namespace } from "./index"
  * Studio katmanı metinleri — docs/FEATURE_SPEC.md §9.9.
  *
  * `components/studio/**` içindeki hiçbir bileşen sabit string yazmaz,
- * hepsi buradan gelir (DESIGN_SYSTEM.md §7 kuralı). Faz 1'de yalnızca sağ
- * panelin sekme anahtarı ve Studio sekmesinin boş durumu var; üretim akışı
- * (SSE, artefakt listesi/detayı) metinleri Faz 2'de bu dosyaya eklenir.
+ * hepsi buradan gelir (DESIGN_SYSTEM.md §7 kuralı). Sağ panelin sekme
+ * anahtarı §13.2 ile kaldırıldı: Studio artık sol panelin "Çıktılar"
+ * sekmesinde, sekme metinleri de `sidebar` namespace'inde.
  */
 export const studio = {
-  // --- Sağ panel sekme anahtarı (§9.9.3) ---
-  tabListLabel: { tr: "Sağ panel sekmeleri", en: "Right panel tabs" },
-  sourcesTab: { tr: "Kaynaklar", en: "Sources" },
-  studioTab: { tr: "Studio", en: "Studio" },
-  /**
-   * Mobil/tablet drawer başlığı (`AppShell`'in `inspectorTitle` prop'u).
-   * Artık yalnızca "Kaynaklar" olamaz -- panel iki sekmeyi birden taşıyor.
-   */
-  panelDrawerTitle: { tr: "Kaynaklar ve Studio", en: "Sources and Studio" },
-
   // --- Studio sekmesi: boş durum (§9.9.4) ---
   emptyTitle: { tr: "Henüz artefakt yok", en: "No artifacts yet" },
 
@@ -44,7 +34,28 @@ export const studio = {
     en: "The selected document is no longer loaded; pick the scope again.",
   },
   openArtifact: { tr: "Aç", en: "Open" },
-  closeArtifact: { tr: "Raporu kapat", en: "Close report" },
+  /**
+   * Artefakt ekranından çıkış. ESKİ HÂLİ "Raporu kapat" idi ve ÜÇ görünümün
+   * de kapatma düğmesinde kullanılıyordu — quiz ve zihin haritası kapatılırken
+   * de "Raporu kapat" yazıyordu. Modernist tam-ekran düzeninde (§13.5 Faz 4)
+   * düğme mockup'taki gibi "Sohbete dön": tipten bağımsız ve nereye
+   * gidildiğini söylüyor.
+   */
+  closeArtifact: { tr: "Sohbete dön", en: "Back to chat" },
+  regenerate: { tr: "Yeniden üret", en: "Regenerate" },
+  /** Tam-ekran üst çubuğun mono künyeleri (§13.5 Faz 4). */
+  reportSectionCount: {
+    tr: (n: number) => `${n} bölüm`,
+    en: (n: number) => `${n} sections`,
+  },
+  mindMapBranchCount: {
+    tr: (n: number) => `${n} dal`,
+    en: (n: number) => `${n} branches`,
+  },
+  mindMapRootKicker: { tr: "Kök", en: "Root" },
+  pageShort: { tr: (n: number) => `s.${n}`, en: (n: number) => `p.${n}` },
+  quizProgressLabel: { tr: "İlerleme", en: "Progress" },
+  quizScoreSoFar: { tr: "şu ana kadar doğru", en: "correct so far" },
   staleBadge: { tr: "korpus değişti", en: "corpus changed" },
   staleHint: {
     tr: "Bu artefakt üretildiğinden beri korpus değişti; yeniden üretmediğiniz sürece eski korpusu anlatır.",
@@ -185,6 +196,12 @@ export const studio = {
   quizCorrect: { tr: "Doğru", en: "Correct" },
   quizIncorrect: { tr: "Yanlış", en: "Incorrect" },
   quizExpectedLabel: { tr: "Beklenen cevap", en: "Expected answer" },
+  /**
+   * Yan yana karşılaştırmanın sol sütunu. YALNIZCA yargı olmayan soruda
+   * (`short_answer`, `correct === null`) gösterilir: orada kararı kullanıcı
+   * veriyor, o yüzden iki metni yan yana koymak işin kendisi.
+   */
+  quizGivenLabel: { tr: "Senin cevabın", en: "Your answer" },
   quizEvidenceLabel: { tr: "Belgedeki dayanak", en: "Evidence in the document" },
   quizSimilarityLabel: { tr: "Benzerlik", en: "Similarity" },
   quizSimilarityHint: {

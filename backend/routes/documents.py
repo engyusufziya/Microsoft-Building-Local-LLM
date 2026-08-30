@@ -9,10 +9,10 @@ import asyncio
 import threading
 from typing import Any, AsyncIterator, List
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 
-from rag import ingest, store
+from rag import ingest, raster, store
 from rag.pdf_loader import PdfLoadError
 
 from .. import schemas
@@ -50,6 +50,16 @@ async def list_documents(request: Request) -> List[schemas.DocumentInfo]:
     id_rows = conn.execute("SELECT id, filename FROM documents").fetchall()
     id_map = {row["filename"]: row["id"] for row in id_rows}
 
+    # Sayfa görüntüsü kaynağı — aynı desen (§13.4). BLOB okunmaz, yalnızca
+    # varlığı sorulur: liste yolu megabaytları taşımamalı.
+    with_pdf = {
+        row["filename"]
+        for row in conn.execute(
+            "SELECT d.filename FROM documents d "
+            "JOIN document_files f ON f.document_id = d.id"
+        ).fetchall()
+    }
+
     return [
         schemas.DocumentInfo(
             id=id_map[d["filename"]],
@@ -58,6 +68,7 @@ async def list_documents(request: Request) -> List[schemas.DocumentInfo]:
             chunk_count=d["chunk_count"],
             ingested_at=d["ingested_at"],
             has_ocr_chunks=ocr_map.get(d["filename"], False),
+            has_page_images=d["filename"] in with_pdf,
         )
         for d in docs
     ]
@@ -74,6 +85,36 @@ async def delete_document(filename: str, request: Request) -> schemas.DeleteResp
     # (zararsız, idempotent).
     store.clear_cache()
     return schemas.DeleteResponse(deleted=True)
+
+
+@router.get("/documents/{filename}/pages/{page}/image")
+async def document_page_image(filename: str, page: int, request: Request) -> Response:
+    """Belgenin bir sayfasını görüntü olarak döndürür — FEATURE_SPEC §13.4.
+
+    ADDITIVE uç: mevcut yedi uca dokunmaz, SSE değil, yeni hata kodu açmaz.
+    Modeli BEKLEMEZ (`_require_ready` yok): rasterleme yerel bir kütüphane
+    çağrısı, embedding ya da LLM gerektirmiyor -- model ısınırken de çalışır.
+
+    Depolama kararı ölçümle (ii) seçildi (§13.4): kaynak PDF saklanır, sayfa
+    istek anında rasterlenir (~47 ms). Önbellek katmanı yok; ölçüm bunu
+    gerekçesiz kılıyor.
+
+    Görüntü CİHAZDAN ÇIKMAZ: baytlar SQLite'tan okunur, yerel PDFium ile
+    render edilir, aynı origin'den servis edilir (§1.2).
+    """
+    pdf = await asyncio.to_thread(store.load_pdf, request.app.state.conn, filename)
+    if pdf is None:
+        # İki durum birden: belge hiç yok, ya da bu değişiklikten ÖNCE
+        # yüklendiği için kaynağı saklanmamış. Arayüz ikisini de aynı
+        # şekilde ele alır (görüntü yok) -- ayrı kod gerekçesiz.
+        raise ApiError(404, "DOCUMENT_NOT_FOUND", f"'{filename}' bulunamadı.")
+
+    try:
+        image = await asyncio.to_thread(raster.render_page, pdf, page)
+    except raster.PageOutOfRange as exc:
+        raise ApiError(404, "DOCUMENT_NOT_FOUND", str(exc)) from exc
+
+    return Response(content=image, media_type=raster.media_type())
 
 
 @router.post("/documents")

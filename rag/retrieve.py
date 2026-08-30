@@ -27,6 +27,15 @@ class Hit:
     page: int
     content: str
     via_ocr: bool = False
+    # --- Alıntı çekmecesinin künyesi (FEATURE_SPEC §13.4) ---
+    # `s.4 · bölüm 12/94 · benzerlik 0.71` satırındaki ilk iki alan. Bunlar
+    # yalnızca GÖSTERİM içindir: sıralamaya, eşiğe (MIN_SCORE) ve güven bandı
+    # rengine GİRMEZLER. `score` ham cosine olarak dokunulmadan kalır
+    # (AGENTS.md §1.1). Varsayılanları None, çünkü Hit'i elle kuran testler
+    # ve markdown fixture yolları bu alanları bilmek zorunda değil.
+    chunk_id: Optional[int] = None
+    chunk_index: Optional[int] = None
+    chunk_total: Optional[int] = None
 
     def citation(self) -> str:
         """Kaynak etiketi: [Kaynak: dosya.pdf s.4]. Markdown fixture'larında sayfa yok."""
@@ -130,6 +139,9 @@ def get_top_chunks(
                     page=row["page"],
                     content=row["content"],
                     via_ocr=bool(row.get("via_ocr")),
+                    chunk_id=row.get("id"),
+                    chunk_index=row.get("chunk_index"),
+                    chunk_total=row.get("chunk_total"),
                 )
             )
         return hits

@@ -1,19 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { PrinterIcon, XIcon, DownloadIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { ArtifactScreen } from "../artifact-screen"
 import { useT } from "@/lib/i18n"
 import { studio } from "@/lib/i18n/studio"
-import { artifactExportUrl } from "@/lib/api"
 import type { ArtifactDetail, MindMapDroppedLabel, MindMapNode } from "@/lib/types"
-import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 import {
   asMindMapPayload,
-  edgeWidth,
   layoutMindMap,
   truncateLabel,
 } from "./mindmap-payload"
@@ -46,7 +43,7 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
   const t = useT(studio)
   const payload = asMindMapPayload(artifact.payload)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
-  const nodeRefs = React.useRef(new Map<string, SVGGElement | null>())
+  const nodeRefs = React.useRef(new Map<string, HTMLDivElement | null>())
 
   const layout = React.useMemo(
     () => (payload === null ? null : layoutMindMap(payload)),
@@ -72,7 +69,7 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
     nodeRefs.current.get(target.node.id)?.focus()
   }
 
-  const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case "ArrowRight":
       case "ArrowDown":
@@ -99,48 +96,31 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
 
   const topicCount = payload.nodes.filter((n) => n.kind === "topic").length
 
+  // Yatay ağaç için kök ve dallar ayrılır. `layout.placed` İÇİNDEKİ İNDEKS
+  // korunur: klavye gezinmesi (`jump`) o diziye göre çalışıyor ve
+  // yeniden numaralandırmak Home/End/ok davranışını sessizce bozardı.
+  const rootIndex = layout.placed.findIndex((p) => p.node.kind === "root")
+  const rootPlaced = rootIndex >= 0 ? layout.placed[rootIndex] : undefined
+  const topicPlaced = layout.placed
+    .map((placed, index) => ({ placed, index }))
+    .filter(({ placed }) => placed.node.kind === "topic")
+
   return (
-    <div
-      data-print="root"
-      data-slot="mindmap-view"
-      className={cn("flex h-full min-h-0 flex-col overflow-y-auto", className)}
+    <ArtifactScreen
+      artifact={artifact}
+      onClose={onClose}
+      slot="mindmap-view"
+      meta={t.mindMapBranchCount(topicCount)}
+      className={className}
     >
-      <header className="flex flex-col gap-3 border-b border-border px-5 py-4">
-        <div className="flex items-start gap-2">
-          <h1 className="flex-1 text-h1 font-semibold text-text-primary">
-            {artifact.title}
-          </h1>
-          <div data-print="hide" className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              render={
-                <a href={artifactExportUrl(artifact.id)} download aria-label={t.exportMarkdown} />
-              }
-            >
-              <DownloadIcon aria-hidden="true" />
-              {t.exportMarkdown}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <PrinterIcon aria-hidden="true" />
-              {t.print}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t.closeArtifact}
-              onClick={onClose}
-            >
-              <XIcon aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-6 gap-y-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Künye satırı. Üst çubuğa SIĞMADIĞI için buraya alındı — ama
+            KALDIRILMADI: sadakat oranı ve düşürülen etiket sayısı §11.9'un
+            görünür olmasını istediği sayılar, tam-ekran düzene geçerken
+            sessizce kaybolamazdı. */}
+        <dl className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-1 border-b border-border px-6 py-3">
           <Metric label={t.mindMapNodeCount(topicCount)} />
-          <Metric
-            label={t.mindMapEdgeCount(payload.edges.length)}
-            hint={t.mindMapEdgeHint}
-          />
+          <Metric label={t.mindMapEdgeCount(payload.edges.length)} hint={t.mindMapEdgeHint} />
           <div className="flex items-baseline gap-1.5">
             <Tooltip>
               <TooltipTrigger
@@ -150,7 +130,6 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
               </TooltipTrigger>
               <TooltipContent>{t.fidelityHint}</TooltipContent>
             </Tooltip>
-            {/* Renk YOK: bu bir oran, retrieval güven bandı değil (§9.1). */}
             <dd className="font-mono text-mono font-medium text-text-primary tabular-nums">
               {artifact.fidelity_score === null ? "—" : artifact.fidelity_score.toFixed(2)}
             </dd>
@@ -161,123 +140,138 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
               {artifact.dropped_count}
             </dd>
           </div>
+          <p className="w-full text-caption text-text-tertiary">{t.mindMapHint}</p>
         </dl>
-        <p data-print="hide" className="text-caption text-text-tertiary">
-          {t.mindMapHint}
-        </p>
-      </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 px-5 py-5 xl:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-6 py-7 xl:flex-row">
         <div className="min-w-0 flex-1">
-          <svg
+          {/* Modernist yatay ağaç. SVG dairelerin YERİNE geçti: köşesiz
+              kutular, 2px kenarlık, dik bağlantı çizgileri.
+
+              ERİŞİLEBİLİRLİK SÖZLEŞMESİ AYNEN KORUNDU (§11.9): kap
+              `role="tree"`, her düğüm `role="treeitem"` + `aria-level`
+              (kök 1, konular 2) + roving tabindex, ve ok/Home/End
+              gezinmesi ESKİ `handleKeyDown`'a bağlı. Değişen yalnızca
+              çizim; klavye ve ekran okuyucu davranışı bir satır bile
+              değişmedi.
+
+              Alıntılar (yapraklar) treeitem DEĞİL: payload'ın düğümleri
+              kök + konulardan ibaret, yaprakları da düğüm saymak ağacın
+              yapısını (ve ölçülen düğüm sayısını) değiştirirdi. */}
+          <div
             role="tree"
             aria-label={t.mindMapAria}
             tabIndex={-1}
             onKeyDown={handleKeyDown}
-            viewBox={`0 0 ${layout.width} ${layout.height}`}
-            className="h-auto w-full max-w-full"
+            className="flex min-w-[52rem] items-stretch outline-none"
           >
-            {payload.edges.map((edge) => {
-              const from = layout.byId.get(edge.from)
-              const to = layout.byId.get(edge.to)
-              if (from === undefined || to === undefined) return null
-              return (
-                <line
-                  key={`${edge.from}-${edge.to}`}
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  stroke="var(--border-strong)"
-                  strokeWidth={edgeWidth(edge)}
-                  strokeDasharray="4 4"
-                />
-              )
-            })}
-            {layout.placed
-              .filter((p) => p.node.kind === "topic")
-              .map((p) => {
-                const root = layout.byId.get("root")
-                if (root === undefined) return null
-                return (
-                  <line
-                    key={`root-${p.node.id}`}
-                    x1={root.x}
-                    y1={root.y}
-                    x2={p.x}
-                    y2={p.y}
-                    stroke="var(--border)"
-                    strokeWidth={1.5}
-                  />
-                )
-              })}
-
-            {layout.placed.map((p, index) => {
-              const isRoot = p.node.kind === "root"
-              const isActive = p.node.id === activeId
-              const radius = isRoot ? 34 : 12 + Math.min(p.node.size, 12)
-              return (
-                <g
-                  key={p.node.id}
-                  ref={(element) => {
-                    nodeRefs.current.set(p.node.id, element)
-                  }}
-                  role="treeitem"
-                  aria-level={isRoot ? 1 : 2}
-                  aria-selected={isActive}
-                  aria-label={`${p.node.label} — ${p.node.size}`}
-                  tabIndex={isActive ? 0 : -1}
-                  data-node-id={p.node.id}
-                  data-label-source={p.node.label_source}
-                  onFocus={() => setSelectedId(p.node.id)}
-                  onClick={() => jump(index)}
-                  className="cursor-pointer outline-none"
-                >
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={radius}
-                    fill={isRoot ? "var(--primary)" : "var(--surface)"}
-                    stroke={isActive ? "var(--primary)" : "var(--border-strong)"}
-                    strokeWidth={isActive ? 3 : 1.5}
-                  />
-                  {!isRoot && (
-                    <text
-                      x={p.x}
-                      y={p.y + 4}
-                      textAnchor="middle"
-                      className="fill-[var(--text-secondary)] font-mono text-[11px]"
-                    >
-                      {p.node.size}
-                    </text>
-                  )}
-                  <text
-                    x={p.anchor === "middle" ? p.x : p.x + (p.anchor === "start" ? radius + 8 : -(radius + 8))}
-                    y={p.anchor === "middle" ? p.y + radius + 18 : p.y + 4}
-                    textAnchor={p.anchor}
+            {rootPlaced !== undefined && (
+              <>
+                <div className="flex w-65 shrink-0 flex-col justify-center">
+                  <div
+                    ref={(element) => {
+                      nodeRefs.current.set(rootPlaced.node.id, element)
+                    }}
+                    role="treeitem"
+                    aria-level={1}
+                    aria-selected={rootPlaced.node.id === activeId}
+                    aria-label={`${rootPlaced.node.label} — ${rootPlaced.node.size}`}
+                    tabIndex={rootPlaced.node.id === activeId ? 0 : -1}
+                    data-node-id={rootPlaced.node.id}
+                    data-label-source={rootPlaced.node.label_source}
+                    onFocus={() => setSelectedId(rootPlaced.node.id)}
+                    onClick={() => jump(rootIndex)}
                     className={cn(
-                      "text-[13px]",
-                      isRoot
-                        ? "fill-[var(--text-primary)] font-semibold"
-                        : "fill-[var(--text-primary)]"
+                      "cursor-pointer border-2 bg-primary p-4.5 text-primary-foreground outline-none",
+                      rootPlaced.node.id === activeId
+                        ? "border-primary"
+                        : "border-text-primary"
                     )}
                   >
-                    {truncateLabel(p.node.label)}
-                  </text>
-                  {p.node.label_source === "fallback" && (
-                    <text
-                      x={p.anchor === "middle" ? p.x : p.x + (p.anchor === "start" ? radius + 8 : -(radius + 8))}
-                      y={p.anchor === "middle" ? p.y + radius + 32 : p.y + 18}
-                      textAnchor={p.anchor}
-                      className="fill-[var(--warning)] text-[11px]"
+                    <p className="text-caption font-medium tracking-[0.1em] uppercase opacity-85">
+                      {t.mindMapRootKicker}
+                    </p>
+                    <p className="mt-2 text-h2 font-semibold">{rootPlaced.node.label}</p>
+                  </div>
+                </div>
+
+                {/* Kökten dallara giden dik omurga. */}
+                <div className="relative w-11 shrink-0" aria-hidden="true">
+                  <span className="absolute top-1/2 right-1/2 left-0 h-0.5 bg-text-primary" />
+                  <span className="absolute top-[12%] bottom-[12%] left-1/2 w-0.5 bg-text-primary" />
+                </div>
+              </>
+            )}
+
+            <div className="flex flex-1 flex-col gap-3.5">
+              {topicPlaced.map(({ placed, index }, branchNo) => {
+                const isActive = placed.node.id === activeId
+                return (
+                  <div key={placed.node.id} className="flex items-stretch">
+                    <div className="relative w-5.5 shrink-0" aria-hidden="true">
+                      <span className="absolute top-1/2 right-0 left-0 h-0.5 bg-text-primary" />
+                    </div>
+                    <div
+                      ref={(element) => {
+                        nodeRefs.current.set(placed.node.id, element)
+                      }}
+                      role="treeitem"
+                      aria-level={2}
+                      aria-selected={isActive}
+                      aria-label={`${placed.node.label} — ${placed.node.size}`}
+                      tabIndex={isActive ? 0 : -1}
+                      data-node-id={placed.node.id}
+                      data-label-source={placed.node.label_source}
+                      onFocus={() => setSelectedId(placed.node.id)}
+                      onClick={() => jump(index)}
+                      className={cn(
+                        "w-62 shrink-0 cursor-pointer border-2 bg-background p-3.5 outline-none",
+                        isActive ? "border-primary" : "border-text-primary"
+                      )}
                     >
-                      {t.labelSourceFallback}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-          </svg>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-mono text-primary tabular-nums">
+                          {String(branchNo + 1).padStart(2, "0")}
+                        </span>
+                        <span className="text-body-sm font-semibold text-text-primary">
+                          {truncateLabel(placed.node.label)}
+                        </span>
+                      </div>
+                      {placed.node.label_source === "fallback" && (
+                        <p className="mt-1.5 text-caption text-warning">
+                          {t.labelSourceFallback}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="relative w-8.5 shrink-0" aria-hidden="true">
+                      <span className="absolute top-1/2 right-0 left-0 h-0.5 bg-border-strong" />
+                    </div>
+
+                    {/* Yapraklar: konunun alıntıları, geldikleri sayfayla
+                        etiketli. Mockup'ın "s.N" rozeti. */}
+                    <ul className="flex flex-1 flex-col justify-center gap-1.5 border-l-2 border-border-strong pl-3.5">
+                      {placed.node.citations.map((citation) => (
+                        <li
+                          key={citation.chunk_id}
+                          className="flex items-center gap-2.5 border border-border bg-surface px-2.5 py-1.5"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-body-sm text-text-secondary">
+                            {citation.source}
+                          </span>
+                          {citation.page > 0 && (
+                            <span className="shrink-0 border border-border px-1 font-mono text-mono text-text-tertiary tabular-nums">
+                              {t.pageShort(citation.page)}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
           {payload.edges.length === 0 && (
             <p className="mt-2 text-caption text-text-tertiary">{t.mindMapNoEdges}</p>
           )}
@@ -294,11 +288,12 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
       </div>
 
       {payload.dropped.length > 0 && (
-        <div className="px-5 pb-5">
+        <div className="px-6 pb-6">
           <DroppedLabels dropped={payload.dropped} />
         </div>
       )}
-    </div>
+      </div>
+    </ArtifactScreen>
   )
 }
 

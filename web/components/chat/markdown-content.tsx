@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm"
 
 import { cn } from "@/lib/utils"
 import { CodeBlock } from "@/components/chat/code-block"
+import { scanCitations } from "@/components/chat/citation"
 
 /**
  * Asistan cevabının markdown gösterimi (tablo/liste/kod).
@@ -47,6 +48,57 @@ function extractText(node: React.ReactNode): string {
 }
 
 const LANGUAGE_PATTERN = /language-([\w-]+)/
+
+/**
+ * Metin düğümlerindeki atıf işaretçilerini üst simgeye çevirir (§13.4).
+ *
+ * react-markdown metin düğümlerini düz string olarak veriyor; bileşen
+ * eşlemesiyle yakalanamıyorlar. Bu yüzden dönüşüm children ağacında
+ * ÖZYİNELİ yapılır — `strong`/`em` gibi iç içe elemanların içindeki
+ * atıflar da yakalanır.
+ *
+ * Alternatif (metni react-markdown'a vermeden önce bir sentinel ile
+ * değiştirmek) REDDEDİLDİ: sentinel kod bloklarının içine de girerdi ve
+ * orada harfi harfine basılırdı.
+ */
+function applyCitations(
+  node: React.ReactNode,
+  render: (citation: string, key: string) => React.ReactNode
+): React.ReactNode {
+  if (typeof node === "string") {
+    const markers = scanCitations(node)
+    if (markers.length === 0) return node
+
+    const parts: React.ReactNode[] = []
+    let rest = node
+    markers.forEach((marker, i) => {
+      const at = rest.indexOf(marker)
+      if (at < 0) return
+      if (at > 0) parts.push(rest.slice(0, at))
+      parts.push(render(marker, `c${i}`))
+      rest = rest.slice(at + marker.length)
+    })
+    if (rest) parts.push(rest)
+    return parts
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child, i) => (
+      <React.Fragment key={i}>{applyCitations(child, render)}</React.Fragment>
+    ))
+  }
+
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
+    const { children } = node.props
+    if (children === undefined) return node
+    return React.cloneElement(node, undefined, applyCitations(children, render))
+  }
+
+  return node
+}
+
+/** Atıf dönüşümünün uygulandığı elemanlar — düz metin taşıyan her blok. */
+const CITATION_HOSTS = ["p", "li", "td", "th", "blockquote", "h1", "h2", "h3"] as const
 
 function buildComponents(highlightCode: boolean): Components {
   return {
@@ -107,6 +159,36 @@ function buildComponents(highlightCode: boolean): Components {
   }
 }
 
+/**
+ * Atıf dönüşümünü metin taşıyan elemanların üzerine SARAR.
+ *
+ * Var olan özel renderer'lar (td/th gibi) korunur: sarmalayıcı yalnızca
+ * children'ı dönüştürüp asıl bileşene devreder.
+ */
+function withCitations(
+  base: Components,
+  render: (citation: string, key: string) => React.ReactNode
+): Components {
+  const wrapped: Record<string, unknown> = { ...base }
+  for (const tag of CITATION_HOSTS) {
+    const Base = (base as Record<string, unknown>)[tag] as
+      | React.ComponentType<Record<string, unknown>>
+      | undefined
+    wrapped[tag] = ({
+      children,
+      ...props
+    }: {
+      children?: React.ReactNode
+    } & Record<string, unknown>) => {
+      const content = applyCitations(children, render)
+      return Base
+        ? <Base {...props}>{content}</Base>
+        : React.createElement(tag, props, content)
+    }
+  }
+  return wrapped as Components
+}
+
 const COMPONENTS_HIGHLIGHTED = buildComponents(true)
 const COMPONENTS_PLAIN = buildComponents(false)
 const REMARK_PLUGINS = [remarkGfm]
@@ -115,20 +197,31 @@ export interface MarkdownContentProps {
   children: string
   /** Akış sürerken kod vurgulaması yapılmaz (her token'da yeniden hesap boşuna). */
   highlightCode?: boolean
+  /**
+   * Atıf işaretçisini (`[Kaynak: dosya.pdf s.4]`) neye çevireceği — §13.4'ün
+   * numaralı üst simgesi. Verilmezse işaretçiler metinde OLDUĞU GİBİ kalır
+   * (mevcut davranış; artefakt görünümleri ve önizleme bunu kullanır).
+   */
+  renderCitation?: (citation: string, key: string) => React.ReactNode
   className?: string
 }
 
 export function MarkdownContent({
   children,
   highlightCode = true,
+  renderCitation,
   className,
 }: MarkdownContentProps) {
+  const base = highlightCode ? COMPONENTS_HIGHLIGHTED : COMPONENTS_PLAIN
+  // Sarmalama her render'da değil, yalnızca renderCitation değiştiğinde.
+  const components = React.useMemo(
+    () => (renderCitation ? withCitations(base, renderCitation) : base),
+    [base, renderCitation]
+  )
+
   return (
     <div className={cn(PROSE_CLASS, className)}>
-      <Markdown
-        remarkPlugins={REMARK_PLUGINS}
-        components={highlightCode ? COMPONENTS_HIGHLIGHTED : COMPONENTS_PLAIN}
-      >
+      <Markdown remarkPlugins={REMARK_PLUGINS} components={components}>
         {children}
       </Markdown>
     </div>

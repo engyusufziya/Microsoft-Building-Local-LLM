@@ -35,6 +35,13 @@ class DocumentInfo(BaseModel):
     chunk_count: int
     ingested_at: str
     has_ocr_chunks: bool
+    # Belgenin KAYNAK PDF'i saklı mı (FEATURE_SPEC §13.4).
+    #
+    # Arayüz sayfa görüntüsünü ancak bu true iken ister. Ölçüldü: aksi halde
+    # tarayıcı her alıntı için 404'ü KONSOLA HATA olarak yazıyor ve sunucu
+    # boşuna rasterlemeye kalkıyor -- oysa "kaynağı yok" bilgisi zaten
+    # listede taşınabilir. Bu değişiklikten önce yüklenmiş belgelerde false.
+    has_page_images: bool = False
 
 
 class ChunkHit(BaseModel):
@@ -45,6 +52,12 @@ class ChunkHit(BaseModel):
     via_ocr: bool
     citation: str
     passed_threshold: bool
+    # Alıntı çekmecesinin künyesi (§13.4). YALNIZCA gösterim: sıralama, eşik
+    # ve güven bandı rengi bunlara bakmaz -- `score` ham cosine kalır.
+    # Markdown fixture'larında None (chunk sırası anlamlı ama belge PDF değil).
+    chunk_id: Optional[int] = None
+    chunk_index: Optional[int] = None
+    chunk_total: Optional[int] = None
 
 
 class RetrieveResponse(BaseModel):

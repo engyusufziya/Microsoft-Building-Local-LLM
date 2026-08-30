@@ -45,11 +45,14 @@ export interface AppShellProps {
 /**
  * DESIGN_SYSTEM.md §4'teki üç kolonlu düzen.
  *
- * | | Genişlik | Sidebar | Chat | Inspector |
+ * | | Genişlik | Sidebar | Chat | Alıntı çekmecesi |
  * |---|---|---|---|---|
  * | Mobile  | < 768px    | `Sheet` drawer | tam genişlik | `Sheet` drawer |
- * | Tablet  | 768–1279px | kalıcı 240px   | esnek        | overlay drawer |
- * | Desktop | ≥ 1280px   | kalıcı 260px   | esnek, min 480px | kalıcı 380px |
+ * | Tablet  | 768–1279px | kalıcı 272px   | esnek        | `Sheet` drawer |
+ * | Desktop | ≥ 1280px   | kalıcı 272px   | esnek, min 480px | `Sheet` drawer |
+ *
+ * Sağ kolon v3'te KALICI DEĞİL (§13.2): çekmece bağlama duyarlıdır ve
+ * masaüstünde de üstte açılır.
  *
  * Bölgeler slot prop'u olarak alınır: bu bileşen sohbetin ya da
  * inspector'ın İÇERİĞİNİ bilmez, yalnızca nereye konacağını bilir.
@@ -74,7 +77,6 @@ function AppShell({
   const breakpoint = useBreakpoint()
 
   const isSidebarOverlay = breakpoint === "mobile"
-  const isInspectorOverlay = breakpoint !== "desktop"
 
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [uncontrolledInspectorOpen, setUncontrolledInspectorOpen] =
@@ -93,7 +95,11 @@ function AppShell({
     () => ({
       breakpoint,
       isSidebarOverlay,
-      isInspectorOverlay,
+      // v3'te sağ kolon KALICI DEĞİL (FEATURE_SPEC §13.2): alıntı çekmecesi
+      // bağlama duyarlıdır, bir numaraya basınca açılır — masaüstünde de.
+      // Kırılıma bakmadığı için sabit; tüketiciler (sohbetin "kaynakları
+      // incele" düğmesi) sözleşmeyi değiştirmeden okumaya devam eder.
+      isInspectorOverlay: true,
       sidebarOpen,
       setSidebarOpen,
       openSidebar: () => setSidebarOpen(true),
@@ -106,7 +112,6 @@ function AppShell({
     [
       breakpoint,
       isSidebarOverlay,
-      isInspectorOverlay,
       sidebarOpen,
       inspectorOpen,
       setInspectorOpen,
@@ -146,27 +151,27 @@ function AppShell({
           <div className="flex min-w-0 flex-1 items-center gap-2">{brand}</div>
           <div className="flex shrink-0 items-center gap-1">
             {headerActions}
-            {isInspectorOverlay && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t.openSources}
-                onClick={() => setInspectorOpen(true)}
-              >
-                <PanelRightIcon />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t.openSources}
+              onClick={() => setInspectorOpen(true)}
+            >
+              <PanelRightIcon />
+            </Button>
           </div>
         </header>
 
         <div className="flex min-h-0 flex-1">
-          {/* Tablet 240px · Desktop 260px — §4 tablosu. */}
+          {/* 272px — mockup'ın sol panel genişliği. v2'de 240/260px'ti;
+              §13.2 ile artefakt listesi de bu kolona girdiği için tek ve
+              daha geniş bir değere sabitlendi. */}
           {!isSidebarOverlay && (
             <aside
               data-print="hide"
               aria-label={t.regionDocuments}
-              className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-border bg-surface xl:w-65"
+              className="flex h-full w-68 shrink-0 flex-col overflow-hidden border-r-2 border-border bg-surface"
             >
               {sidebar}
             </aside>
@@ -180,16 +185,6 @@ function AppShell({
             {chat}
           </main>
 
-          {/* Inspector yalnızca ≥1280px'te kalıcı kolon — §4 [!important]. */}
-          {!isInspectorOverlay && (
-            <aside
-              data-print="hide"
-              aria-label={t.regionSources}
-              className="flex h-full w-95 shrink-0 flex-col overflow-hidden border-l border-border bg-surface"
-            >
-              {inspector}
-            </aside>
-          )}
         </div>
 
         {isSidebarOverlay && (
@@ -222,35 +217,33 @@ function AppShell({
           </Sheet>
         )}
 
-        {isInspectorOverlay && (
-          <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
-            <SheetContent
-              data-print="hide"
-              side="right"
-              showCloseButton={false}
-              className="gap-0 p-0 data-[side=right]:w-[86vw] data-[side=right]:sm:max-w-95"
-            >
-              <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-border p-3">
-                <SheetTitle>{resolvedInspectorTitle}</SheetTitle>
-                <SheetClose
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t.closeSources}
-                    />
-                  }
-                >
-                  <XIcon />
-                </SheetClose>
-              </SheetHeader>
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {inspector}
-              </div>
-            </SheetContent>
-          </Sheet>
-        )}
+        <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
+          <SheetContent
+            data-print="hide"
+            side="right"
+            showCloseButton={false}
+            className="gap-0 p-0 data-[side=right]:w-[86vw] data-[side=right]:sm:max-w-100"
+          >
+            <SheetHeader className="flex-row items-center justify-between gap-2 border-b-2 border-border p-3">
+              <SheetTitle>{resolvedInspectorTitle}</SheetTitle>
+              <SheetClose
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t.closeSources}
+                  />
+                }
+              >
+                <XIcon />
+              </SheetClose>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {inspector}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </AppShellProvider>
   )

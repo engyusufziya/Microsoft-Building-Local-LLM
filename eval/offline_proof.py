@@ -84,6 +84,31 @@ class ConnectionRecorder:
         return [(h, p) for h, p in self.attempts if not _is_loopback(h)]
 
 
+def _raster_probe() -> int:
+    """Depodaki gerçek PDF'in birkaç sayfasını rasterler; kaç sayfa döndüyse onu.
+
+    Amaç görüntü kalitesi değil, `rag/raster.py`'nin bağımlılık zincirinin
+    (pypdfium2 -> PDFium -> Pillow) socket'e HİÇ dokunmadığını kayıt altında
+    göstermek. PDF yoksa 0 döner ve denetim yine anlamlıdır (yalnızca bu kol
+    ölçülmemiş olur).
+    """
+    from rag import raster
+
+    pdf_path = Path(__file__).resolve().parent.parent / "Foundry_Local_Plan.pdf"
+    if not pdf_path.exists():
+        return 0
+
+    data = pdf_path.read_bytes()
+    rendered = 0
+    for page in (1, 2):
+        try:
+            if raster.render_page(data, page):
+                rendered += 1
+        except raster.PageOutOfRange:
+            break
+    return rendered
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Offline kanıt: eval koşumu + ağ denetimi")
     parser.add_argument("--model", help=f"chat modeli (varsayılan: {config.CHAT_MODEL})")
@@ -104,6 +129,11 @@ def main(argv=None) -> int:
     try:
         with ConnectionRecorder() as rec:
             code, model_result = run_eval.run(args.model, conn, None)
+            # Sayfa rasterleyicisi de AYNI kaydın içinde koşar (§13.4:
+            # "görüntü cihazdan çıkmaz; offline_proof bu uçla birlikte 0
+            # soket doğrular"). pypdfium2 yeni bir çalışma-anı bağımlılığı;
+            # ağ kullanmadığı iddiası burada ÖLÇÜLÜR, varsayılmaz.
+            raster_pages = _raster_probe()
     finally:
         conn.close()
 
@@ -112,6 +142,7 @@ def main(argv=None) -> int:
     summary = model_result["summary"]
 
     print(f"\n=== Ağ denetimi ===")
+    print(f"  Rasterlenen sayfa (pypdfium2, §13.4): {raster_pages}")
     print(f"  Denenen benzersiz bağlantı sayısı: {len(unique_attempts)}")
     for host, port in unique_attempts:
         flag = "LOOPBACK" if _is_loopback(host) else "!! DIŞARI !!"

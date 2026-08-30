@@ -138,6 +138,7 @@ don't fully understand, and multi-step work with unclear requirements.
 .venv/bin/python eval/mindmap_proof.py                # Faz 3 closing measurement, NOT a routine gate
 .venv/bin/python eval/quiz_proof.py [--trap]          # Faz 4 closing measurement, NOT a routine gate
 .venv/bin/python eval/ui_proof.py                     # browser proof (needs requirements-dev.txt); no model
+.venv/bin/python eval/short_answer_calibration.py     # short_answer threshold measurement; embedding only
 .venv/bin/python docs/check_contrast.py               # verify contrast claims
 .venv/bin/python -m rag.ingest --pdf dosya.pdf        # ingest a document
 .venv/bin/python -m rag.ingest --markdown-dir data    # ingest the markdown fixtures
@@ -180,6 +181,15 @@ Query ──> query_router (rule-based: search / summarize / corpus)
       ──> retrieve (cosine + MIN_SCORE, optional BM25+RRF candidate pool)
       ──> answer (SYSTEM_PROMPT | SUMMARY_PROMPT + qwen2.5-7b)
       ──> answer + [Kaynak: dosya.pdf s.4]
+```
+
+Alongside it, the source PDF is kept so a cited page can be rendered on
+demand (FEATURE_SPEC §13.4):
+
+```
+PDF bytes ──> store.document_files (BLOB, CASCADE with the document)
+          ──> raster.render_page (pypdfium2, on request, ~47 ms)
+          ──> GET /api/documents/{filename}/pages/{page}/image
 ```
 
 `backend/` exposes this pipeline over HTTP/SSE. `web/` is served as a static
@@ -278,6 +288,7 @@ anything else on this list:
 | `eval/run_eval.py --category X` | **7B + embedding** | ~45 s |
 | `eval/offline_proof.py` | 7B + embedding | ~180 s |
 | `eval/fidelity_trap.py` | embedding | ~10 s |
+| `eval/short_answer_calibration.py` | embedding | ~15 s |
 | `eval/report_trap.py` | 7B + embedding | ~4 min (9 LLM calls on eval.db) |
 | `eval/mindmap_proof.py` | 7B + embedding | ~1 min (7 LLM calls on eval.db) |
 | `eval/quiz_proof.py` | 7B + embedding | ~1 min (LLM only for short_answer) |

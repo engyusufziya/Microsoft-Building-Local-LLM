@@ -61,6 +61,9 @@ async def retrieve_endpoint(
                 via_ocr=h.via_ocr,
                 citation=h.citation(),
                 passed_threshold=h.score >= threshold,
+                chunk_id=h.chunk_id,
+                chunk_index=h.chunk_index,
+                chunk_total=h.chunk_total,
             )
             for h in hits
         ],

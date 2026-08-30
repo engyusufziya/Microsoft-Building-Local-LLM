@@ -3,10 +3,6 @@
  * §11.9 · §12.11.
  */
 export { StudioPanel, type StudioPanelProps } from "./studio-panel"
-export {
-  RightPanelTabs,
-  type RightPanelTabsProps,
-} from "./right-panel-tabs"
 export { ReportView, type ReportViewProps } from "./report/report-view"
 export { MindMapView, type MindMapViewProps } from "./mindmap/mindmap-view"
 export { QuizRunner, type QuizRunnerProps } from "./quiz/quiz-runner"

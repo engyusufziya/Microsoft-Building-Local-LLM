@@ -29,6 +29,14 @@ export const sidebar = {
   openSources: { tr: "Kaynak panelini aç", en: "Open source panel" },
   closeSources: { tr: "Kaynak panelini kapat", en: "Close source panel" },
 
+  // --- Sol panel sekme anahtarı (FEATURE_SPEC §13.2) ---
+  // v3'te sol kolon yalnızca belgeleri değil, artefakt listesini de taşıyor;
+  // sekme metinleri bu yüzden `sidebar` namespace'inde, `studio`'da değil:
+  // anahtarın kendisi kabuğa ait, içeriği Studio'ya.
+  tabListLabel: { tr: "Sol panel sekmeleri", en: "Left panel tabs" },
+  tabSources: { tr: "Kaynaklar", en: "Sources" },
+  tabOutputs: { tr: "Çıktılar", en: "Outputs" },
+
   // --- DocumentUploader (FEATURE_SPEC §1.1) ---
   uploadTitle: { tr: "PDF yükleyin", en: "Upload PDF" },
   uploadHint: {

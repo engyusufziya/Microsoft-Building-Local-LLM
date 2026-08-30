@@ -85,6 +85,20 @@ export function listDocuments(): Promise<DocumentInfo[]> {
   return requestJson<DocumentInfo[]>("/documents")
 }
 
+/**
+ * Sayfa görüntüsünün URL'i — FEATURE_SPEC §13.4.
+ *
+ * `fetch` DEĞİL, düz URL: görüntü `<img src>` ile yüklenir, böylece tarayıcı
+ * kendi önbelleğini ve ilerlemeli çözümlemesini kullanır. Aynı origin
+ * (`API_BASE` görece), yani §1.2 offline garantisi korunur.
+ *
+ * Dosya adı yol parçası olduğu için ENCODE EDİLİR: Türkçe karakter ve boşluk
+ * içeren adlar (`Ders Notları 2026.pdf`) aksi halde kırılır.
+ */
+export function pageImageUrl(filename: string, page: number): string {
+  return `${API_BASE}/documents/${encodeURIComponent(filename)}/pages/${page}/image`
+}
+
 export function deleteDocument(filename: string): Promise<DeleteResponse> {
   return requestJson<DeleteResponse>(`/documents/${encodeURIComponent(filename)}`, {
     method: "DELETE",

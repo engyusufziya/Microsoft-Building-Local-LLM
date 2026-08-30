@@ -21,6 +21,16 @@ fastapi>=0.141.0
 uvicorn>=0.52.1
 python-multipart>=0.0.32
 
+# Sayfa görüntülü alıntı (FEATURE_SPEC §13.4) için PDF rasterleyici.
+#
+# LİSANS GEREKÇESİ -- spec'in ilk adayı PyMuPDF'ti ve REDDEDİLDİ: PyMuPDF
+# AGPL-3.0 (ya da ticari) lisanslı, bu depo ise MIT. AGPL bir ÇALIŞMA-ANI
+# bağımlılığı olarak eklenseydi tüm dağıtımı AGPL şartlarına çekerdi --
+# görsel bir özellik için ödenecek bedel değil. pypdfium2 BSD-3-Clause /
+# Apache-2.0; PDFium'u wheel içinde gömülü getiriyor, sistem `poppler`
+# istemiyor, ağ kullanmıyor (§1.2).
+pypdfium2>=5.13.0
+
 # Taranmış PDF sayfaları için OCR (macOS Vision). İsteğe bağlı: kurulu değilse
 # metin katmanı olmayan sayfalar atlanır ve kullanıcıya bildirilir.
 pyobjc-framework-Vision>=10.0; sys_platform == "darwin"

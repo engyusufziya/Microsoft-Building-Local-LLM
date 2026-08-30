@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { AlertTriangleIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -41,6 +42,8 @@ export interface StreamingTextProps {
   incompleteLabel?: string
   /** Kopma sebebi (backend'den gelen mesaj); varsa ikinci satırda gösterilir. */
   incompleteDetail?: string
+  /** Atıf işaretçisini numaralı üst simgeye çevirir (§13.4). */
+  renderCitation?: (citation: string, key: string) => React.ReactNode
   className?: string
 }
 
@@ -50,6 +53,7 @@ export function StreamingText({
   incomplete = false,
   incompleteLabel,
   incompleteDetail,
+  renderCitation,
   className,
 }: StreamingTextProps) {
   return (
@@ -58,6 +62,7 @@ export function StreamingText({
         // Vurgulama yalnızca akış bittiğinde: her token'da yeniden
         // renklendirmek hem boşuna hem de titreme yaratır.
         highlightCode={!streaming}
+        renderCitation={renderCitation}
         className={streaming ? CURSOR_CLASS : undefined}
       >
         {text}

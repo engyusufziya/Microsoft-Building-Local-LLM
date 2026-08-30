@@ -380,3 +380,27 @@ QUIZ_MAX_QUESTIONS = 12
 # bulunabilmesini garanti eder (6 aday > 3 gerek).
 QUIZ_CHOICE_COUNT = 4
 
+
+# --- Modernist Faz 3: Sayfa görüntülü alıntı (FEATURE_SPEC §13.4) -------------
+
+# Sayfa render ölçeği. PDF'in kendi 72 dpi kullanıcı birimiyle çarpılır:
+# 1.5 -> A4 için ~893x1263 px. ÖLÇÜLDÜ (863 KB / 13 sayfalık gerçek PDF):
+#
+#   ölçek  çözünürlük   sayfa/ort  WebP q80 (13 sayfa toplam)
+#   1.0    596x842       139 ms     729 KB
+#   1.5    893x1263      101 ms    1326 KB
+#   2.0    1191x1684     164 ms    1920 KB
+#
+# 1.5 seçildi: çekmecenin ~368 px'lik önizleme alanını retina yoğunluğunda
+# besleyecek kadar büyük, kullanıcı yakınlaştırdığında metin hâlâ okunur, ve
+# tek sayfa isteği 47 ms'te dönüyor. 2.0 çözünürlüğü artırıyor ama gecikmeyi
+# ve baytları da artırıyor; okunabilirlikte 1.5'e karşı gözle görülür bir
+# kazanç ölçülmedi.
+PAGE_IMAGE_SCALE = 1.5
+
+# Sayfa görüntüsü çıktı biçimi ve kalitesi. WebP, aynı sayfalarda PNG'nin
+# ~%40'ı kadar yer tutuyor (1326 KB'a karşı 3314 KB) ve görüntü zaten
+# ekranda gösterilen bir önizleme -- kayıpsızlığın karşılığı yok. q80'de
+# metin kenarlarında gözle görülür bozulma ölçülmedi.
+PAGE_IMAGE_FORMAT = "WEBP"
+PAGE_IMAGE_QUALITY = 80

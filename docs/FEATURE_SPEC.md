@@ -257,12 +257,19 @@ class RetrieveResponse(BaseModel):
 |---|---|---|
 | 400 | `EMPTY_QUERY` | Soru boş |
 | 400 | `INVALID_PDF` | pypdf açamadı / şifreli |
-| 404 | `DOCUMENT_NOT_FOUND` | Silinecek belge yok |
+| 404 | `DOCUMENT_NOT_FOUND` | Silinecek belge yok · **sayfa görüntüsü kaynağı yok ya da sayfa aralık dışı** (§13.4) |
 | 409 | `NO_DOCUMENTS` | Korpus boş, soru sorulamaz |
 | 413 | `FILE_TOO_LARGE` | Yapılandırılmış sınır aşıldı |
 | 422 | `NO_CONTENT` | PDF'ten hiç chunk çıkmadı |
 | 503 | `MODEL_WARMING` | Modeller henüz yüklenmedi |
 | 500 | `INTERNAL` | Beklenmeyen |
+
+Modernist Faz 3'ün sayfa görüntüsü ucu (§13.4) **yeni kod EKLEMEZ**: hem
+"belgenin kaynağı saklanmamış" hem "sayfa aralık dışı" durumları var olan
+`DOCUMENT_NOT_FOUND` ile döner. Ayrı bir `PAGE_NOT_FOUND` değerlendirildi ve
+gerekçesiz bulundu: alıntı zaten o belgenin bir chunk'ından geldiği için
+aralık dışı sayfa normal akışta ulaşılamaz bir savunma dalı, ve arayüz iki
+durumu da aynı şekilde ele alıyor (görüntü yok).
 
 Studio katmanı (§9) dört kod **ekler** — mevcut sekizin hiçbiri değişmez:
 
@@ -380,6 +387,15 @@ data: {"code": "INVALID_PDF", "message": "..."}
 
 ## 4. Inspector Etkileşim Modeli
 
+> [!note] v3 yerleşimi (§13.2) — **davranış** değil, **yer** değişti
+> Inspector artık kalıcı sağ kolon değil, her kırılımda bağlama duyarlı bir
+> **alıntı çekmecesi**. Aşağıdaki durum makinesi ve ChunkCard anatomisi
+> aynen geçerlidir; tek fark, çekmece kapalıyken bu durumların
+> görüntülenmemesi — durumun kendisi korunur, çekmece yeniden açıldığında
+> kaldığı yerden görünür. Numaralı üst simge → çekmece eşlemesi Faz 3'te
+> §13.4 ile eklenir; o zamana kadar çekmeceyi açan iki yol vardır
+> (başlıktaki düğme, mesaj altındaki "Kaynakları incele").
+
 ### 4.1 Durum makinesi
 
 ```mermaid
@@ -423,7 +439,7 @@ ve panel başında "Hiçbir bölüm eşiği geçemedi" açıklaması görünür.
 
 ## 5. Durum Matrisi
 
-| Durum | Sidebar | Chat | Inspector |
+| Durum | Sol panel · Kaynaklar | Chat | Alıntı çekmecesi |
 |---|---|---|---|
 | Modeller yükleniyor | İskelet + "hazırlanıyor" | Girdi kilitli | Boş |
 | Belge yok | Boş durum + yükleme çağrısı | Boş durum, girdi kilitli | Boş |
@@ -435,6 +451,11 @@ ve panel başında "Hiçbir bölüm eşiği geçemedi" açıklaması görünür.
 | LLM reddetti | Normal | Yerelleştirilmiş metin, kaynak yok | Kartlar normal (bulundu ama yetmedi) |
 | Ağ/sunucu hatası | Normal | Hata kartı + "tekrar dene" | Son durum korunur |
 | Akış ortasında hata | Normal | **Kısmi metin korunur** + hata satırı | Son durum korunur |
+
+Sol panelin **Çıktılar** sekmesi bu matrise satır EKLEMEZ: artefakt
+listesinin durumları §9.9.4'te tanımlıdır ve sekme değişimi sohbeti ya da
+çekmeceyi etkilemez (iki sekme de mount'lu kalır). "Alıntı çekmecesi"
+sütunu, çekmece AÇIKKEN görüleni tarif eder.
 
 > [!tip] Kısmi metin neden korunuyor?
 > Akış 3 sn sürüyor; 2. saniyede kopan bir bağlantıda üretilen metni silmek
@@ -2214,7 +2235,32 @@ sözlük getirmek ikinci bir bakım yüzeyi açardı — `§10.15`'te durak-keli
 sözlüğü aynı gerekçeyle reddedilmişti. Boşluk terimi zaten **ayırt edici** bir
 özel ad/kimlik olduğu için eşanlamlısı pratikte yoktur.
 
-> [!danger] `short_answer` bir eşiğe indirgenmez
+> [!danger] `short_answer` bir eşiğe indirgenmez — artık ÖLÇÜLMÜŞ bir karar
+> Bu madde önce bir **argümandı** ("eşik uydurmak ölçülmemiş bir kararı
+> ölçülmüş gibi sunmak olur"). `eval/short_answer_calibration.py` o argümanı
+> ölçüme çevirdi: 18 referans cevap x 3 sınıf (doğru / konusu bitişik ama
+> yanlış / konu dışı), `score_attempt`'in kullandığı embedding çağrısının
+> aynısıyla.
+>
+> | | min | ortalama | max |
+> |---|---|---|---|
+> | doğru cevap | 0.4772 | 0.6331 | 0.8135 |
+> | **yakın yanlış** | 0.3434 | **0.5741** | **0.7664** |
+> | uzak yanlış | 0.1670 | 0.3036 | 0.4456 |
+>
+> Doğru cevaplarla **konusu bitişik ama yanlış** cevaplar iç içe geçiyor: en
+> düşük doğru (0.4772) en yüksek yanlışın (0.7664) çok altında. En iyi eşik
+> **0.575** ve isabeti yalnızca **%74.1** — 18 doğrunun 6'sına "yanlış",
+> 36 yanlışın 8'ine "doğru" diyor. **Dört yargıdan biri hatalı olurdu.**
+>
+> Ayrımın nerede çalıştığı da ölçüldü: doğru cevap ile **konu dışı** cevap
+> temiz ayrılıyor (0.4772 > 0.4456). Ayrılamayan tam olarak quiz'de önemli
+> olan durum: *konusu doğru, olgusu yanlış.*
+>
+> Bilinen sınır: küme 18 öğe ve etiketler tek kaynaklı (koşucuyu yazan ajan,
+> bağımsız insan değil). Ama örtüşme o kadar geniş ki daha büyük bir kümenin
+> sonucu ters çevirmesi beklenmiyor.
+>
 > `correct` **her zaman `null`**dur ve benzerlik **toplam skora katılmaz**.
 > `score` yalnızca deterministik sorulardan hesaplanır; hiç deterministik soru
 > yoksa `null` döner (0.0 yazmak "hepsini yanlış yaptı" demek olurdu).
@@ -2440,25 +2486,59 @@ Mockup'ın alıntı çekmecesi üç şey gösterir: (a) **sayfa görüntüsü**,
 (b) önce/**vurgu**/sonra bağlamıyla alıntılanan bölüm, (c) `s.4 · bölüm 12/94 ·
 benzerlik 0.71`.
 
-- **(b) ve (c) mevcut veriden gelir.** Bağlam metni `Hit.content`, sayfa
-  `Hit.page`, "benzerlik" **`Hit.score` ham kosinüs** (§0, §1.1) — yeniden
-  ölçeklenmez. Numaralı üst-simge → çekmece eşlemesi, §1.3'teki
-  SourceChip→ChunkCard etkileşiminin yeni görünümüdür; **davranış** §4 durum
-  makinesiyle aynıdır.
+- **(b) ve (c) — bu maddenin ilk hâli KISMEN YANLIŞTI, ölçümle düzeltildi.**
+  İddia "ikisi de mevcut veriden gelir" idi. Doğrusu:
+  - **Gelenler:** bağlam metni `Hit.content`, sayfa `Hit.page`, "benzerlik"
+    **`Hit.score` ham kosinüs** (§0, §1.1) — yeniden ölçeklenmez.
+  - **GELMEYEN:** `s.4 · **bölüm 12/94** · benzerlik 0.71` satırındaki chunk
+    sıra numarası ve belge toplamı. `Hit` (rag/retrieve.py) yalnızca
+    `score/source/page/content/via_ocr` taşır; `ChunkHit` (backend/schemas.py)
+    da aynı beşi. Ne `chunk_id`, ne sıra, ne toplam var — üstelik veri
+    `store`'da MEVCUT (`chunks.id`, belge içinde `ORDER BY id`), yalnızca
+    `Hit` kurulurken düşürülüyor.
+  - **Karar:** `Hit` ve `ChunkHit` üç alan kazanır — `chunk_id`,
+    `chunk_index`, `chunk_total`. `score` alanına DOKUNULMAZ (AGENTS.md §1.1);
+    eklenen alanlar sıralama/eşik/renk hesabına girmez, yalnızca çekmecenin
+    künyesini yazar. Alternatif — "bölüm 12/94"yü tasarımdan atmak — reddedildi:
+    kullanıcıya alıntının belgenin neresinden geldiğini söyleyen tek sinyal o.
+
+  Numaralı üst-simge → çekmece eşlemesi, §1.3'teki SourceChip→ChunkCard
+  etkileşiminin yeni görünümüdür; **davranış** §4 durum makinesiyle aynıdır.
 - **(a) sayfa görüntüsü net-yenidir ve iki eksiği açığa çıkarır:**
   1. `pdf_loader` yalnızca **metin** çıkarır (`pypdf`); rasterleyici **yoktur**.
   2. `store` ne ham PDF'i ne de sayfa görüntüsünü **saklar** (şema:
      documents/chunks/artifacts…). Kaynak PDF ingest sonrası kaybolur.
 
   Bu yüzden sözleşme:
-  - **Yeni çalışma-anı bağımlılığı**: yerel bir PDF rasterleyici (aday:
-    PyMuPDF/`fitz` — offline, sistem `poppler` gerektirmez). `requirements.txt`'e
-    "v2 bağımlılıkları kendi adına yazıldı" desenindeki gibi **gerekçesiyle**
-    eklenir. Ağ yok (§1.2).
-  - **Depolama kararı Faz 3'te ölçümle seçilir**, iki aday: (i) ingest anında
-    sayfaları rasterle + önbelleğe al (ingest süresi/disk artar, sorgu hızlı),
-    (ii) kaynak PDF'i sakla + istek anında rasterle (disk ≈ PDF boyutu, ilk
-    istek yavaş). Ölçüm: ingest süresi + disk + ilk-istek gecikmesi.
+  - **Yeni çalışma-anı bağımlılığı: `pypdfium2`** — spec'in ilk adayı
+    **PyMuPDF'ti ve REDDEDİLDİ.** Gerekçe teknik değil **lisans**: PyMuPDF
+    AGPL-3.0 (ya da ticari), bu depo MIT (`LICENSE`). AGPL bir çalışma-anı
+    bağımlılığı olarak tüm dağıtımı AGPL'e çekerdi. `pypdfium2` BSD-3-Clause /
+    Apache-2.0, PDFium'u wheel'de gömülü getirir, sistem `poppler` istemez,
+    ağ kullanmaz (§1.2). `requirements.txt`'e gerekçesiyle yazıldı.
+  - **Depolama kararı ÖLÇÜLDÜ — aday (ii) seçildi** (13 sayfalık 863 KB'lık
+    gerçek bir PDF, `scale=1.5`, WebP q80):
+
+    | | (i) ingest'te rasterle + önbellek | (ii) PDF'i sakla + istekte rasterle |
+    |---|---|---|
+    | ingest ek süresi | **+1.32 sn** (101 ms/sayfa) | **0** |
+    | disk | **1326 KB** (PDF'in 1.54×'i) | **863 KB** (PDF'in kendisi) |
+    | ilk istek | ~0 (blob okuma) | **40–48 ms** |
+
+    (ii) her ölçütte ya kazanıyor ya da farkı önemsiz: diskte %35 tasarruf,
+    ingest'e sıfır maliyet, ve 47 ms yerel render kullanıcı için algılanabilir
+    bir gecikme değil. Üstüne iki şey **bedavaya** geliyor: mockup'ın "PDF'te
+    aç" düğmesi ancak kaynak PDF saklanırsa mümkün, ve önbellek geçersizleme
+    sorunu hiç doğmuyor (render her zaman kaynağıyla tutarlı).
+  - **Önbellek katmanı EKLENMEZ.** 47 ms ölçüldüğü için spekülatif optimizasyon
+    olurdu (AGENTS.md §2.2). Karar ölçüme bağlı: sayfa render'ı 47 ms'te kaldığı
+    sürece önbellek gerekçesizdir.
+  - **Geriye dönük veri sınırı (net-yeni, ölçüldü):** yükleme yolu PDF
+    baytlarını şu an **atıyor** (`backend/routes/documents.py`: `data` yalnızca
+    ingest süresince bellekte). Değişiklikten ÖNCE yüklenmiş belgelerin kaynağı
+    yok; bu belgeler için uç `404` döner ve bu **doğru davranıştır** — sahte
+    görüntü üretmek "sahte sayı göstermeme" ilkesinin görsel karşılığı olurdu.
+    Görüntü isteyen kullanıcı belgeyi yeniden yükler.
   - **Additive endpoint** (mevcut yedi + §9.7 studio uçlarına dokunmaz):
     ```
     GET /api/documents/{filename}/pages/{page}/image  -> image/png (veya webp)
@@ -2481,19 +2561,62 @@ bellek kuralı).
 - [x] `DESIGN_SYSTEM.md` güncel; `check_contrast.py` açık+koyu **PASS** (54 çift, en sıkı 4.77:1)
 - [x] `npm run build` temiz · `lint` 0
 
-**Faz 2 — Kabuk & bilgi mimarisi**
-- [ ] Sol Kaynaklar/Çıktılar sekmeleri + sağ alıntı çekmecesi (§13.2)
-- [ ] §4/§5 yeni yerleşime göre güncel; davranış korunuyor
-- [ ] üç kırılımda `ui_proof.py` PASS · `pytest backend/tests -q` N/N · build + lint
+**Faz 2 — Kabuk & bilgi mimarisi** ✅ (kapandı)
+- [x] Sol Kaynaklar/Çıktılar sekmeleri (272px) + sağ alıntı çekmecesi her
+  kırılımda (§13.2); `RightPanelTabs` kaldırıldı, artefakt listesi sola taşındı
+- [x] §4/§5 yeni yerleşime göre güncel; davranış korunuyor (§4 durum makinesi
+  ve §5 matrisi aynen geçerli, yalnızca sütun adları yerleşimi izliyor)
+- [x] `ui_proof.py` üç kırılımı da ölçüyor (yeni bölüm) ve Faz 2'nin tüm
+  kontrolleri PASS · `pytest backend/tests -q` **209 passed** · build + lint 0
+- [!] `ui_proof` genelinde **1 kontrol kırmızı**: "her cümlenin atıf üst
+  simgesi var" (0 atıf). Faz 2 ÖNCESİ de kırmızı — `git stash` ile Faz 1
+  ağacında birebir aynı üç hata ölçüldü. Nedeni ölçüldü:
+  `rag.db`'deki **sekiz artefaktın tamamında** `artifact_claims.chunk_id`
+  NULL, `report-view.tsx` ise üst simgeyi `chunk_id` varsa basıyor. Bu bir
+  `rag/artifacts` + veri sorunu, kabuk sorunu değil; kendi kararını ve model
+  yükleyen bir koşuyu gerektirdiği için Faz 2'de **kapatılmadı, gizlenmedi**.
 
-**Faz 3 — Sohbet + satır içi alıntı + sayfa görüntüsü**
-- [ ] Numaralı alıntı → çekmece; "benzerlik" ham `Hit.score`
-- [ ] Rasterleyici + depolama kararı ölçümle seçildi (§13.4); yeni uç testli (kırmızı→yeşil)
-- [ ] `eval 23/23` (rag'e dokunuldu) · `offline_proof` 0 soket · `ui_proof` PASS
+**Faz 3 — Sohbet + satır içi alıntı + sayfa görüntüsü** ✅ (kapandı)
+- [x] Numaralı alıntı → çekmece; "benzerlik" **ham `Hit.score`** — tarayıcıda
+  ölçüldü: künye `s.1 · bölüm 1/94 · benzerlik 0.71`, akıştaki ham değerin
+  aynısı. `Hit`/`ChunkHit` üç künye alanı kazandı (`chunk_id`,
+  `chunk_index`, `chunk_total`); `score` alanına dokunulmadı ve künye
+  alanlarının eşiği/sıralamayı etkilemediği testle sabitlendi.
+- [x] Rasterleyici **`pypdfium2`** (PyMuPDF lisans nedeniyle reddedildi) +
+  depolama kararı **ölçümle** (ii) seçildi; yeni uç testli (kırmızı→yeşil,
+  6 test) ve `ui_proof`'ta gerçek yükleme yolundan geçirilerek doğrulandı
+- [x] `eval 23/23` (176 sn) · `offline_proof` **23/23, 0 soket**, rasterleyici
+  aynı kaydın içinde 2 sayfa render etti · `ui_proof` **PASS** ·
+  `pytest` **218 passed** · `fidelity_trap` PASS · build + lint 0
+- [x] **Faz 2'den devralınan kırmızı kapandı** — "her cümlenin atıf üst
+  simgesi var" kontrolü yanlış bir varsayımı ölçüyordu; gerçek sözleşmeye
+  (`chunk_id` çapası VE `payload.citations` üyeliği) bağlandı ve pozitif
+  durum artık gerçekten koşuluyor.
 
-**Faz 4 — Quiz / Harita / Rapor**
-- [ ] Üç ekran tam-ekran Modernist; üretim mantığı (§9–12) değişmedi
-- [ ] build + lint · `pytest` N/N · gereken kapanış ölçümü (`quiz_proof`/`mindmap_proof`/`report_trap`) tek seferlik
+**Faz 4 — Quiz / Harita / Rapor** ✅ (kapandı)
+- [x] Üç ekran tam-ekran Modernist; **üretim mantığı (§9–12) değişmedi** —
+  kanıt: `rag/artifacts/` diff'te HİÇ yok, ve `mindmap_proof` 13/13 PASS
+- [x] Üç kopya başlık tek bir `ArtifactScreen` kabuğuna indi; bu, üç
+  görünümde birden görünen **"Raporu kapat" etiket hatasını** da kapattı
+  (quiz ve harita kapatılırken de "Raporu kapat" yazıyordu)
+- [x] `pytest` 218 passed · build + lint 0 · `ui_proof` PASS (tam-ekran
+  kutusu 1440×900 ölçüldü) · `check_contrast` PASS · `mindmap_proof` PASS
+
+**Faz 4'ün mockup'tan ALMADIĞI şey — ve nedeni**
+
+Mockup quiz'i **tek tek sayfalıyor** ("Soru 03 / 12", ileri/geri). Bu
+alınmadı: §12 dondurulmuş bir sözleşme ve tek denemede tüm cevapların
+gönderilmesi (`submitQuizAttempt`) hem puanlamanın hem deneme kaydının
+temeli. Sayfalama bir **düzen** değil **etkileşim** değişikliği olurdu ve
+§13.0'ın "artefakt üretim mantığı dondurulmuştur" sınırının hemen yanındaki
+etkileşim sözleşmesini deler. Mockup'ın verdiği ilerleme sinyali sayfalama
+olmadan sağlandı: sağ raydaki kare ızgara + doğru sayacı.
+
+Mockup'ın harita **yapraklarına basınca alıntı çekmecesinin açılması** da
+alınmadı: çekmece sohbetin retrieval anlık görüntüsüne bağlı
+(`selectedAssistant`), artefakt alıntılarını oraya beslemek yeni bir veri
+yolu — düzen işi değil. Yapraklar sayfa etiketiyle gösteriliyor, tıklanabilir
+değil.
 
 **Faz 5 — Boş durum + ayarlar (salt-okunur)**
 - [ ] Boş durum Modernist; ayarlar `MIN_SCORE`/topK'yı backend'den **salt-okunur** gösterir

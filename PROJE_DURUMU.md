@@ -1094,6 +1094,289 @@ kademeli tutmak (Modernist keskin, hepsi 0); tek tema (koyu korundu).
 Kapılar: `check_contrast` PASS · build temiz · lint 0 · offline grep temiz.
 Sırada Faz 2 (kabuk & bilgi mimarisi).
 
+## Modernist yeniden tasarım — Faz 2 (kabuk & bilgi mimarisi)
+
+Faz 1 token'ları verdi; Faz 2 **rolleri yeniden dağıttı**. Üç kolon duruyor,
+ama ne taşıdıkları değişti (`FEATURE_SPEC §13.2`):
+
+- **Sol kolon iki sekme oldu:** Kaynaklar (belgeler) + Çıktılar (artefakt
+  listesi). Genişlik 240/260px'ten mockup'ın **272px**'ine çıktı, çünkü kolon
+  artık iki içerik taşıyor.
+- **Sağ kolon kalıcı olmaktan çıktı.** `RightPanelTabs` (Kaynaklar | Studio)
+  kaldırıldı; Retrieval Inspector her kırılımda açılan bir **alıntı
+  çekmecesine** taşındı (400px).
+
+Geri alınan kararın kaydı duruyor (`DESIGN_SYSTEM §4`): v2 "Inspector
+masaüstünde kalıcı olmalı, çünkü açıklanabilirlik bu ürünün farkı" diyordu.
+v3 bunu tersine çevirdi — açıklanabilirlik kalıcı kolonda değil **cümlenin
+içinde** duracak (numaralı üst simge, Faz 3). Kalıcı kolon "her zaman görünür
+ama hangi cümleye ait olduğu belirsiz" bir listeydi; çekmece o belirsizliği
+kaldırıyor. Kazanç sohbete geri verilen genişlik.
+
+Sahiplik notu: §13.2'nin uyardığı gibi bu faz dört dizini birden böldü
+(`shell/` + `sidebar/` + `studio/` + `inspector/`). Sekme anahtarı sağ
+panelden sol panele **taşındı, kopyalanmadı**; Studio içeriği sol panele
+`outputs` **slot'u** olarak giriyor, `sidebar/` `studio/`'yu import etmiyor.
+
+### Faz 2'nin ölçümle ortaya çıkardığı iki şey
+
+**1. Faz 1 iki yazdırma kontrolünü kırmış ve bunu görmemiş.** `ui_proof.py`
+karanlık temada yazdırma paletini v2'nin literal'lerine (`#ffffff` /
+`#111827`) göre denetliyordu; Faz 1 paleti Modernist'e çevirdiğinde
+`DESIGN_SYSTEM §1.5` tablosu güncellendi ama kontrol güncellenmedi — çünkü
+**Faz 1'in kapı listesinde `ui_proof` yoktu** (check_contrast + build + lint
+vardı). Kontrolün amacı değişmeden beklenen değerler §1.5'e hizalandı
+(`#f3f2f2` / `#201e1d`). Ders: palet değişikliği yalnızca kontrast kapısını
+değil, paleti okuyan HER kapıyı ilgilendiriyor.
+
+**2. Rapor atıf üst simgeleri hiç basılmıyor — ve bu Faz 2'den önce de
+böyleydi.** Atıf yapıldı, tahmin edilmedi: değişiklikler `git stash`'lendi,
+Faz 1 ağacı yeniden build edilip `ui_proof` koşuldu ve **birebir aynı üç
+hata** çıktı. Sonra nedeni ölçüldü — `rag.db`'deki sekiz artefaktın
+tamamında `artifact_claims.chunk_id` NULL, oysa `report-view.tsx` üst simgeyi
+yalnızca `chunk_id` doluyken basıyor (`fidelity.py:88` bağlanabilen iddia
+için dolduruyor). Yani sadakat kaydı tutuluyor, **hangi chunk'a bağlandığı**
+tutulmuyor. `rag/artifacts` tarafında kendi kararını ve model yükleyen bir
+koşuyu gerektirdiği için Faz 2'de kapatılmadı; kapı kırmızısı olarak
+`FEATURE_SPEC §13.5`'e yazıldı.
+
+**Kapılar (Faz 2).** `pytest backend/tests -q` **209 passed** · build temiz ·
+lint 0 · `check_contrast` PASS (54 çift) · `ui_proof` Faz 2 kontrollerinin
+tamamı PASS, yukarıdaki devralınan hata dışında. `ui_proof` artık **üç
+kırılımı** da ölçüyor (mobil 390 / tablet 900 / masaüstü 1440); önceden
+yalnızca 1440px vardı ve kabuk değiştiği için tek genişlik yetersizdi.
+
+Sırada Faz 3 (sohbet + satır içi alıntı + sayfa görüntüsü) — tek rag/backend'e
+dokunan faz, modeli yalnız yükler.
+
+## Modernist yeniden tasarım — Faz 3 (satır içi alıntı + sayfa görüntüsü)
+
+Faz 2 kabuğu kurdu; Faz 3 **net-yeni tek özelliği** (sayfa görüntülü alıntı)
+geçirdi ve bunu yaparken spec'in kendisinde üç hata buldu. Planın revizyonu
+`FEATURE_SPEC §13.4`'te, gerekçeleriyle.
+
+### Spec'in ölçümle düzeltilen üç noktası
+
+**1. Rasterleyici adayı lisans nedeniyle değişti.** §13.4 PyMuPDF diyordu.
+PyMuPDF **AGPL-3.0**, bu depo **MIT** (`LICENSE`). AGPL bir çalışma-anı
+bağımlılığı olarak eklenseydi tüm dağıtımı AGPL şartlarına çekerdi — görsel
+bir özellik için ödenecek bedel değil. **`pypdfium2`** seçildi:
+BSD-3-Clause / Apache-2.0, PDFium wheel'in içinde gömülü, sistem `poppler`
+istemiyor. Teknik bir gerekçe değil, lisans gerekçesi — ve ancak paket
+metadata'sı okunduğunda görülüyor.
+
+**2. "(b) ve (c) mevcut veriden gelir" iddiası kısmen YANLIŞTI.** Çekmecenin
+`s.4 · bölüm 12/94 · benzerlik 0.71` künyesindeki **chunk sırası ve belge
+toplamı hiçbir yerden gelmiyordu**: `Hit` yalnızca
+`score/source/page/content/via_ocr` taşıyor, `ChunkHit` de aynı beşi. Veri
+`store`'da vardı (`chunks.id`, belge içinde `ORDER BY id`) ama `Hit`
+kurulurken düşüyordu. `Hit` ve `ChunkHit` üç alan kazandı — `chunk_id`,
+`chunk_index`, `chunk_total`. **`score`'a dokunulmadı** ve künye alanlarının
+sıralamaya/eşiğe girmediği ayrı bir testle sabitlendi (künyesi dolu bir hit
+eşiğin altında, künyesi boş olan üstünde kalıyor).
+
+**3. Depolama kararı ÖLÇÜLDÜ, seçilmedi.** §13.4 iki adayı ölçüme
+bırakmıştı. 863 KB / 13 sayfalık gerçek bir PDF üzerinde, `scale=1.5`,
+WebP q80:
+
+| | (i) ingest'te rasterle + önbellek | (ii) PDF'i sakla + istekte rasterle |
+|---|---|---|
+| ingest ek süresi | +1.32 sn (101 ms/sayfa) | **0** |
+| disk | 1326 KB (PDF'in 1.54×'i) | **863 KB** |
+| ilk istek | ~0 | **40–48 ms** |
+
+(ii) seçildi: diskte %35 tasarruf, ingest'e sıfır maliyet, 47 ms algılanabilir
+bir gecikme değil. Üstüne iki şey bedavaya geldi — mockup'ın "PDF'te aç"
+düğmesi ancak kaynak saklanırsa mümkün, ve önbellek geçersizleme sorunu hiç
+doğmuyor. **Önbellek katmanı eklenmedi**: 47 ms ölçüldükten sonra spekülatif
+optimizasyon olurdu.
+
+### Uygulama
+
+Kaynak PDF `documents` tablosuna kolon olarak değil ayrı `document_files`
+tablosuna yazılıyor (PK = document_id, CASCADE): liste yolları satır başına
+megabaytlık BLOB taşımasın. Yeni uç **additive** ve **yeni hata kodu
+açmıyor** — `GET /api/documents/{filename}/pages/{page}/image`, hem "kaynağı
+yok" hem "sayfa aralık dışı" için `DOCUMENT_NOT_FOUND`. Uç modeli beklemiyor:
+rasterleme yerel bir kütüphane çağrısı, ısınma sırasında da çalışıyor.
+
+Satır içi numara, cevap metnindeki `[Kaynak: ...]` işaretçilerinden türüyor;
+numara **metinde ilk görülme** sırasından geliyor, skor sırasından değil.
+Çekmece odağı (`focusedChunk`) 1.5 sn'lik vurgudan (`highlight`) AYRI bir
+alan: birleştirilseydi çekmece 1.5 sn sonra ilk alıntıya geri atlardı.
+
+**Retrieval Inspector çekmecenin altında duruyor.** Yalnızca tek alıntıyı
+göstermek §4.3'ün eşik çizgisini ve "neyin neden elendiğini" kaybettirirdi.
+
+### Ölçümle bulunan iki gerçek hata (ikisi de kendi kodumda)
+
+- **Üst simge sıfır yükseklikteydi.** `inline-flex` içinde tek metin düğümü
+  `box=16x0` veriyordu — DOM'da var, tıklanamaz. Tarayıcı kanıtı yakaladı
+  (`element is not visible`), kod incelemesi yakalamazdı. `inline-block` +
+  açık `leading-4` ile düzeltildi.
+- **`tailwind-merge` yazı boyutunu düşürüyordu.** `text-mono` ile
+  `text-primary-foreground` aynı `text-*` ailesinde çakışıyor; render edilen
+  class listesinde `text-mono` YOKTU. Boyut üst simgenin sarmalayıcısına,
+  renk düğmede kaldı.
+
+### Devralınan kırmızı kapandı — gevşetilerek değil, düzeltilerek
+
+Faz 2'nin bıraktığı "her cümlenin atıf üst simgesi var" kontrolü **yanlış bir
+varsayımı** ölçüyordu. Üst simgenin gerçek koşulu iki tane: iddianın
+`chunk_id` çapası olacak **ve** o chunk `payload.citations` içinde bulunacak.
+Kontrol bu sözleşmeye bağlandı. Ayrıca `ON DELETE SET NULL`'un bayat
+artefaktta çapaları boşalttığı, yani bunun bir kod hatası değil tasarlanmış
+bir bozunma olduğu kayda geçti. `ui_proof` artık iki şeyi birden ölçüyor:
+bayat artefakt çökmeden ve sahte atıf uydurmadan render ediliyor, taze
+artefaktta üst simgeler **gerçekten basılıyor**.
+
+`ui_proof` bir de yeni yetenek kazandı: sohbet akışı **modelsiz** taklit
+ediliyor (`answer_query_stream` sahte, Hit'ler kopyalanan veritabanındaki
+GERÇEK chunk'lardan). Böylece numaralı alıntı → çekmece → sayfa görüntüsü
+zinciri gerçek Chromium'da, model yüklemeden uçtan uca ölçülebiliyor.
+
+**Kapılar (Faz 3).** eval **23/23** (176 sn) · `offline_proof` **23/23,
+0 soket** (rasterleyici aynı kaydın içinde 2 sayfa render etti) ·
+`fidelity_trap` PASS · `pytest` **218 passed** · `ui_proof` **PASS** ·
+`check_contrast` PASS · build temiz · lint 0.
+
+Sırada Faz 4 (Quiz / Harita / Rapor ekranlarının tam-ekran Modernist düzeni).
+
+## Modernist yeniden tasarım — Faz 4 (Quiz / Harita / Rapor ekranları)
+
+Üç artefakt ekranı tam-ekran Modernist düzene geçti. **Üretim mantığına
+dokunulmadı** ve bu iddia diff'le kanıtlanabilir: `rag/artifacts/` bu fazın
+değişiklik listesinde hiç yok, `mindmap_proof` 13/13 PASS.
+
+### Üç kopya başlık, bir etiket hatası
+
+Rapor, harita ve quiz görünümlerinin başlıkları birbirinin **kopyasıydı**:
+aynı `<header>`, aynı indir/yazdır/kapat üçlüsü. Kopyanın sessiz bedeli tek
+bir i18n anahtarındaydı — `closeArtifact: "Raporu kapat"` ÜÇ görünümde de
+kullanılıyordu, yani **quiz ve zihin haritası kapatılırken de "Raporu kapat"
+yazıyordu**. Üç yerde ayrı ayrı düzeltilecek bir hata yerine tek bir
+`ArtifactScreen` kabuğu yazıldı; etiket mockup'taki gibi tipten bağımsız
+**"Sohbete dön"** oldu.
+
+### Zihin haritası: SVG'den kutu ağacına, ARIA'ya dokunmadan
+
+Mockup radyal SVG grafiği yerine yatay bir kutu ağacı gösteriyor (köşesiz
+kutular, 2px kenarlık, dik konnektörler). Çizim tamamen değişti ama
+**erişilebilirlik sözleşmesi (§11.9) bir satır bile değişmedi**: kap hâlâ
+`role="tree"`, düğümler `role="treeitem"` + `aria-level` (kök 1, konu 2) +
+roving tabindex, ok/Home/End gezinmesi aynı `handleKeyDown`'a bağlı.
+`ui_proof`'un seçicileri `svg[role="tree"]`/`g[role="treeitem"]`'den
+etiketten bağımsız hâle getirildi — ölçülen şey elemanın türü değil, rolü.
+
+Bu geçişte **kaybedilmek üzere olan** bir şey vardı: eski başlıktaki sadakat
+oranı ve düşürülen etiket sayacı. Üst çubuğa sığmıyorlardı; silinmek yerine
+içeriğin künye satırına taşındılar. §11.9'un görünür olmasını istediği
+sayılar bir düzen değişikliğinde sessizce kaybolamaz.
+
+### Ölçümle ortaya çıkan iki davranış değişikliği
+
+**1. Tam ekran, `fixed` ile — ve yazdırma bunu sevmiyor.** Mockup'ın
+`position:absolute; inset:0`'ı kabuğun tamamını kaplıyor. `position: fixed`
+bir eleman yazdırıldığında **tek sayfaya kırpılır** ve raporun çok sayfalı
+çıktısı bozulurdu (§10.12). Kabuk `print:static print:overflow-visible` ile
+yazdırmada normal akışa dönüyor; `ui_proof`'un yazdırma bölümü bunu
+doğruluyor ("rapor görünür ve tam boy", overflow=visible).
+
+**2. Açık artefakt artık sol paneli de kaplıyor.** Yani yeni bir artefakt
+üretmek için önce sohbete dönmek gerekiyor. Bu tasarımın kendisi, hata değil
+— ama `ui_proof`'un akışı bunu varsaymıyordu ve bir tıklama "üretim düğmesi
+artefaktın ardında kaldı" diye zaman aşımına uğradı. Kanıt koşucusu
+düzeltildi ve bu davranış artık **ölçülüyor** (ekran kutusu 1440×900,
+viewport'un tamamı).
+
+### Mockup'tan bilinçli olarak ALINMAYAN iki şey
+
+- **Quiz sayfalaması** ("Soru 03 / 12"). §12 dondurulmuş: tek denemede tüm
+  cevapların gönderilmesi (`submitQuizAttempt`) hem puanlamanın hem deneme
+  kaydının temeli. Sayfalama düzen değil **etkileşim** değişikliği olurdu.
+  Mockup'ın ilerleme sinyali sayfalama olmadan verildi: sağ rayda kare
+  ızgara + doğru sayacı. Sayaç kendi kararını vermiyor, sunucunun döndürdüğü
+  `correct` alanını okuyor — `short_answer` hâlâ doğru/yanlış olarak
+  işaretlenmiyor (§12.8).
+- **Harita yapraklarına basınca alıntı çekmecesinin açılması.** Çekmece
+  sohbetin retrieval anlık görüntüsüne bağlı; artefakt alıntılarını oraya
+  beslemek yeni bir veri yolu, düzen işi değil.
+
+**Eklenen tek yeni eylem: "Yeniden üret".** Üretim mantığını değiştirmiyor,
+var olan `generate`'i artefaktın KENDİ kapsamıyla yeniden çağırıyor.
+
+**Kapılar (Faz 4).** `pytest` **218 passed** · build temiz · lint **0** ·
+`ui_proof` **PASS** · `check_contrast` PASS · `mindmap_proof` **PASS**
+(kapanış ölçümü, tek seferlik).
+
+Sırada Faz 5 (boş durum + salt-okunur ayarlar).
+
+## `short_answer` eşiği ölçüldü — ve eşik REDDEDİLDİ (ikinci kez, bu kez sayıyla)
+
+Faz 4 raporunda "`short_answer` hâlâ doğru/yanlış işaretlenmiyor (§12.6)"
+diye geçen satır, bir eksiklik sanılıp ele alındı. Kök neden araması bunun
+bir hata değil **kasıtlı bir sözleşme** olduğunu gösterdi: `score_attempt`
+`correct` alanını bilerek `None` bırakıyor, kural beş yerde birden
+sabitlenmiş (üretici, iki backend testi, `quiz_proof`, `ui_proof`).
+
+Ama kararın gerekçesi o güne kadar bir **argümandı**: "eşik uydurmak
+ölçülmemiş bir kararı ölçülmüş gibi sunmak olur." `AGENTS.md §1.4` tam da
+bunu düzenliyor — *bir eşik değişikliği kendi kararı olarak, bir ölçümle
+gerekçelendirilerek sunulur.* Yani argümanı ölçüme çevirmek gerekiyordu.
+
+`eval/short_answer_calibration.py` bunu yapıyor. 18 referans cevap (korpustan,
+`data/*.md`) x 3 sınıf: doğru (öğrencinin kendi kelimeleriyle aynı olgu),
+**yakın yanlış** (aynı belgeden bitişik ama başka olgu), uzak yanlış (başka
+belge). Benzerlik `score_attempt`'in kullandığı çağrının aynısı — iki cevap da
+`is_query=False`.
+
+| | min | ortalama | max |
+|---|---|---|---|
+| doğru | 0.4772 | 0.6331 | 0.8135 |
+| **yakın yanlış** | 0.3434 | **0.5741** | **0.7664** |
+| uzak yanlış | 0.1670 | 0.3036 | 0.4456 |
+
+**Dağılımlar iç içe.** En düşük doğru (0.4772), en yüksek yanlışın (0.7664)
+çok altında. Eşik 0.50'den 0.95'e tarandı; en iyisi **0.575** ve isabeti
+**%74.1** — 18 doğrunun 6'sına "yanlış", 36 yanlışın 8'ine "doğru" diyor.
+Yani **dört yargıdan biri hatalı** olurdu.
+
+Ölçümün en öğretici kısmı ayrımın NEREDE çöktüğü: doğru cevapla **konu dışı**
+cevap temiz ayrılıyor (0.4772 > 0.4456, tam ayrılabilir). Ayrılamayan tam
+olarak quiz'de önemli olan durum — *konusu doğru, olgusu yanlış*. Yani
+embedding benzerliği burada "aynı konudan mı bahsediyor" sorusunu cevaplıyor,
+"aynı şeyi mi söylüyor" sorusunu değil.
+
+**Sonuç: işaretleme AÇILMADI.** Ölçüm yolu seçildi ve ölçüm "hayır" dedi.
+Kullanıcı bilgiden mahrum kalmıyor: ekranda benzerlik sayısı, beklenen cevap
+ve belgedeki dayanak birlikte duruyor — kendi doğrulamasını yapıyor.
+`FEATURE_SPEC`'in `[!danger]` kutusu artık argüman değil tablo taşıyor.
+
+**Bilinen sınır, gizlenmiyor:** küme 18 öğe ve etiketler tek kaynaklı
+(koşucuyu yazan ajan; bağımsız insan değerlendirmesi değil). Örtüşme çok
+geniş olduğu için daha büyük bir kümenin sonucu ters çevirmesi beklenmiyor,
+ama bu bir beklenti, ölçüm değil. Küme büyütülür ya da bağımsız etiketlenirse
+karar yeniden açılabilir.
+
+### Ölçümün açtığı UX iyileştirmesi: yan yana karşılaştırma
+
+Eşik reddedildi ama şikâyetin kendisi haklıydı: yargı olmayan soruda
+kullanıcı "cevabım tuttu mu?" sorusuna bakarken gözü yukarıdaki girdi kutusu
+ile aşağıdaki "Beklenen cevap" satırı arasında gidip geliyordu.
+
+Çözüm eşik gerektirmiyor: `correct === null` olan soruda (yani yalnızca
+`short_answer`) kendi cevabı ile beklenen cevap **yan yana** gösteriliyor
+(Modernist: 2px kenarlık, köşesiz, ikiye bölünmüş kutu). Yargısı olan üç
+deterministik tipte bu blok **çıkmıyor** — orada sonuç zaten "Doğru/Yanlış"
+diyor ve seçili şık işaretli duruyor, ikinci bir karşılaştırma gürültü olurdu.
+
+§12.6 sözleşmesi bozulmadı: hiçbir yargı üretilmiyor, benzerlik sayısı ve
+belgedeki dayanak yerinde duruyor. `ui_proof`'un "`short_answer`
+DOĞRU/YANLIŞ olarak işaretlenmiyor" kontrolü aynen geçiyor, yanına
+karşılaştırmanın gösterildiğini ölçen yeni bir kontrol eklendi ve yargısız
+sonucun ekran görüntüsü artık kanıt çıktılarına kaydediliyor
+(`short-answer-result.png`).
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -1106,10 +1389,10 @@ devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
 Bu turda DENENİP REDDEDİLEN: entailment katmanı (yukarıda, sayılarıyla).
 
 Açıkta kalan, gerekçesi kayıtlı işler:
-- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0 + Faz 1 kapandı (kararlar
-  `FEATURE_SPEC §13`; tasarım sistemi yukarıda); sırada Faz 2 (kabuk & bilgi
-  mimarisi). İzole prototip `web/app/onizleme/` referans olarak duruyor, Faz
-  6'da kaldırılacak.
+- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0–4 kapandı (kararlar
+  `FEATURE_SPEC §13`); sırada Faz 5 (boş durum + salt-okunur ayarlar).
+  Faz 2'nin devralınan kırmızısı Faz 3'te kapandı. İzole prototip
+  `web/app/onizleme/` referans olarak duruyor, Faz 6'da kaldırılacak.
 - **Entailment boşluğu**, artık daha geniş biçimde kayıtlı: özel ad taşımayan
   çelişki için ölçülmüş savunma yok. LLM doğrulayıcı denendi ve reddedildi.
 - **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;

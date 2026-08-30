@@ -11,6 +11,8 @@ import type { ApiErrorBody } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { StreamingText } from "@/components/chat/streaming-text"
 import { SourceChips } from "@/components/chat/source-chips"
+import { CitationMarker } from "@/components/chat/citation-marker"
+import { numberCitations } from "@/components/chat/citation"
 import { ThinkingIndicator } from "@/components/chat/thinking-indicator"
 import {
   chatActions,
@@ -77,19 +79,44 @@ function NoAnswerBody({ explanation }: { explanation: string }) {
 function AssistantBody({
   message,
   phase,
+  onOpenDrawer,
 }: {
   message: AssistantMessage
   phase: ChatPhase
+  onOpenDrawer?: () => void
 }) {
   const t = useT(chat)
   const c = useT(common)
   const errorText = useErrorText()
 
+  // Numaralandırma metinden türer (§13.4): işaretçinin İLK GÖRÜLME sırası.
+  // Akış sırasında da hesaplanır ki numara son token'da yerinden oynamasın.
+  const numbers = React.useMemo(() => numberCitations(message.text), [message.text])
+  const renderCitation = React.useCallback(
+    (citation: string, key: string) => {
+      const number = numbers.get(citation)
+      // Eşleşmeyen bir işaretçi metinde OLDUĞU GİBİ kalır -- uydurma numara
+      // basmaktansa ham etiketi göstermek dürüst olan.
+      if (number === undefined) return citation
+      return (
+        <CitationMarker
+          key={key}
+          number={number}
+          citation={citation}
+          messageId={message.id}
+          label={t.openCitation(number)}
+          onOpenDrawer={onOpenDrawer}
+        />
+      )
+    },
+    [numbers, message.id, t, onOpenDrawer]
+  )
+
   switch (message.outcome) {
     case "streaming":
       // Henüz token gelmediyse aşamalı gösterge, geldiyse akan metin + imleç.
       return message.text ? (
-        <StreamingText text={message.text} streaming />
+        <StreamingText text={message.text} streaming renderCitation={renderCitation} />
       ) : (
         <ThinkingIndicator phase={phase === "idle" ? "searching" : phase} />
       )
@@ -97,7 +124,7 @@ function AssistantBody({
     case "answered":
       return (
         <div className="flex flex-col gap-3">
-          <StreamingText text={message.text} />
+          <StreamingText text={message.text} renderCitation={renderCitation} />
           <SourceChips messageId={message.id} sources={message.sources} />
         </div>
       )
@@ -202,7 +229,7 @@ function AssistantBlock({
         )}
       </div>
 
-      <AssistantBody message={message} phase={phase} />
+      <AssistantBody message={message} phase={phase} onOpenDrawer={onOpenInspector} />
 
       {/* Mobil/tablet: Inspector kalıcı kolon değil, drawer
           (DESIGN_SYSTEM.md §4). Drawer'ın kendisi kabuk agent'ının;
@@ -212,7 +239,7 @@ function AssistantBlock({
           type="button"
           variant="ghost"
           size="sm"
-          className="mt-1 w-fit xl:hidden"
+          className="mt-1 w-fit"
           onClick={() => {
             chatActions.selectMessage(message.id)
             onOpenInspector()

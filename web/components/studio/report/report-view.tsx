@@ -1,14 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { DownloadIcon, PrinterIcon, XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { studio } from "@/lib/i18n/studio"
-import { artifactExportUrl } from "@/lib/api"
 import type { ArtifactDetail, DroppedClaim, ReportTable } from "@/lib/types"
-import { Button } from "@/components/ui/button"
+import { ArtifactScreen } from "../artifact-screen"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -55,45 +53,19 @@ export function ReportView({ artifact, onClose, className }: ReportViewProps) {
   const claims = claimByNodePath(artifact.claims)
 
   return (
-    <div
-      data-print="root"
-      data-slot="report-view"
-      className={cn("flex h-full min-h-0 flex-col overflow-y-auto", className)}
+    <ArtifactScreen
+      artifact={artifact}
+      onClose={onClose}
+      slot="report-view"
+      showPrint
+      meta={t.reportSectionCount(payload.sections.length)}
+      className={className}
     >
-      <header className="flex flex-col gap-3 border-b border-border px-5 py-4">
-        <div className="flex items-start gap-2">
-          <h1 className="flex-1 text-h1 font-semibold text-text-primary">
-            {artifact.title}
-          </h1>
-          <div data-print="hide" className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              render={
-                <a href={artifactExportUrl(artifact.id)} download aria-label={t.exportMarkdown} />
-              }
-            >
-              <DownloadIcon aria-hidden="true" />
-              {t.exportMarkdown}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <PrinterIcon aria-hidden="true" />
-              {t.print}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t.closeArtifact}
-              onClick={onClose}
-            >
-              <XIcon aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+      {/* Modernist ölçü kolonu: metin 76ch'i aşmaz, ekran genişledikçe
+          ortalanır (mockup'ın 660–760 px'lik gövde sütunu). */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto print:overflow-visible">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-7">
         <ReportMeta artifact={artifact} sentences={sentenceCount(payload)} />
-      </header>
-
-      <div className="flex flex-col gap-6 px-5 py-5">
         {payload.sections.map((section, sectionIndex) => (
           <section key={section.id} className="flex flex-col gap-2">
             <h2 className="text-h2 font-semibold text-text-primary">{section.title}</h2>
@@ -160,7 +132,8 @@ export function ReportView({ artifact, onClose, className }: ReportViewProps) {
 
         {payload.dropped.length > 0 && <DroppedPanel dropped={payload.dropped} />}
       </div>
-    </div>
+      </div>
+    </ArtifactScreen>
   )
 }
 

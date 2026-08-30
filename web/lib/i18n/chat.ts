@@ -128,6 +128,39 @@ export const chat = {
   },
   openInspector: { tr: "Kaynakları incele", en: "Inspect sources" },
 
+  // --- Alıntı çekmecesi (FEATURE_SPEC §13.4) ---
+  openCitation: {
+    tr: (n: number) => `${n}. kaynağı aç`,
+    en: (n: number) => `Open source ${n}`,
+  },
+  drawerTitle: { tr: "Alıntı", en: "Citation" },
+  citedPassage: { tr: "Alıntılanan bölüm", en: "Cited passage" },
+  pageImageLabel: {
+    tr: (page: number) => `sayfa görüntüsü · s.${page}`,
+    en: (page: number) => `page image · p.${page}`,
+  },
+  pageImageMissing: {
+    tr: "Sayfa görüntüsü yok — belge bu özellikten önce yüklenmiş.",
+    en: "No page image — the document was uploaded before this feature.",
+  },
+  /** `s.4 · bölüm 12/94 · benzerlik 0.71` — üç alan da HAM veriden. */
+  citationMeta: {
+    tr: (page: number, index: number, total: number, score: number) =>
+      `s.${page} · bölüm ${index}/${total} · benzerlik ${score.toFixed(2)}`,
+    en: (page: number, index: number, total: number, score: number) =>
+      `p.${page} · chunk ${index}/${total} · similarity ${score.toFixed(2)}`,
+  },
+  /** Sayfa ya da sıra bilinmiyorsa (markdown fixture) yalnızca benzerlik. */
+  citationMetaScoreOnly: {
+    tr: (score: number) => `benzerlik ${score.toFixed(2)}`,
+    en: (score: number) => `similarity ${score.toFixed(2)}`,
+  },
+  otherCitations: { tr: "Diğer alıntılar", en: "Other citations" },
+  noCitationSelected: {
+    tr: "Bir numaraya basınca alıntı burada açılır.",
+    en: "Press a number to open the citation here.",
+  },
+
   // Akış ortasında kopma — kısmi metin korunur (§5 [!tip]).
   streamIncomplete: {
     tr: "Yanıt tamamlanamadı.",

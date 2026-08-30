@@ -50,6 +50,22 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(document_id);
 
+-- Sayfa görüntülü alıntı (FEATURE_SPEC §13.4) için KAYNAK PDF.
+--
+-- `documents`'a kolon olarak DEĞİL, ayrı tabloya: `documents` satırları
+-- listeleme/sayım yollarında sık taranıyor ve satır başına megabaytlık bir
+-- BLOB taşımaları gerekmiyor. PK = document_id olduğu için ilişki 1-1 ve
+-- CASCADE belge silinince görüntü kaynağını da götürüyor.
+--
+-- Depolama kararı ÖLÇÜLDÜ (§13.4): kaynak PDF saklanır, sayfa İSTEK ANINDA
+-- rasterlenir. Ölçülen alternatif -- ingest'te rasterleyip önbelleğe almak --
+-- %54 daha fazla disk ve +1.32 sn ingest maliyeti getiriyordu; istek anında
+-- render 47 ms.
+CREATE TABLE IF NOT EXISTS document_files (
+    document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+    pdf         BLOB NOT NULL
+);
+
 -- Hibrit retrieval (rag/retrieve.py) için BM25 tam metin indeksi.
 --
 -- KASITLI OLARAK "external content" (content='chunks') DEĞİL, BAĞIMSIZ bir
@@ -276,6 +292,7 @@ def upsert_document(
     page_count: int,
     chunks: Sequence[Any],
     embeddings: Sequence[Sequence[float]],
+    pdf_bytes: Optional[bytes] = None,
 ) -> int:
     """Bir belgeyi chunk'ları ve embedding'leriyle birlikte yazar, document_id döndürür.
 
@@ -339,11 +356,42 @@ def upsert_document(
                     """,
                     [(document_id, *r) for r in rows],
                 )
+
+            # Kaynak PDF (§13.4). `pdf_bytes` None ise DOKUNULMAZ: markdown
+            # fixture'ları ve PDF olmayan yollar için saklanacak bir kaynak
+            # yok, ve yeniden yüklemede baytları vermeyen bir çağrı var olan
+            # kaydı sessizce silmemeli.
+            if pdf_bytes is not None:
+                conn.execute(
+                    """
+                    INSERT INTO document_files (document_id, pdf) VALUES (?, ?)
+                    ON CONFLICT(document_id) DO UPDATE SET pdf = excluded.pdf
+                    """,
+                    (document_id, sqlite3.Binary(pdf_bytes)),
+                )
     finally:
         # Transaction başarısız olsa bile önbelleği düşürmek güvenli taraftır.
         _invalidate(conn)
 
     return document_id
+
+
+def load_pdf(conn: sqlite3.Connection, filename: str) -> Optional[bytes]:
+    """Belgenin kaynak PDF'ini döndürür; yoksa None.
+
+    None iki farklı şeyi birden anlatır ve çağıran taraf ikisini de aynı
+    şekilde ele alır (404): belge hiç yok, ya da belge bu değişiklikten ÖNCE
+    yüklendiği için kaynağı saklanmamış (§13.4 geriye dönük veri sınırı).
+    """
+    row = conn.execute(
+        """
+        SELECT f.pdf FROM document_files f
+        JOIN documents d ON d.id = f.document_id
+        WHERE d.filename = ?
+        """,
+        (filename,),
+    ).fetchone()
+    return bytes(row[0]) if row else None
 
 
 def delete_document(conn: sqlite3.Connection, filename: str) -> bool:
@@ -595,7 +643,7 @@ def load_matrix(conn: sqlite3.Connection) -> tuple[np.ndarray, list[dict]]:
 
     cur = conn.execute(
         """
-        SELECT id, source, page, content, via_ocr, embedding
+        SELECT id, document_id, source, page, content, via_ocr, embedding
         FROM chunks
         ORDER BY id
         """
@@ -616,6 +664,15 @@ def load_matrix(conn: sqlite3.Connection) -> tuple[np.ndarray, list[dict]]:
     matrix = np.empty((len(records), dim), dtype=np.float32)
     metas: list[dict] = []
 
+    # Belge içi sıra ve toplam -- çekmecenin "bölüm 12/94" künyesi (§13.4).
+    # SORGU ANINDA değil BURADA hesaplanır: load_matrix zaten önbellekli, yani
+    # maliyet korpus başına bir kez. `ORDER BY id` belge içinde de sıralı
+    # olduğu için sıra numarası doğrudan sayaçtan gelir.
+    totals: dict[int, int] = {}
+    for r in records:
+        totals[r["document_id"]] = totals.get(r["document_id"], 0) + 1
+    seen: dict[int, int] = {}
+
     for i, r in enumerate(records):
         vec = np.frombuffer(r["embedding"], dtype=np.float32)
         if vec.size != dim:
@@ -625,6 +682,8 @@ def load_matrix(conn: sqlite3.Connection) -> tuple[np.ndarray, list[dict]]:
                 f"belgeleri yeniden yükleyin."
             )
         matrix[i] = vec
+        document_id = r["document_id"]
+        seen[document_id] = seen.get(document_id, 0) + 1
         metas.append(
             {
                 "id": r["id"],
@@ -632,6 +691,8 @@ def load_matrix(conn: sqlite3.Connection) -> tuple[np.ndarray, list[dict]]:
                 "page": r["page"],
                 "content": r["content"],
                 "via_ocr": bool(r["via_ocr"]),
+                "chunk_index": seen[document_id],
+                "chunk_total": totals[document_id],
             }
         )
 

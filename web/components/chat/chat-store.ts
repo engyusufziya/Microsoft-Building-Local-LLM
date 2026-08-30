@@ -85,6 +85,16 @@ export interface ChatState {
   /** Inspector'ın gösterdiği mesaj; varsayılan olarak en son asistan mesajı. */
   selectedMessageId: string | null
   highlight: ChunkHighlight | null
+  /**
+   * Alıntı çekmecesinin gösterdiği chunk (FEATURE_SPEC §13.4).
+   *
+   * `highlight`ten AYRI bir alan: `highlight` 1.5 sn sonra kendini
+   * temizleyen görsel bir vurgu (§4 Dolu -> Vurgulu -> Dolu), oysa çekmece
+   * kullanıcı başka bir numaraya basana kadar AÇIK KALMALI. İkisini tek
+   * alanda birleştirmek çekmecenin 1.5 sn sonra ilk alıntıya geri
+   * atlamasına yol açardı.
+   */
+  focusedChunk: ChunkHighlight | null
   /** "Tekrar dene" için son sorulan soru. */
   lastQuestion: string | null
 }
@@ -94,6 +104,7 @@ const INITIAL_STATE: ChatState = {
   phase: "idle",
   selectedMessageId: null,
   highlight: null,
+  focusedChunk: null,
   lastQuestion: null,
 }
 
@@ -353,7 +364,15 @@ export const chatActions = {
 
   /** Inspector'ın hangi mesajın retrieval'ını gösterdiğini değiştirir. */
   selectMessage(messageId: string): void {
-    setState((prev) => ({ ...prev, selectedMessageId: messageId, highlight: null }))
+    setState((prev) => ({
+      ...prev,
+      selectedMessageId: messageId,
+      highlight: null,
+      // Odak başka bir mesajın chunk'ına aitse düşer: çekmece o mesajın
+      // ilk alıntısına döner, yanlış mesajın chunk'ını göstermez.
+      focusedChunk:
+        prev.focusedChunk?.messageId === messageId ? prev.focusedChunk : null,
+    }))
   },
 
   /**
@@ -373,10 +392,12 @@ export const chatActions = {
 
     clearHighlightTimer()
     highlightNonce += 1
+    const focus = { messageId, chunkIndex, nonce: highlightNonce }
     setState((prev) => ({
       ...prev,
       selectedMessageId: messageId,
-      highlight: { messageId, chunkIndex, nonce: highlightNonce },
+      highlight: focus,
+      focusedChunk: focus,
     }))
 
     highlightTimer = setTimeout(() => {
