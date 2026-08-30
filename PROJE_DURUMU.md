@@ -1025,6 +1025,42 @@ Bu, Studio fazlarının "requirements.txt değişmedi" ölçümleriyle çelişme
 iddialar ilgili fazın yeni bir çalışma anı bağımlılığı EKLEMEDİĞİNİ söylüyor,
 listenin kalıcı olarak donduğunu değil.
 
+## Modernist yeniden tasarım — Faz 0 (kararlar)
+
+`claude.ai/design`'daki "Ders Masası" mockup'ı NotebookLM tarzı bir arayüz
+öneriyor: sıcak-gri zemin, kırmızı marka vurgusu (`#ec3013`), sıfır köşe
+yarıçapı, 2px kenarlıklar, tek tipografi (Archivo); sola toplanmış
+Kaynaklar/Çıktılar, sağda bağlama-duyarlı alıntı çekmecesi.
+
+Karar mockup'a bakarak değil **çalışan görüntü** üzerinden verilsin diye önce
+izole bir prototip kuruldu: `web/app/onizleme/` — üretim kabuğuna, dondurulmuş
+`globals.css` token'larına ve `DESIGN_SYSTEM.md`'ye dokunmadan, altı ekranın
+tamamı çalışır hâlde. Offline temiz (CDN yok; `lucide-react` + depoya gömülü
+fontlar), kapılar yeşil (build temiz, lint temiz). Bu, `AGENTS.md §1.6`'nın
+"sözleşme değişimini ölçülmüş bir karara dayandır" ilkesinin uygulaması; prototip
+Faz 6'da kaldırılacak.
+
+Benimsendi. Yürütme kararları (ayrıntı `FEATURE_SPEC §13`):
+
+- **Aşamalı** (sistem → kabuk → ekran ekran). Büyük patlama reddedildi.
+- **Koyu tema korunur** (Modernist için ikinci token seti). Tek tema reddedildi:
+  theme-toggle + yazdırma paletini (`DESIGN_SYSTEM §1.5`) silerdi.
+- **Net-yeni tek özellik: sayfa görüntülü alıntı.** Kapsamı belirlerken iki eksik
+  ölçülüp `FEATURE_SPEC §13.4`'e sözleşme olarak yazıldı: `pdf_loader` (`pypdf`)
+  bir rasterleyici **değil**, ve `store` ham PDF'i **saklamıyor** — yani hem yeni
+  bir yerel rasterleyici bağımlılığı (aday PyMuPDF, offline) hem de bir depolama
+  kararı gerekiyor; depolama iki aday arasında **Faz 3'te ölçümle** seçilecek.
+
+Ölçülmeden karara bağlanmayan, gerekçesi kayıtlı çatışma:
+
+- **Marka kırmızısı (`#ec3013`) ↔ skor-zayıf bandı (`#DC2626`, `--danger` ile
+  aynı).** İkisi aynı ekranda karışır; skor bantları `MIN_SCORE`'a bağlı olduğu
+  için keyfi değiştirilemez. Faz 1 skor paletini ayırt edilebilir yeniden türetip
+  `check_contrast.py`'yi açık+koyu için yeniden koşacak.
+
+Kapsam dışı bırakılanlar (canlı eşik/topK kaydırağı, cihaz telemetrisi) ve diğer
+reddedilen alternatifler `FEATURE_SPEC §13.6`'da.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -1037,6 +1073,10 @@ devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
 Bu turda DENENİP REDDEDİLEN: entailment katmanı (yukarıda, sayılarıyla).
 
 Açıkta kalan, gerekçesi kayıtlı işler:
+- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0 kapandı (kararlar +
+  `FEATURE_SPEC §13`); sırada Faz 1 (tasarım sistemi — token + Archivo +
+  skor paleti/kontrast). İzole prototip `web/app/onizleme/` referans olarak
+  duruyor, Faz 6'da kaldırılacak.
 - **Entailment boşluğu**, artık daha geniş biçimde kayıtlı: özel ad taşımayan
   çelişki için ölçülmüş savunma yok. LLM doğrulayıcı denendi ve reddedildi.
 - **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;

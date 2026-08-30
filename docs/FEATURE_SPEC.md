@@ -2367,3 +2367,150 @@ görünür kanıtı) — ve deneme sunucuya `score=1.0` ile kaydediliyor.
 | Quiz'i `eval_set.json`'a eklemek | "23/23"ün ne ölçtüğünü sessizce genişletirdi (§12.12) |
 | `score_attempt`e `conn` parametresi | Cevap anahtarı, atıf ve gerekçe zaten payload'da; kullanılmayan parametre (§10.5'in "payload render'ın tek girdisi" kuralı) |
 | Puanlama sonucunu `quiz_attempts`e yazmak | Payload değişmediği sürece aynı girdiden aynı sonuç çıkar; ikinci doğruluk kaynağı (§12.10) |
+
+---
+
+## 13. Modernist Yeniden Tasarım (v3 arayüz)
+
+> Bu bölüm bir **arayüz** sözleşmesidir; motor (§0) ve mevcut yedi endpoint (§2)
+> **değişmez**. Kaynak: `claude.ai/design` "Ders Masası" mockup'ı; projeye
+> `web/app/onizleme/` altında sadık, izole bir prototip olarak alındı (Faz 0
+> referansı). Görsel karar `PROJE_DURUMU.md`'de gerekçesiyle kayıtlı.
+>
+> Yürütme **aşamalı**: önce tasarım sistemi, sonra kabuk, sonra ekran ekran.
+> Her faz kendi kapısını (§13.5) yeşil geçmeden sonrakine geçilmez.
+
+### 13.0 Kapsam — ve kapsam DIŞI
+
+| İçeride | Dışarıda (gerekçesiyle) |
+|---|---|
+| Modernist token seti (açık **+ koyu**), radius=0, 2px kenarlık, Archivo | Tek tema (koyuyu düşürmek) — §13.6'da **reddedildi** |
+| shadcn primitiflerinin Modernist'e uyarlanması | Yeni UI kütüphanesi / shadcn'i sökmek |
+| Bilgi mimarisi: sol Kaynaklar/Çıktılar sekmeleri, sağ alıntı çekmecesi (§13.2) | Mobil düzenin yeniden tasarımı (mevcut kırılımlar korunur — DS §4) |
+| Satır içi numaralı alıntı → çekmece (§13.4) | — |
+| **Sayfa görüntülü alıntı** (net-yeni, §13.4) | Canlı eşik/topK kaydırakları — §13.6'da kapsam dışı |
+| Ayarlar çekmecesi (**salt-okunur**) | Cihaz telemetrisi (canlı tok/s, RAM, GPU) — §13.6'da kapsam dışı |
+| Quiz/Harita/Rapor ekranlarının tam-ekran Modernist düzeni | Artefakt üretim mantığı (§9–12 donduruldu) |
+| Archivo woff2 gömme (offline) | Google Fonts / unpkg CDN — §1.2 ihlali, **reddedildi** |
+
+### 13.1 Temel kararlar
+
+1. **Aşamalı yürütme.** Büyük patlama reddedildi (§13.6): tek uzun dal, kapılar yalnızca sonda yeşillenir, geri alması pahalı.
+2. **Koyu tema korunur.** Mockup açık-tema; ama mevcut yetenek (theme-toggle + yazdırma paleti §1.5) kayıpsız kalmalı → Modernist için **ikinci bir koyu token seti** türetilir, kontrast iki kat doğrulanır.
+3. **Net-yeni tek özellik: sayfa görüntülü alıntı.** Diğer mockup yenilikleri (canlı eşik kaydırağı, cihaz telemetrisi) bilinçli olarak kapsam dışı.
+
+### 13.2 Bilgi mimarisi değişimi
+
+Mockup, v2'nin üç-kolon yerleşimini korur ama **rolleri yeniden dağıtır**:
+
+| | v2 (bugün) | v3 (Modernist) |
+|---|---|---|
+| Sol kolon | Yalnızca belgeler (`sidebar/`) | **Kaynaklar / Çıktılar** sekmeleri — belgeler + artefakt listesi |
+| Orta | Sohbet | Sohbet + satır içi numaralı alıntı |
+| Sağ kolon | Kalıcı sekmeler: Inspector + Studio (`RightPanelTabs`) | **Bağlama-duyarlı alıntı çekmecesi** — numaraya basınca açılır |
+
+Sonuç: bugün sağ kolonda yaşayan **artefakt listesi sola** (Çıktılar sekmesi),
+**Retrieval Inspector'ın rolü sağ çekmeceye** taşınır. Bu, `DESIGN_SYSTEM §6`
+dosya sahipliğini birden çok sahip arasında böler (`shell/` + `sidebar/` +
+`studio/` + `inspector/`) — Faz 2'de koordine edilir, `kalite-muhafizi`
+denetler. §4 durum makinesi ve §5 durum matrisi bu yeni yerleşime göre
+güncellenir; **davranış** (hangi durumda ne görünür) korunur, yalnızca **yer**
+değişir.
+
+### 13.3 Skor bandı ↔ marka kırmızısı çatışması (kontrat-kritik)
+
+Modernist marka vurgusu **kırmızıdır** (`#ec3013`). Mevcut skor-zayıf bandı da
+**kırmızıdır** (`#DC2626`, §1.2) ve `--danger` ile aynı değerdedir. Aynı ekranda
+"marka kırmızısı" ile "düşük güven kırmızısı" **karışır**.
+
+Değişmez sınır: skor bantları §1.2'deki dört-bant semantiğini ve **`MIN_SCORE`
+bağlamasını** korur; "elendi" sınırı backend'den gelir, literal yazılmaz;
+üç-sinyal kuralı (renk + sayı + ikon) korunur.
+
+Faz 1'in işi: skor paletini marka kırmızısından **ayırt edilebilir** yeniden
+türetmek (bant anlamları ve eşik bağı sabit) ve `docs/check_contrast.py`'yi
+açık+koyu için yeniden koşmak. Çözülemezse telafi: renkten bağımsız ikincil
+sinyali güçlendirmek (§1.2 zaten ikon taşıyor) — bu ayrı bir `DESIGN_SYSTEM`
+kararı olarak kaydedilir. Skor kırmızısını marka kırmızısıyla **birleştirmek**
+§13.6'da reddedildi: güven sinyali dekorasyona dönüşürdü.
+
+### 13.4 Sayfa görüntülü alıntı — net-yeni sözleşme
+
+Mockup'ın alıntı çekmecesi üç şey gösterir: (a) **sayfa görüntüsü**,
+(b) önce/**vurgu**/sonra bağlamıyla alıntılanan bölüm, (c) `s.4 · bölüm 12/94 ·
+benzerlik 0.71`.
+
+- **(b) ve (c) mevcut veriden gelir.** Bağlam metni `Hit.content`, sayfa
+  `Hit.page`, "benzerlik" **`Hit.score` ham kosinüs** (§0, §1.1) — yeniden
+  ölçeklenmez. Numaralı üst-simge → çekmece eşlemesi, §1.3'teki
+  SourceChip→ChunkCard etkileşiminin yeni görünümüdür; **davranış** §4 durum
+  makinesiyle aynıdır.
+- **(a) sayfa görüntüsü net-yenidir ve iki eksiği açığa çıkarır:**
+  1. `pdf_loader` yalnızca **metin** çıkarır (`pypdf`); rasterleyici **yoktur**.
+  2. `store` ne ham PDF'i ne de sayfa görüntüsünü **saklar** (şema:
+     documents/chunks/artifacts…). Kaynak PDF ingest sonrası kaybolur.
+
+  Bu yüzden sözleşme:
+  - **Yeni çalışma-anı bağımlılığı**: yerel bir PDF rasterleyici (aday:
+    PyMuPDF/`fitz` — offline, sistem `poppler` gerektirmez). `requirements.txt`'e
+    "v2 bağımlılıkları kendi adına yazıldı" desenindeki gibi **gerekçesiyle**
+    eklenir. Ağ yok (§1.2).
+  - **Depolama kararı Faz 3'te ölçümle seçilir**, iki aday: (i) ingest anında
+    sayfaları rasterle + önbelleğe al (ingest süresi/disk artar, sorgu hızlı),
+    (ii) kaynak PDF'i sakla + istek anında rasterle (disk ≈ PDF boyutu, ilk
+    istek yavaş). Ölçüm: ingest süresi + disk + ilk-istek gecikmesi.
+  - **Additive endpoint** (mevcut yedi + §9.7 studio uçlarına dokunmaz):
+    ```
+    GET /api/documents/{filename}/pages/{page}/image  -> image/png (veya webp)
+    ```
+    Yalnızca görüntü döndürür; SSE değil. Belge/sayfa yoksa `404`; §2.2 hata
+    listesi **additive** kalır, yeni kod açılmaz.
+  - Görüntü **cihazdan çıkmaz**; `offline_proof.py` bu uçla birlikte 0 soket
+    doğrular.
+
+### 13.5 Fazlar ve tamamlanma kriterleri
+
+Kapı ayrımı: UI-yalnız fazlar **model yüklemeyen** yarıyı koşar
+(pytest + build + lint + `ui_proof` + `check_contrast`); rag/backend'e dokunan
+faz (Faz 3) modeli **tek başına** yükler (16 GB — §7 Eşzamanlılık, `AGENTS.md`
+bellek kuralı).
+
+**Faz 1 — Tasarım sistemi**
+- [ ] Archivo 400/600/800 woff2 gömülü, lisansı yanında; `offline_proof` 0 soket
+- [ ] `globals.css` Modernist açık+koyu token; radius=0; skor bantları marka kırmızısından ayrık (§13.3)
+- [ ] `DESIGN_SYSTEM.md` güncel; `check_contrast.py` açık+koyu **PASS**
+- [ ] `npm run build` temiz · `lint` 0
+
+**Faz 2 — Kabuk & bilgi mimarisi**
+- [ ] Sol Kaynaklar/Çıktılar sekmeleri + sağ alıntı çekmecesi (§13.2)
+- [ ] §4/§5 yeni yerleşime göre güncel; davranış korunuyor
+- [ ] üç kırılımda `ui_proof.py` PASS · `pytest backend/tests -q` N/N · build + lint
+
+**Faz 3 — Sohbet + satır içi alıntı + sayfa görüntüsü**
+- [ ] Numaralı alıntı → çekmece; "benzerlik" ham `Hit.score`
+- [ ] Rasterleyici + depolama kararı ölçümle seçildi (§13.4); yeni uç testli (kırmızı→yeşil)
+- [ ] `eval 23/23` (rag'e dokunuldu) · `offline_proof` 0 soket · `ui_proof` PASS
+
+**Faz 4 — Quiz / Harita / Rapor**
+- [ ] Üç ekran tam-ekran Modernist; üretim mantığı (§9–12) değişmedi
+- [ ] build + lint · `pytest` N/N · gereken kapanış ölçümü (`quiz_proof`/`mindmap_proof`/`report_trap`) tek seferlik
+
+**Faz 5 — Boş durum + ayarlar (salt-okunur)**
+- [ ] Boş durum Modernist; ayarlar `MIN_SCORE`/topK'yı backend'den **salt-okunur** gösterir
+- [ ] `MIN_SCORE` literal grep'i **boş** · build + lint · `ui_proof` PASS
+
+**Faz 6 — Kapanış**
+- [ ] `/onizleme` prototipi kaldırıldı; karar kaydı `PROJE_DURUMU.md`'de
+- [ ] Tam kapı: eval 23/23 · pytest 0 hata · `fidelity_trap` PASS · offline 0 soket · `check_contrast` PASS · `ui_proof` PASS · temiz build
+
+### 13.6 Reddedilen alternatifler
+
+| Alternatif | Neden reddedildi |
+|---|---|
+| Tek tema (koyuyu düşürmek) | theme-toggle + yazdırma paletini (§1.5) silerdi; koyu Modernist türetmek karşılanabilir bir maliyet |
+| Büyük patlama (tek dal, tek merge) | Kapılar yalnızca sonda yeşillenir; uzun süre yarım durum; geri alması pahalı |
+| Archivo'yu CDN'den çekmek | §1.2 offline garantisini kırar; woff2 gömülür |
+| Skor kırmızısını marka kırmızısıyla birleştirmek | Güven sinyalini (§1.2) dekorasyona indirger; bantlar `MIN_SCORE`'a bağlı |
+| Canlı eşik/topK kaydırağı | `MIN_SCORE` bir sözleşme (§0.1, §1.3); canlı mutasyon ayrı mimari karar — bu turda kapsam dışı, ayarlar salt-okunur |
+| Cihaz telemetrisi (canlı tok/s, RAM, GPU) | Backend'de yeni ölçüm/uç gerektirir; görsel değere karşı maliyet bu turda gereksiz |
+| İstek anında rasterlemeyi peşinen seçmek | İki depolama adayı ölçülmeden karar olurdu — Faz 3'e bırakıldı (§13.4) |
