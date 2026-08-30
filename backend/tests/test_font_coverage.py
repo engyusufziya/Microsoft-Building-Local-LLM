@@ -36,17 +36,15 @@ TURKISH = {
     "ü": 0x00FC, "Ü": 0x00DC,
 }
 
-# Inter yalnızca geçici /onizleme prototipinde kullanılıyor ve Faz 6'da
-# dosyalarıyla birlikte kaldırılacak; ÜRÜN yolunda hiç yüklenmiyor.
-LEGACY_PREFIXES = ("inter-",)
-
-
 def _active_fonts() -> list[Path]:
-    return sorted(
-        path
-        for path in FONT_DIR.glob("*.woff2")
-        if not path.name.startswith(LEGACY_PREFIXES)
-    )
+    """Depoya gömülü TÜM woff2'ler.
+
+    Faz 5'te burada bir istisna listesi vardı (Inter yalnızca geçici
+    /onizleme prototipinde kullanılıyordu). Faz 6 prototipi ve Inter'i
+    kaldırdı; istisna da onunla birlikte gitti. Artık gömülü her font
+    ürün yolunda, yani hepsi Türkçe'yi tam kapsamak zorunda.
+    """
+    return sorted(FONT_DIR.glob("*.woff2"))
 
 
 def test_font_dizini_bos_degil():

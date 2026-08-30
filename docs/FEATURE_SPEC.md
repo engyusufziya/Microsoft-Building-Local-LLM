@@ -2419,9 +2419,10 @@ görünür kanıtı) — ve deneme sunucuya `score=1.0` ile kaydediliyor.
 ## 13. Modernist Yeniden Tasarım (v3 arayüz)
 
 > Bu bölüm bir **arayüz** sözleşmesidir; motor (§0) ve mevcut yedi endpoint (§2)
-> **değişmez**. Kaynak: `claude.ai/design` "Ders Masası" mockup'ı; projeye
-> `web/app/onizleme/` altında sadık, izole bir prototip olarak alındı (Faz 0
-> referansı). Görsel karar `PROJE_DURUMU.md`'de gerekçesiyle kayıtlı.
+> **değişmez**. Kaynak: `claude.ai/design` "Ders Masası" mockup'ı; karar
+> verilirken projeye `web/app/onizleme/` altında sadık, izole bir prototip
+> olarak alınmıştı (Faz 0 referansı) ve **Faz 6'da kaldırıldı** — görevini
+> tamamladı. Görsel karar `PROJE_DURUMU.md`'de gerekçesiyle kayıtlı.
 >
 > Yürütme **aşamalı**: önce tasarım sistemi, sonra kabuk, sonra ekran ekran.
 > Her faz kendi kapısını (§13.5) yeşil geçmeden sonrakine geçilmez.
@@ -2678,9 +2679,27 @@ Analizde çıkan altı nokta, kriterler yazılmadan önce bilinmiyordu:
    (`backend/tests/test_font_coverage.py`): depoya gömülen HER woff2 artık
    Türkçe alfabenin tamamını taşımak zorunda.
 
-**Faz 6 — Kapanış**
-- [ ] `/onizleme` prototipi kaldırıldı; karar kaydı `PROJE_DURUMU.md`'de
-- [ ] Tam kapı: eval 23/23 · pytest 0 hata · `fidelity_trap` PASS · offline 0 soket · `check_contrast` PASS · `ui_proof` PASS · temiz build
+**Faz 6 — Kapanış** ✅ (kapandı)
+- [x] `/onizleme` prototipi kaldırıldı; kaldırma kararı ve prototipin ne işe
+      yaradığı `PROJE_DURUMU.md`'de kayıtlı (silindi diye gerekçesi silinmedi)
+- [x] Inter fontları, `fonts.ts` girdisi, `layout.tsx` değişkeni ve
+      `@fontsource/inter` bağımlılığı kaldırıldı — Inter yalnızca prototipte
+      kullanılıyordu. `test_font_coverage.py`'deki Inter istisnası da silindi:
+      artık gömülü HER font ürün yolunda ve Türkçe'yi tam kapsamak zorunda.
+- [x] **Faz 4'ün geride bıraktığı ölü kod temizlendi.** Zihin haritası SVG'den
+      kutu ağacına geçince radyal yerleşim matematiği (`PlacedNode.x/y/anchor`,
+      `VIEW`, `RADIUS`, trigonometri, `edgeWidth`, `byId`) okunmaz olmuştu ama
+      her render'da hesaplanmaya devam ediyordu. `layoutMindMap` yaptığı işe
+      indirildi: `orderedNodes`. Kaldırılan `edgeWidth`'in taşıdığı KARAR
+      (kenarlar §1.2 bantlarıyla renklendirilmez) yok olmadı, görünümdeki
+      konnektörlerin yanına taşındı.
+- [x] **Tam kapı** — hepsi tek turda, aynı ağaçta:
+      eval **23/23** (175 sn) · `pytest` **229 passed** · `fidelity_trap` PASS ·
+      `offline_proof` **23/23, 0 soket** · `check_contrast` PASS ·
+      `ui_proof` **PASS** (96 kontrol) · build + lint 0
+- [x] §13.0 kapsam tablosunun **sekiz "İçeride" maddesinin tamamı** teslim
+      edildi; "Dışarıda" sütunundaki hiçbir madde sızmadı (telemetrinin ve
+      canlı kaydırağın yokluğu `ui_proof`'ta ölçülüyor).
 
 ### 13.6 Reddedilen alternatifler
 

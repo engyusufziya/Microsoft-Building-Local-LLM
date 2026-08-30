@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 import {
   asMindMapPayload,
-  layoutMindMap,
+  orderedNodes,
   truncateLabel,
 } from "./mindmap-payload"
 
@@ -45,28 +45,28 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const nodeRefs = React.useRef(new Map<string, HTMLDivElement | null>())
 
-  const layout = React.useMemo(
-    () => (payload === null ? null : layoutMindMap(payload)),
+  const nodes = React.useMemo(
+    () => (payload === null ? [] : orderedNodes(payload)),
     [payload]
   )
 
-  if (payload === null || layout === null) return null
+  if (payload === null) return null
 
-  const focusable = layout.placed
-  const activeId = selectedId ?? focusable[0]?.node.id ?? null
-  const selected = focusable.find((p) => p.node.id === activeId)?.node ?? null
+  const focusable = nodes
+  const activeId = selectedId ?? focusable[0]?.id ?? null
+  const selected = focusable.find((node) => node.id === activeId) ?? null
 
   const move = (delta: number) => {
-    const index = focusable.findIndex((p) => p.node.id === activeId)
+    const index = focusable.findIndex((node) => node.id === activeId)
     const next = focusable[(index + delta + focusable.length) % focusable.length]
-    setSelectedId(next.node.id)
-    nodeRefs.current.get(next.node.id)?.focus()
+    setSelectedId(next.id)
+    nodeRefs.current.get(next.id)?.focus()
   }
 
   const jump = (index: number) => {
     const target = focusable[index]
-    setSelectedId(target.node.id)
-    nodeRefs.current.get(target.node.id)?.focus()
+    setSelectedId(target.id)
+    nodeRefs.current.get(target.id)?.focus()
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -96,14 +96,14 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
 
   const topicCount = payload.nodes.filter((n) => n.kind === "topic").length
 
-  // Yatay ağaç için kök ve dallar ayrılır. `layout.placed` İÇİNDEKİ İNDEKS
-  // korunur: klavye gezinmesi (`jump`) o diziye göre çalışıyor ve
-  // yeniden numaralandırmak Home/End/ok davranışını sessizce bozardı.
-  const rootIndex = layout.placed.findIndex((p) => p.node.kind === "root")
-  const rootPlaced = rootIndex >= 0 ? layout.placed[rootIndex] : undefined
-  const topicPlaced = layout.placed
-    .map((placed, index) => ({ placed, index }))
-    .filter(({ placed }) => placed.node.kind === "topic")
+  // Yatay ağaç için kök ve dallar ayrılır. `nodes` İÇİNDEKİ İNDEKS korunur:
+  // klavye gezinmesi (`jump`) o diziye göre çalışıyor ve yeniden
+  // numaralandırmak Home/End/ok davranışını sessizce bozardı.
+  const rootIndex = nodes.findIndex((node) => node.kind === "root")
+  const rootNode = rootIndex >= 0 ? nodes[rootIndex] : undefined
+  const topicNodes = nodes
+    .map((node, index) => ({ node, index }))
+    .filter((entry) => entry.node.kind === "topic")
 
   return (
     <ArtifactScreen
@@ -165,25 +165,25 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
             onKeyDown={handleKeyDown}
             className="flex min-w-[52rem] items-stretch outline-none"
           >
-            {rootPlaced !== undefined && (
+            {rootNode !== undefined && (
               <>
                 <div className="flex w-65 shrink-0 flex-col justify-center">
                   <div
                     ref={(element) => {
-                      nodeRefs.current.set(rootPlaced.node.id, element)
+                      nodeRefs.current.set(rootNode.id, element)
                     }}
                     role="treeitem"
                     aria-level={1}
-                    aria-selected={rootPlaced.node.id === activeId}
-                    aria-label={`${rootPlaced.node.label} — ${rootPlaced.node.size}`}
-                    tabIndex={rootPlaced.node.id === activeId ? 0 : -1}
-                    data-node-id={rootPlaced.node.id}
-                    data-label-source={rootPlaced.node.label_source}
-                    onFocus={() => setSelectedId(rootPlaced.node.id)}
+                    aria-selected={rootNode.id === activeId}
+                    aria-label={`${rootNode.label} — ${rootNode.size}`}
+                    tabIndex={rootNode.id === activeId ? 0 : -1}
+                    data-node-id={rootNode.id}
+                    data-label-source={rootNode.label_source}
+                    onFocus={() => setSelectedId(rootNode.id)}
                     onClick={() => jump(rootIndex)}
                     className={cn(
                       "cursor-pointer border-2 bg-primary p-4.5 text-primary-foreground outline-none",
-                      rootPlaced.node.id === activeId
+                      rootNode.id === activeId
                         ? "border-primary"
                         : "border-text-primary"
                     )}
@@ -191,7 +191,7 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
                     <p className="text-caption font-medium tracking-[0.1em] uppercase opacity-85">
                       {t.mindMapRootKicker}
                     </p>
-                    <p className="mt-2 text-h2 font-semibold">{rootPlaced.node.label}</p>
+                    <p className="mt-2 text-h2 font-semibold">{rootNode.label}</p>
                   </div>
                 </div>
 
@@ -204,25 +204,25 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
             )}
 
             <div className="flex flex-1 flex-col gap-3.5">
-              {topicPlaced.map(({ placed, index }, branchNo) => {
-                const isActive = placed.node.id === activeId
+              {topicNodes.map(({ node, index }, branchNo) => {
+                const isActive = node.id === activeId
                 return (
-                  <div key={placed.node.id} className="flex items-stretch">
+                  <div key={node.id} className="flex items-stretch">
                     <div className="relative w-5.5 shrink-0" aria-hidden="true">
                       <span className="absolute top-1/2 right-0 left-0 h-0.5 bg-text-primary" />
                     </div>
                     <div
                       ref={(element) => {
-                        nodeRefs.current.set(placed.node.id, element)
+                        nodeRefs.current.set(node.id, element)
                       }}
                       role="treeitem"
                       aria-level={2}
                       aria-selected={isActive}
-                      aria-label={`${placed.node.label} — ${placed.node.size}`}
+                      aria-label={`${node.label} — ${node.size}`}
                       tabIndex={isActive ? 0 : -1}
-                      data-node-id={placed.node.id}
-                      data-label-source={placed.node.label_source}
-                      onFocus={() => setSelectedId(placed.node.id)}
+                      data-node-id={node.id}
+                      data-label-source={node.label_source}
+                      onFocus={() => setSelectedId(node.id)}
                       onClick={() => jump(index)}
                       className={cn(
                         "w-62 shrink-0 cursor-pointer border-2 bg-background p-3.5 outline-none",
@@ -234,16 +234,23 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
                           {String(branchNo + 1).padStart(2, "0")}
                         </span>
                         <span className="text-body-sm font-semibold text-text-primary">
-                          {truncateLabel(placed.node.label)}
+                          {truncateLabel(node.label)}
                         </span>
                       </div>
-                      {placed.node.label_source === "fallback" && (
+                      {node.label_source === "fallback" && (
                         <p className="mt-1.5 text-caption text-warning">
                           {t.labelSourceFallback}
                         </p>
                       )}
                     </div>
 
+                    {/* Konnektörler RENKLENDİRİLMEZ. Kenar ağırlığı ham
+                        cosine olsa da DESIGN_SYSTEM §1.2 güven bantları
+                        SORGU→CHUNK alaka düzeyi için kalibre edildi; iki
+                        KONU MERKEZİ arasındaki benzerlik başka bir sorudur
+                        (§11.6). Bantla boyamak Inspector'ın anlamını sessizce
+                        genişletirdi. (Bu gerekçe kaldırılan `edgeWidth`
+                        fonksiyonundan taşındı.) */}
                     <div className="relative w-8.5 shrink-0" aria-hidden="true">
                       <span className="absolute top-1/2 right-0 left-0 h-0.5 bg-border-strong" />
                     </div>
@@ -251,7 +258,7 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
                     {/* Yapraklar: konunun alıntıları, geldikleri sayfayla
                         etiketli. Mockup'ın "s.N" rozeti. */}
                     <ul className="flex flex-1 flex-col justify-center gap-1.5 border-l-2 border-border-strong pl-3.5">
-                      {placed.node.citations.map((citation) => (
+                      {node.citations.map((citation) => (
                         <li
                           key={citation.chunk_id}
                           className="flex items-center gap-2.5 border border-border bg-surface px-2.5 py-1.5"

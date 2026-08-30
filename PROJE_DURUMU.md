@@ -1086,7 +1086,8 @@ Font: **Archivo** (Modernist ailesi) offline gömüldü. `@fontsource/archivo`'n
 `latin` ve `latin-ext` altkümeleri ağırlık başına (400/600/800) **tek woff2**'de
 birleştirildi (dev-zamanı `fonttools`, çalışma-anı bağımlılığı değil); Türkçe
 glifleri (ş ğ ı İ …) tek dosyada tam kapsanıyor. Inter dosyaları depoda kaldı;
-yalnızca geçici `/onizleme` prototipi kullanıyor, Faz 6'da kaldırılacak.
+yalnızca geçici `/onizleme` prototipi kullanıyordu; ikisi de Faz 6'da
+kaldırıldı.
 
 Reddedilen: `#EC3013`'ü `--primary` yapmak (beyaz metinle AA altı); radius'ı
 kademeli tutmak (Modernist keskin, hepsi 0); tek tema (koyu korundu).
@@ -1447,6 +1448,59 @@ edilmiyor, offline iddiası bozulmuyor.
 Sırada Faz 6 (kapanış): `/onizleme` prototipi ve artık kullanılmayan Inter
 fontları kaldırılacak, tam kapı bir kez koşulacak.
 
+## Modernist yeniden tasarım — Faz 6 (kapanış)
+
+Prototip görevini tamamladı ve kaldırıldı. Faz 0'da kurulmasının sebebi
+kayıtta duruyor: karar mockup'a bakarak değil **çalışan görüntü** üzerinden
+verilsin diye `web/app/onizleme/` altında üretim kabuğuna dokunmayan izole
+bir kopya kurulmuştu. Altı ekranın hepsi artık üretimde, prototipin
+karşılaştırma değeri bitti — dosya silindi, **gerekçesi silinmedi**.
+
+Prototiple birlikte giden şeyler: Inter fontları (üç woff2 + lisans),
+`fonts.ts` girdisi, `layout.tsx` değişkeni, `@fontsource/inter`
+bağımlılığı ve `test_font_coverage.py`'deki Inter istisnası. Sonuncusu
+önemli: artık depoya gömülü **her** font ürün yolunda, yani hiçbiri Türkçe
+kapsamı denetiminden muaf değil.
+
+### Faz 4'ün geride bıraktığı ölü kod
+
+Zihin haritası SVG'den kutu ağacına geçince radyal yerleşim matematiği
+okunmaz olmuştu — ama **her render'da hesaplanmaya devam ediyordu**:
+`PlacedNode.x/y/anchor`, `VIEW`, `RADIUS`, açı trigonometrisi, `edgeWidth`,
+`byId`, `layout.width/height`. Hiçbirini kimse çağırmıyordu.
+
+`layoutMindMap` yaptığı işe indirildi ve adı onu söyler oldu: `orderedNodes`
+— kök önce, sonra konular, deterministik. Klavye gezinmesi bu sıraya bağlı
+olduğu için indeks anlamı korundu.
+
+Kaldırılan `edgeWidth`'in **taşıdığı karar** yok olmadı. O fonksiyonun
+docstring'i "kenarlar `DESIGN_SYSTEM §1.2` güven bantlarıyla renklendirilmez;
+o bantlar sorgu→chunk için kalibre edildi, iki konu merkezi arasındaki
+benzerlik başka bir sorudur" diyordu. Karar hâlâ yürürlükte (konnektörler
+renksiz), o yüzden gerekçe görünümdeki konnektörlerin yanına taşındı. Ölü
+kodu silerken canlı bir kararı da silmek, bu deponun en kolay yapacağı hata
+olurdu.
+
+### Kapsam denetimi
+
+`§13.0`'ın **sekiz "İçeride" maddesinin tamamı** teslim edildi: token seti
+(Faz 1), shadcn uyarlaması (Faz 1–4), bilgi mimarisi (Faz 2), satır içi
+numaralı alıntı ve sayfa görüntüsü (Faz 3), artefakt ekranları (Faz 4),
+salt-okunur ayarlar (Faz 5), Archivo gömme (Faz 1).
+
+"Dışarıda" sütunundan hiçbir madde **sızmadı** — ve bu bir iddia değil,
+ölçüm: cihaz telemetrisinin ve canlı eşik/topK kaydırağının YOKLUĞU
+`ui_proof`'ta ayrı kontroller olarak tutuluyor. Tek tema reddi de yerinde:
+koyu tema ve yazdırma paleti kayıpsız duruyor.
+
+### Tam kapı — tek turda, aynı ağaçta
+
+eval **23/23** (175 sn) · `pytest` **229 passed** · `fidelity_trap` PASS ·
+`offline_proof` **23/23, 0 soket** (rasterleyici aynı kaydın içinde) ·
+`check_contrast` PASS · `ui_proof` **PASS** (96 kontrol) · build + lint 0.
+
+Modernist yeniden tasarım (v3 arayüz) **kapandı**.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -1459,10 +1513,9 @@ devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
 Bu turda DENENİP REDDEDİLEN: entailment katmanı (yukarıda, sayılarıyla).
 
 Açıkta kalan, gerekçesi kayıtlı işler:
-- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0–5 kapandı (kararlar
-  `FEATURE_SPEC §13`); sırada Faz 6 (kapanış).
-  Faz 2'nin devralınan kırmızısı Faz 3'te kapandı. İzole prototip
-  `web/app/onizleme/` referans olarak duruyor, Faz 6'da kaldırılacak.
+- **Modernist yeniden tasarım (v3 arayüz)**: **TAMAMLANDI** — altı fazın
+  hepsi kapandı, kararlar `FEATURE_SPEC §13`'te. İzole prototip ve Inter
+  fontları Faz 6'da kaldırıldı; tam kapı tek turda yeşil geçti.
 - **Entailment boşluğu**, artık daha geniş biçimde kayıtlı: özel ad taşımayan
   çelişki için ölçülmüş savunma yok. LLM doğrulayıcı denendi ve reddedildi.
 - **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;

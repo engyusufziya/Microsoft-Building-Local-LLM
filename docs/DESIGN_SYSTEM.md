@@ -162,8 +162,16 @@ Yazdırma seçicileri **ikidir** ve bileşen iç yapısına bağlanmaz:
 > Faz 4.1.4'ün kabul kriteri: build çıktısında hiçbir dış font isteği olmaması.
 > Archivo için `@fontsource/archivo`'nun `latin` + `latin-ext` altkümeleri
 > ağırlık başına (400/600/800) TEK woff2'de birleştirildi; Türkçe glifleri
-> (ş ğ ı İ …) tek dosyada tam kapsanıyor. (Önceki Inter dosyaları depoda kalıyor;
-> yalnızca geçici `/onizleme` prototipi kullanıyor, Faz 6'da kaldırılacak.)
+> (ş ğ ı İ …) tek dosyada tam kapsanıyor.
+>
+> **AYNI birleştirme JetBrains Mono'ya da uygulanır.** Faz 1'de atlanmıştı ve
+> mono fontta `ş Ş İ ğ Ğ` HİÇ YOKTU — tarayıcı eksik glifi sistem fontundan
+> getirdiği için hata sessizdi (Faz 5'te boş durum ekranında gözle görüldü,
+> `fontTools` ile ölçüldü). `backend/tests/test_font_coverage.py` artık
+> depoya gömülü HER woff2'nin Türkçe alfabeyi tam taşımasını şart koşuyor.
+>
+> Inter dosyaları Faz 6'da **kaldırıldı**: yalnızca geçici `/onizleme`
+> prototipi kullanıyordu, prototiple birlikte gitti.
 
 ### 2.2 Ölçek
 
