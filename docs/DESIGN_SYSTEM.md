@@ -6,6 +6,11 @@
 >
 > Kural: **hiçbir bileşende sabit renk (hex) yazılmaz.** Her renk bir CSS
 > değişkeninden okunur.
+>
+> **Modernist v3 (Faz 1, `FEATURE_SPEC §13`):** token **adları** aynı kaldı;
+> **değerleri** Modernist palete yeniden ayarlandı (sıcak-gri zemin, kırmızı
+> marka, radius=0, tek aile Archivo). Açık **ve** koyu tema korunur; tüm
+> çiftler `docs/check_contrast.py` ile yeniden doğrulandı (§1.4).
 
 ---
 
@@ -15,18 +20,25 @@
 
 | Token | Light | Dark | Kullanım |
 |---|---|---|---|
-| `--primary` | `#4F46E5` | `#818CF8` | Ana eylem, aktif durum, odak halkası |
-| `--primary-hover` | `#4338CA` | `#A5B4FC` | Hover/active |
-| `--primary-fg` | `#FFFFFF` | `#0A0A0B` | Primary zemin üzerindeki metin |
-| `--accent` | `#9333EA` | `#C084FC` | AI/üretim göstergesi, vurgu |
-| `--background` | `#FFFFFF` | `#0A0A0B` | Sayfa zemini |
-| `--surface` | `#F9FAFB` | `#141416` | Kart, sidebar, panel |
-| `--surface-raised` | `#FFFFFF` | `#1C1C1F` | Modal, dropdown, popover |
-| `--border` | `#E5E7EB` | `#27272A` | Ayırıcı, kart kenarı |
-| `--border-strong` | `#D1D5DB` | `#3F3F46` | Girdi kenarı, vurgulu ayırıcı |
-| `--text-primary` | `#111827` | `#FAFAFA` | Başlık, gövde |
-| `--text-secondary` | `#6B7280` | `#A1A1AA` | Açıklama, ikincil bilgi |
-| `--text-tertiary` | `#6B7280` | `#8B8B93` | Metadata, zaman damgası |
+| `--primary` | `#C02D18` | `#FF9783` | Ana eylem, aktif durum, odak halkası, buton dolgusu |
+| `--primary-hover` | `#AE1800` | `#FFC4B8` | Hover/active |
+| `--primary-fg` | `#FFFFFF` | `#1A1918` | Primary zemin üzerindeki metin |
+| `--accent` | `#AE1800` | `#FF9783` | AI/üretim göstergesi, vurgu (metin olarak) |
+| `--background` | `#F3F2F2` | `#1A1918` | Sayfa zemini |
+| `--surface` | `#EAE9E9` | `#232120` | Kart, sidebar, panel |
+| `--surface-raised` | `#F8F4F4` | `#2D2B2B` | Modal, dropdown, popover |
+| `--border` | `#D7D3D3` | `#3A3736` | Ayırıcı, kart kenarı |
+| `--border-strong` | `#7D7979` | `#605D5D` | Girdi kenarı, vurgulu ayırıcı |
+| `--text-primary` | `#201E1D` | `#F8F4F4` | Başlık, gövde |
+| `--text-secondary` | `#605D5D` | `#BAB6B6` | Açıklama, ikincil bilgi |
+| `--text-tertiary` | `#605D5D` | `#9B9797` | Metadata, zaman damgası |
+
+> [!note] Marka kırmızısı: `--primary` neden `#C02D18`, canlı `#EC3013` değil?
+> Mockup'ın canlı kırmızısı (`#EC3013`) beyaz metinle yalnızca **4.20:1** verir
+> (AA altı). `--primary` etkileşimli dolgu olarak beyaz metinle **5.79:1**, zemin
+> üstünde metin olarak **min 4.77:1** okunur; bu yüzden bir basamak koyu tuğla
+> (`#C02D18`) seçildi — göze hâlâ canlı marka kırmızısı. `--accent` (metin olarak
+> vurgu) daha da koyu `#AE1800`, çünkü metnin zemin üstünde geçmesi gerekir.
 
 > [!warning] `--text-tertiary` neden `--text-secondary` ile aynı (light)?
 > Taslakta `#9CA3AF` önerilmişti; ölçtüğümde beyaz üzerinde **2.54:1** çıktı —
@@ -44,9 +56,16 @@ Bantlar `rag/config.py`'deki gerçek ölçümlere dayanır: cevabı olan sorular
 | Bant | Aralık | Anlam | Light | Dark |
 |---|---|---|---|---|
 | Güçlü | ≥ 0.70 | Yüksek güven, cevaplanabilir aralığın üstü | `#047857` | `#34D399` |
-| Orta | 0.55 – 0.70 | Kullanılabilir ama tek başına yeterli olmayabilir | `#B45309` | `#FBBF24` |
-| Zayıf | `MIN_SCORE` – 0.55 | Eşiği ancak geçti | `#DC2626` | `#F87171` |
-| Elendi | < `MIN_SCORE` | LLM'e hiç gitmedi | `#6B7280` | `#8B8B93` |
+| Orta | 0.55 – 0.70 | Kullanılabilir ama tek başına yeterli olmayabilir | `#8F5600` | `#FBBF24` |
+| Zayıf | `MIN_SCORE` – 0.55 | Eşiği ancak geçti | `#9E2F17` | `#F87171` |
+| Elendi | < `MIN_SCORE` | LLM'e hiç gitmedi | `#605D5D` | `#9B9797` |
+
+> [!warning] §13.3 — "Zayıf" bandı marka kırmızısından AYRIK olmalı
+> Modernist marka vurgusu kırmızı (`--primary`); "zayıf" bandı da kırmızı
+> ailesinde. Karışmasınlar diye zayıf **koyu tuğla** seçildi (light `#9E2F17`,
+> markadan 1.26× kontrastla; dark `#F87171`, salmon marka `#FF9783`'ten 1.32×).
+> Bantlar `MIN_SCORE`'a bağlı kalır, üç-sinyal kuralı (renk+sayı+ikon) korunur;
+> renk kaldırılsa bilgi hâlâ okunur.
 
 > [!danger] Eşik değeri koda gömülmez
 > "Elendi" sınırı `MIN_SCORE`'dur ve **backend'den gelir** (`/api/health` veya
@@ -63,32 +82,40 @@ Bantlar `rag/config.py`'deki gerçek ölçümlere dayanır: cevabı olan sorular
 | Token | Light | Dark | Kullanım |
 |---|---|---|---|
 | `--success` | `#047857` | `#34D399` | Yükleme tamamlandı |
-| `--warning` | `#B45309` | `#FBBF24` | Atlanan sayfa, OCR uyarısı |
-| `--danger` | `#DC2626` | `#F87171` | Hata, silme eylemi |
-| `--info` | `#4F46E5` | `#818CF8` | Bilgilendirme |
-| `--ocr-badge` | `#B45309` | `#FBBF24` | OCR'dan gelen chunk işareti |
+| `--warning` | `#8F5600` | `#FBBF24` | Atlanan sayfa, OCR uyarısı |
+| `--danger` | `#9E2F17` | `#F87171` | Hata, silme eylemi |
+| `--info` | `#C02D18` | `#FF9783` | Bilgilendirme |
+| `--ocr-badge` | `#8F5600` | `#FBBF24` | OCR'dan gelen chunk işareti |
+
+Durum renkleri skor bantlarıyla aynı ölçülmüş değerleri paylaşır (success=güçlü,
+warning=orta, danger=zayıf); Modernist'te ayrı bir renk kararı değil, §1.2'nin
+kontrastı doğrulanmış tonlarının yeniden kullanımı. `--info` markayla (`--primary`)
+aynıdır — Modernist palette ayrı bir bilgi mavisi yoktur.
 
 `--ocr-badge` ayrı bir token: OCR metni tanım gereği daha az güvenilir,
 kullanıcı bunu skordan bağımsız görmeli.
 
 ### 1.4 Kontrast doğrulaması (ölçüldü, iddia değil)
 
-Tüm metin/zemin çiftleri WCAG AA (≥ 4.5:1) üstünde:
+Tüm metin/zemin çiftleri WCAG AA (≥ 4.5:1) üstünde. Aşağıdaki değerler
+`--background` üzerinedir; `check_contrast.py` ayrıca `--surface` ve
+`--surface-raised` üzerinde de doğrular ve **en düşük** çift bile AA üstündedir
+(light'ta en sıkı: `--primary` on `--surface` = 4.77:1):
 
 | Token | Light | Dark |
 |---|---|---|
-| `--text-primary` | 17.74:1 | 18.96:1 |
-| `--text-secondary` | 4.83:1 | 7.72:1 |
-| `--text-tertiary` | 4.83:1 | 5.85:1 |
-| `--primary` | 6.29:1 | 6.63:1 |
-| `--accent` | 5.38:1 | 7.49:1 |
-| Skor · güçlü | 5.48:1 | 10.29:1 |
-| Skor · orta | 5.02:1 | 11.85:1 |
-| Skor · zayıf | 4.83:1 | 7.15:1 |
-| Skor · elendi | 4.83:1 | 5.85:1 |
+| `--text-primary` | 14.86:1 | 16.08:1 |
+| `--text-secondary` | 5.83:1 | 8.74:1 |
+| `--text-tertiary` | 5.83:1 | 6.08:1 |
+| `--primary` | 5.18:1 | 8.37:1 |
+| `--accent` | 6.41:1 | 8.37:1 |
+| Skor · güçlü | 4.91:1 | 9.13:1 |
+| Skor · orta | 5.37:1 | 10.52:1 |
+| Skor · zayıf | 6.54:1 | 6.35:1 |
+| Skor · elendi | 5.83:1 | 6.08:1 |
 
-Yeni bir renk eklenirse aynı hesap tekrarlanmalı — `docs/` altındaki kontrast
-script'i ile.
+Yeni bir renk eklenirse aynı hesap tekrarlanmalı — `docs/check_contrast.py` ile
+(değerler iddia değil, tekrar üretilebilir ölçüm).
 
 ### 1.5 Yazdırma paleti (Studio Faz 2)
 
@@ -99,12 +126,12 @@ sütunuyla değiştirir:
 
 | Token | Yazdırmada kullanılan değer | Kaynak |
 |---|---|---|
-| `--background` · `--surface-raised` | `#FFFFFF` | §1.1 light |
-| `--surface` | `#F9FAFB` | §1.1 light |
-| `--border` · `--border-strong` | `#E5E7EB` · `#D1D5DB` | §1.1 light |
-| `--text-primary` · `--text-secondary` · `--text-tertiary` | `#111827` · `#6B7280` · `#6B7280` | §1.1 light |
-| `--primary` | `#4F46E5` | §1.1 light |
-| `--warning` | `#B45309` | §1.3 light |
+| `--background` | `#F3F2F2` | §1.1 light |
+| `--surface` · `--surface-raised` | `#EAE9E9` · `#F8F4F4` | §1.1 light |
+| `--border` · `--border-strong` | `#D7D3D3` · `#7D7979` | §1.1 light |
+| `--text-primary` · `--text-secondary` · `--text-tertiary` | `#201E1D` · `#605D5D` · `#605D5D` | §1.1 light |
+| `--primary` | `#C02D18` | §1.1 light |
+| `--warning` | `#8F5600` | §1.3 light |
 
 > [!warning] Bu tablo §1.1/§1.3'ün **kopyasıdır** — ikisi birlikte değişmeli
 > Yeni bir renk kararı değil: kâğıt beyazdır, karanlık temanın açık metni
@@ -126,14 +153,17 @@ Yazdırma seçicileri **ikidir** ve bileşen iç yapısına bağlanmaz:
 
 | Rol | Font | Neden |
 |---|---|---|
-| UI | **Inter** | Yüksek x-height, dar alanda okunaklı; Linear/Notion'ın da tercihi |
+| UI (gövde + başlık) | **Archivo** | Modernist v3 (§13) ailesi; grotesk karakter, 800'de güçlü başlık |
 | Mono | **JetBrains Mono** | Skor, chunk metni, kod; rakamları ayırt edici |
 
 > [!danger] CDN kullanılmaz
 > Google Fonts CDN offline iddiasını **bozar**. Fontlar `.woff2` olarak
 > `web/app/fonts/` altına indirilir ve `next/font/local` ile bundle'a gömülür.
 > Faz 4.1.4'ün kabul kriteri: build çıktısında hiçbir dış font isteği olmaması.
-> Yalnızca kullanılan ağırlıklar (400/500/600) paketlenir.
+> Archivo için `@fontsource/archivo`'nun `latin` + `latin-ext` altkümeleri
+> ağırlık başına (400/600/800) TEK woff2'de birleştirildi; Türkçe glifleri
+> (ş ğ ı İ …) tek dosyada tam kapsanıyor. (Önceki Inter dosyaları depoda kalıyor;
+> yalnızca geçici `/onizleme` prototipi kullanıyor, Faz 6'da kaldırılacak.)
 
 ### 2.2 Ölçek
 
@@ -158,22 +188,27 @@ uygulaması" hissi verir ve üç kolonlu düzende yer kaybettirir.
 **Spacing** — 4px tabanlı: `4 · 8 · 12 · 16 · 24 · 32 · 48 · 64`
 Kart/panel iç boşluğu 24, bölüm arası 32, sıkışık liste öğesi 8–12.
 
-**Radius**
+**Radius** — Modernist v3 (§13): **keskin köşe, hepsi 0**.
 
 | Token | Değer | Kullanım |
 |---|---|---|
-| `--radius-sm` | 6px | Rozet, chip |
-| `--radius-md` | 8px | Buton, girdi |
-| `--radius-lg` | 12px | Kart, panel |
-| `--radius-xl` | 16px | Modal |
+| `--radius-sm` | 0px | Rozet, chip |
+| `--radius-md` | 0px | Buton, girdi |
+| `--radius-lg` | 0px | Kart, panel |
+| `--radius-xl` | 0px | Modal |
 
-**Shadow** — yalnızca light mode'da anlamlıdır.
+> [!note] Ad basamakları neden duruyor?
+> Değerler 0'a çekildi ama `sm/md/lg/xl` adları korundu: Tailwind köprüsü
+> (`rounded-*`) ve mevcut bileşenler bu adlara bağlı; yalnızca değer değişti,
+> yapı kırılmadı.
+
+**Shadow** — yalnızca light mode'da anlamlıdır; Modernist ink-tinted tonlar.
 
 | Token | Light | Dark |
 |---|---|---|
-| `--shadow-sm` | `0 1px 2px rgb(0 0 0 / .05)` | `none` |
-| `--shadow-md` | `0 4px 12px rgb(0 0 0 / .08)` | `none` |
-| `--shadow-lg` | `0 12px 32px rgb(0 0 0 / .12)` | `none` |
+| `--shadow-sm` | `0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent)` | `none` |
+| `--shadow-md` | `0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent)` | `none` |
+| `--shadow-lg` | `0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent)` | `none` |
 
 > [!info] Dark mode'da katman gölgeyle değil, yüzey açıklığıyla kurulur
 > `--background` → `--surface` → `--surface-raised` giderek açılır. Gölge

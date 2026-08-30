@@ -17,33 +17,33 @@ import sys
 AA_NORMAL = 4.5
 
 LIGHT = {
-    "background": "#FFFFFF",
-    "surface": "#F9FAFB",
-    "surface-raised": "#FFFFFF",
-    "text-primary": "#111827",
-    "text-secondary": "#6B7280",
-    "text-tertiary": "#6B7280",
-    "primary": "#4F46E5",
-    "accent": "#9333EA",
+    "background": "#F3F2F2",
+    "surface": "#EAE9E9",
+    "surface-raised": "#F8F4F4",
+    "text-primary": "#201E1D",
+    "text-secondary": "#605D5D",
+    "text-tertiary": "#605D5D",
+    "primary": "#C02D18",
+    "accent": "#AE1800",
     "score-strong": "#047857",
-    "score-medium": "#B45309",
-    "score-weak": "#DC2626",
-    "score-rejected": "#6B7280",
+    "score-medium": "#8F5600",
+    "score-weak": "#9E2F17",
+    "score-rejected": "#605D5D",
 }
 
 DARK = {
-    "background": "#0A0A0B",
-    "surface": "#141416",
-    "surface-raised": "#1C1C1F",
-    "text-primary": "#FAFAFA",
-    "text-secondary": "#A1A1AA",
-    "text-tertiary": "#8B8B93",
-    "primary": "#818CF8",
-    "accent": "#C084FC",
+    "background": "#1A1918",
+    "surface": "#232120",
+    "surface-raised": "#2D2B2B",
+    "text-primary": "#F8F4F4",
+    "text-secondary": "#BAB6B6",
+    "text-tertiary": "#9B9797",
+    "primary": "#FF9783",
+    "accent": "#FF9783",
     "score-strong": "#34D399",
     "score-medium": "#FBBF24",
     "score-weak": "#F87171",
-    "score-rejected": "#8B8B93",
+    "score-rejected": "#9B9797",
 }
 
 # Zemin üzerinde okunması gereken ön plan token'ları.

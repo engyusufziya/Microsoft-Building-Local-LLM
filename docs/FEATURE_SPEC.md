@@ -2475,11 +2475,11 @@ Kapı ayrımı: UI-yalnız fazlar **model yüklemeyen** yarıyı koşar
 faz (Faz 3) modeli **tek başına** yükler (16 GB — §7 Eşzamanlılık, `AGENTS.md`
 bellek kuralı).
 
-**Faz 1 — Tasarım sistemi**
-- [ ] Archivo 400/600/800 woff2 gömülü, lisansı yanında; `offline_proof` 0 soket
-- [ ] `globals.css` Modernist açık+koyu token; radius=0; skor bantları marka kırmızısından ayrık (§13.3)
-- [ ] `DESIGN_SYSTEM.md` güncel; `check_contrast.py` açık+koyu **PASS**
-- [ ] `npm run build` temiz · `lint` 0
+**Faz 1 — Tasarım sistemi** ✅ (kapandı)
+- [x] Archivo 400/600/800 woff2 gömülü (latin+latin-ext birleşik, Türkçe tam), lisansı yanında; offline kaynak+`out/` grep temiz — tam `offline_proof` (7B yükler) model-boş anda/final kapıda
+- [x] `globals.css` Modernist açık+koyu token; radius=0; skor bantları marka kırmızısından ayrık (§13.3)
+- [x] `DESIGN_SYSTEM.md` güncel; `check_contrast.py` açık+koyu **PASS** (54 çift, en sıkı 4.77:1)
+- [x] `npm run build` temiz · `lint` 0
 
 **Faz 2 — Kabuk & bilgi mimarisi**
 - [ ] Sol Kaynaklar/Çıktılar sekmeleri + sağ alıntı çekmecesi (§13.2)

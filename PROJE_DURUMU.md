@@ -1061,6 +1061,39 @@ Benimsendi. Yürütme kararları (ayrıntı `FEATURE_SPEC §13`):
 Kapsam dışı bırakılanlar (canlı eşik/topK kaydırağı, cihaz telemetrisi) ve diğer
 reddedilen alternatifler `FEATURE_SPEC §13.6`'da.
 
+## Modernist yeniden tasarım — Faz 1 (tasarım sistemi)
+
+Token **adları** dondurulmuş sözleşmede kaldı; **değerleri** Modernist palete
+yeniden ayarlandı (`globals.css`). Açık **ve** koyu tema korundu — mockup
+açık-tema olduğu için koyu varyant türetildi. `check_contrast.py`'nin LIGHT/DARK
+sözlükleri güncellendi ve **54 çiftin tamamı** WCAG AA üstünde (en sıkı: light
+`--primary` on `--surface` = 4.77:1).
+
+Ölçümle verilen renk kararları:
+
+- **Marka kırmızısı `--primary` = `#C02D18`, canlı `#EC3013` DEĞİL.** Mockup'ın
+  canlı kırmızısı beyaz metinle yalnızca **4.20:1** (AA altı). Bir basamak koyu
+  tuğla `#C02D18` hem dolgu-üstü-beyaz (5.79:1) hem zemin-üstü-metin (min 4.77:1)
+  okunur ve göze hâlâ canlı marka kırmızısı. Metin olarak vurgu (`--accent`) daha
+  da koyu `#AE1800`.
+- **Skor "zayıf" bandı markadan ayrıldı (§13.3):** light `#9E2F17` (koyu tuğla,
+  markadan 1.26×), dark `#F87171` (salmon markadan 1.32×). Bantlar `MIN_SCORE`'a
+  bağlı, üç-sinyal kuralı korundu — güven sinyali marka kırmızısıyla karışmıyor.
+- **Durum renkleri** skor bantlarının kontrastı doğrulanmış tonlarını yeniden
+  kullanır (success=güçlü, warning=orta, danger=zayıf); `--info` = marka.
+
+Font: **Archivo** (Modernist ailesi) offline gömüldü. `@fontsource/archivo`'nun
+`latin` ve `latin-ext` altkümeleri ağırlık başına (400/600/800) **tek woff2**'de
+birleştirildi (dev-zamanı `fonttools`, çalışma-anı bağımlılığı değil); Türkçe
+glifleri (ş ğ ı İ …) tek dosyada tam kapsanıyor. Inter dosyaları depoda kaldı;
+yalnızca geçici `/onizleme` prototipi kullanıyor, Faz 6'da kaldırılacak.
+
+Reddedilen: `#EC3013`'ü `--primary` yapmak (beyaz metinle AA altı); radius'ı
+kademeli tutmak (Modernist keskin, hepsi 0); tek tema (koyu korundu).
+
+Kapılar: `check_contrast` PASS · build temiz · lint 0 · offline grep temiz.
+Sırada Faz 2 (kabuk & bilgi mimarisi).
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -1073,10 +1106,10 @@ devri · `FEATURE_SPEC §9.10`'un işaretsiz kutuları · `scope="document"`
 Bu turda DENENİP REDDEDİLEN: entailment katmanı (yukarıda, sayılarıyla).
 
 Açıkta kalan, gerekçesi kayıtlı işler:
-- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0 kapandı (kararlar +
-  `FEATURE_SPEC §13`); sırada Faz 1 (tasarım sistemi — token + Archivo +
-  skor paleti/kontrast). İzole prototip `web/app/onizleme/` referans olarak
-  duruyor, Faz 6'da kaldırılacak.
+- **Modernist yeniden tasarım (v3 arayüz)**: Faz 0 + Faz 1 kapandı (kararlar
+  `FEATURE_SPEC §13`; tasarım sistemi yukarıda); sırada Faz 2 (kabuk & bilgi
+  mimarisi). İzole prototip `web/app/onizleme/` referans olarak duruyor, Faz
+  6'da kaldırılacak.
 - **Entailment boşluğu**, artık daha geniş biçimde kayıtlı: özel ad taşımayan
   çelişki için ölçülmüş savunma yok. LLM doğrulayıcı denendi ve reddedildi.
 - **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;
