@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
+import { useArtifactName } from "./artifact-name"
 import { useArtifacts, type ArtifactKind } from "./use-artifacts"
 
 /**
@@ -286,25 +287,24 @@ function ArtifactRow({
   onOpen: () => void
 }) {
   const t = useT(studio)
-  const kindLabel = { report: t.kindReport, mindmap: t.kindMindMap, quiz: t.kindQuiz }[
-    artifact.kind
-  ]
+  const name = useArtifactName(artifact)
   return (
     <li
       data-kind={artifact.kind}
+      data-artifact-id={artifact.id}
       className={cn(
         "flex flex-col gap-1.5 rounded-lg border bg-card p-3",
         active ? "border-primary" : "border-border"
       )}
     >
+      {/* Ad artık türetiliyor ve TİPİ ZATEN İÇERİYOR ("Rapor · Tüm
+          belgeler"), bu yüzden yanındaki tip rozeti kaldırıldı: aynı bilgi
+          iki kez yazılıyordu. İkon tipi görsel olarak taşımaya devam eder. */}
       <div className="flex items-start gap-2">
         {KIND_ICON[artifact.kind]}
         <p className="flex-1 text-body-sm font-medium text-text-primary">
-          {artifact.title}
+          {name}
         </p>
-        <span className="shrink-0 rounded-sm border border-border px-1.5 text-caption text-text-secondary">
-          {kindLabel}
-        </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {/* Oran; güven bandı rengi YOK (§9.1). */}

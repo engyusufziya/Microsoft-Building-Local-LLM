@@ -10,6 +10,7 @@ import { artifactExportUrl } from "@/lib/api"
 import type { ArtifactDetail } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 
+import { useArtifactName } from "./artifact-name"
 import { useArtifacts } from "./use-artifacts"
 
 /**
@@ -51,6 +52,7 @@ export function ArtifactScreen({
 }: ArtifactScreenProps) {
   const t = useT(studio)
   const { generatingKind, generate } = useArtifacts()
+  const name = useArtifactName(artifact)
 
   return (
     <div
@@ -72,7 +74,7 @@ export function ArtifactScreen({
         </Button>
         <span aria-hidden="true" className="h-4.5 w-px bg-border" />
         <h1 className="truncate text-body-sm font-semibold text-text-primary">
-          {artifact.title}
+          {name}
         </h1>
         {meta !== undefined && (
           <span className="shrink-0 font-mono text-mono text-text-secondary tabular-nums">

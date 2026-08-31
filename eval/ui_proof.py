@@ -466,7 +466,14 @@ def main(argv=None) -> int:
             print("\n--- Gerçek rapor render'ı ---")
             artifact_list = page.get_by_role("list", name="Üretilen artefaktlar")
             artifact_list.wait_for(timeout=10000)
-            artifact_list.locator("li").first.get_by_role("button", name="Aç").click()
+            # KİMLİĞE göre seçilir, KONUMA göre değil. Önceden `.first`
+            # kullanılıyordu ve "listenin ilki aradığımız rapordur" varsayıyordu;
+            # kullanıcı yeni bir artefakt ürettiği anda liste başı değişince
+            # kanıt yanlış artefaktı ölçmeye başlıyordu (gerçek `rag.db`'de
+            # yaşandı: en üstte bir zihin haritası belirdi).
+            artifact_list.locator(
+                f'li[data-artifact-id="{existing[0]["id"]}"]'
+            ).get_by_role("button", name="Aç").click()
             report = page.locator('[data-print="root"]')
             report.wait_for(timeout=10000)
             detail = json.loads(
@@ -476,7 +483,14 @@ def main(argv=None) -> int:
             expected_sentences = sum(
                 len(par["sentences"]) for sec in payload["sections"] for par in sec["paragraphs"]
             )
-            check("rapor başlığı render edildi", detail["title"] in report.inner_text())
+            # Arayüz artık motorun `title` alanını BASMIYOR: adı `kind` +
+            # `scope`'tan TÜRETİYOR (DESIGN_SYSTEM §7 [!warning] -- backend'den
+            # gelen ham Türkçe metin basılmaz). Eskiden "Korpus Raporu"
+            # yazıyordu ve arayüz İngilizce'ye alındığında da öyle kalıyordu.
+            check("başlık türetilmiş addan geliyor (motorun ham title'ı DEĞİL)",
+                  "Rapor · Tüm belgeler" in report.inner_text()
+                  and detail["title"] not in report.inner_text(),
+                  report.inner_text()[:80].replace("\n", " | "))
             check("her cümle node_path taşıyor",
                   report.locator("[data-node-path]").count() == expected_sentences,
                   f"{report.locator('[data-node-path]').count()}/{expected_sentences}")
@@ -573,9 +587,9 @@ def main(argv=None) -> int:
         pct = progress.get_attribute("aria-valuenow")
         check("pct 0-100 TAM SAYI (§9.5 ölçeği)",
               pct is not None and pct.isdigit() and 0 <= int(pct) <= 100, str(pct))
-        page.wait_for_selector("text=Arayüz Kanıtı Raporu", timeout=30000)
+        page.wait_for_selector("text=Rapor · Tüm belgeler", timeout=30000)
         check("üretim bitince rapor otomatik açıldı",
-              "Arayüz Kanıtı Raporu" in page.locator('[data-print="root"]').inner_text())
+              "Rapor · Tüm belgeler" in page.locator('[data-print="root"]').inner_text())
         check("düşürülen iddia panelde görünüyor",
               "gpt-4" in page.locator('[data-print="root"]').inner_text())
 
@@ -810,17 +824,26 @@ def main(argv=None) -> int:
         # Faz 3 — satır içi numaralı alıntı -> çekmece -> sayfa görüntüsü
         # ---------------------------------------------------------------
         print("\n--- Sayfa görüntüsü ucu (§13.4) ---")
-        # Kopyalanan veritabanındaki belge bu özellikten ÖNCE yüklendiği için
-        # kaynağı saklanmamış: 404 DOĞRU cevap (geriye dönük veri sınırı).
-        existing_doc = json.loads(urllib.request.urlopen(f"{BASE}/api/documents").read())[0]
-        try:
-            urllib.request.urlopen(
-                f"{BASE}/api/documents/{urllib.parse.quote(existing_doc['filename'])}"
-                f"/pages/1/image"
-            )
-            check("kaynağı saklanmamış belge 404 veriyor", False, "200 döndü")
-        except urllib.error.HTTPError as exc:
-            check("kaynağı saklanmamış belge 404 veriyor", exc.code == 404, str(exc.code))
+        # Geriye dönük veri sınırı: bu özellikten ÖNCE yüklenmiş belgelerin
+        # kaynağı saklanmamıştır ve uç 404 döner. Böyle bir belgenin VAR OLDUĞU
+        # VARSAYILMAZ -- kopyalanan veritabanı zamanla değişiyor (kullanıcı
+        # belgeyi yeniden yüklerse kaynağı artık saklıdır). API'nin kendi
+        # `has_page_images` alanına bakılır; yoksa kol atlanır ve bu AÇIKÇA
+        # yazılır. Aynı dal `backend/tests/test_page_image.py`'de ayrıca
+        # sabitlenmiş durumda.
+        docs = json.loads(urllib.request.urlopen(f"{BASE}/api/documents").read())
+        sourceless = [d for d in docs if not d["has_page_images"]]
+        if sourceless:
+            try:
+                urllib.request.urlopen(
+                    f"{BASE}/api/documents/"
+                    f"{urllib.parse.quote(sourceless[0]['filename'])}/pages/1/image"
+                )
+                check("kaynağı saklanmamış belge 404 veriyor", False, "200 döndü")
+            except urllib.error.HTTPError as exc:
+                check("kaynağı saklanmamış belge 404 veriyor", exc.code == 404, str(exc.code))
+        else:
+            print("  [ATLA] kaynağı saklanmamış belge yok -- kol pytest'te sabit")
 
         # Gerçek yükleme yolundan geçen bir PDF: baytlar saklanmalı ve sayfa
         # rasterlenebilmeli. Embedding sahte, ama YÜKLEME YOLU gerçek.
