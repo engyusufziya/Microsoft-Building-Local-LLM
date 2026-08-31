@@ -137,7 +137,9 @@ don't fully understand, and multi-step work with unclear requirements.
 .venv/bin/python eval/report_trap.py                  # Faz 2 closing measurement, NOT a routine gate
 .venv/bin/python eval/mindmap_proof.py                # Faz 3 closing measurement, NOT a routine gate
 .venv/bin/python eval/quiz_proof.py [--trap]          # Faz 4 closing measurement, NOT a routine gate
-.venv/bin/python eval/ui_proof.py                     # browser proof (needs requirements-dev.txt); no model
+.venv/bin/python eval/ui_proof.py                     # browser proof on a deterministic fixture; no model
+.venv/bin/python eval/ui_proof.py --shots-dir docs/screenshots   # refresh README screenshots
+.venv/bin/python eval/ui_proof.py --db rag.db        # same proof against real data (fragile by design)
 .venv/bin/python eval/short_answer_calibration.py     # short_answer threshold measurement; embedding only
 .venv/bin/python docs/check_contrast.py               # verify contrast claims
 .venv/bin/python -m rag.ingest --pdf dosya.pdf        # ingest a document
@@ -154,6 +156,13 @@ were the gate.
 
 Minimum gate before delivery: **eval 23/23 · `pytest backend/tests -q` with
 zero failures · `eval/fidelity_trap.py` PASS · clean frontend build**.
+
+`eval/ui_proof.py` now defaults to a **deterministic fixture**
+(`eval/fixtures/ui.db`, built on demand like `eval/eval.db`) rather than the
+developer's `rag.db`. That coupling broke the proof twice — once when a new
+artifact changed the list order, once when re-uploading a PDF removed the
+"document without a stored source" case the proof asserted. `--db rag.db`
+still points it at real data when you want to look at real data.
 
 `.github/workflows/gates.yml` runs the model-free half of that gate (pytest ·
 frontend build · lint) on every push. The model-loading half — eval, offline

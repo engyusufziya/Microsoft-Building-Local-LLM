@@ -4,7 +4,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-009688?logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16.3-000000?logo=nextdotjs&logoColor=white)
 ![Offline](https://img.shields.io/badge/network_calls-0_sockets_(audited)-success)
-![Tests](https://img.shields.io/badge/backend_tests-201_passing-success)
+![Tests](https://img.shields.io/badge/backend_tests-passing-success)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![Gates](https://github.com/engyusufziya/Microsoft-Building-Local-LLM/actions/workflows/gates.yml/badge.svg)](https://github.com/engyusufziya/Microsoft-Building-Local-LLM/actions/workflows/gates.yml)
 
@@ -66,6 +66,45 @@ flowchart TB
 
 ---
 
+## 🖥️ Interface
+
+Every screenshot below is produced by `eval/ui_proof.py --shots-dir docs/screenshots`
+against a deterministic fixture — they are **proof artifacts, not marketing renders**,
+and they refresh whenever the proof runs.
+
+**Inline citation → drawer → page image.** Each claim in an answer carries a numbered
+superscript. Pressing it opens the citation drawer with the rendered PDF page, the cited
+chunk, and the identity line `p.1 · chunk 1/94 · similarity 0.71` — where *similarity* is
+the **raw cosine**, never rescaled.
+
+![Citation drawer with page image](docs/screenshots/citation-drawer.png)
+
+**First run.** With an empty corpus the workspace is a single instruction, not a dashboard
+of disabled controls.
+
+![Empty state](docs/screenshots/empty.png)
+
+**Mind map.** Topics and their source pages, laid out as a tree. Keyboard-navigable
+(`role="tree"`, arrow keys, Home/End). Label suggestions that failed the fidelity gate are
+counted in a collapsed panel — withheld from the map, never hidden from the user.
+
+![Mind map](docs/screenshots/mindmap.png)
+
+**Quiz.** Three of four question types are graded deterministically. `short_answer` is
+**not** marked right or wrong — the answer↔answer cosine has no calibrated threshold
+(measured: best threshold reaches only 74.1 % accuracy, see *Limitations*). Instead the
+user's answer is shown beside the expected one, so they judge it themselves.
+
+![Short answer result](docs/screenshots/short-answer-result.png)
+
+**Settings — read-only.** `top_k` and `MIN_SCORE` are read from `/api/health`; the UI never
+hard-codes a threshold. There are no sliders: mutating `MIN_SCORE` at runtime is a separate
+architectural decision, not a settings toggle.
+
+![Settings drawer](docs/screenshots/settings.png)
+
+---
+
 ## 🛠️ Tech Stack & Key Components
 
 | Layer | Technology | Purpose |
@@ -75,7 +114,8 @@ flowchart TB
 | Retrieval | NumPy · SQLite (FTS5) | L2-normalised matrix cache, cosine search, optional BM25+RRF |
 | Storage | SQLite (`float32` BLOB) | Chunks, embeddings, artifacts, claims, quiz attempts |
 | OCR | macOS Vision (`pyobjc`) | Scanned-page fallback; `tr-TR` verified at runtime |
-| API | FastAPI · SSE | 14 endpoints, streaming chat + artifact generation |
+| PDF raster | `pypdfium2` (BSD-3 / Apache-2.0) | Renders the cited page on demand (~47 ms). **PyMuPDF was rejected — it is AGPL-3.0 and this repo is MIT** |
+| API | FastAPI · SSE | 14 endpoints, streaming chat + artifact generation, on-demand page images |
 | Frontend | Next.js 16 (`output: 'export'`) · React 19 · Tailwind · shadcn/ui | Static export served by FastAPI — one process, zero network |
 | Dev-only | Playwright + Chromium | Browser proof (`requirements-dev.txt`, never imported by the product) |
 
@@ -123,15 +163,15 @@ Hardware: **Apple M4 MacBook Air, 16 GB**, macOS 26.5, Foundry Local 0.8.119.
 
 | Gate | Result | Notes |
 |---|---|---|
-| Evaluation set | **23/23** (172 s, 7.5 s/question) | 10 answerable · 3 unanswerable · 2 edge · 3 meta · 2 corpus · 3 cross-lingual |
+| Evaluation set | **23/23** (175 s, 7.6 s/question) | 10 answerable · 3 unanswerable · 2 edge · 3 meta · 2 corpus · 3 cross-lingual |
 | Retrieval accuracy | **10/10** | Correct source document for every answerable question |
 | Model comparison | `qwen2.5-7b` 23/23 · `phi-4-mini` 12/15 | `eval/results.json`, reproducible via `--model` |
 | Offline audit | **0 socket calls** | `socket.connect` wrapped across a full eval run |
-| Backend tests | **201 passing** (~1.5 s) | No model loaded — pure unit/API layer |
+| Backend tests | **229 passing** (~1.5 s) | No model loaded — pure unit/API layer |
 | Fidelity gate trap | `0.5487 / grounded` | A **known limit**, pinned so it cannot change silently (see below) |
 | Mind map closing proof | **13/13** | 7 clusters, 7/7 labels from the model, `fidelity_score` 1.0000 |
 | Quiz closing proof | **16/16** | Answer key verifiable from corpus; injected hallucination **not published** |
-| Browser proof | **42/42** | Real Chromium: keyboard navigation, print contract, 0 console errors, 0 external requests |
+| Browser proof | **105/105** | Real Chromium on a deterministic fixture: citation chain, page image, keyboard navigation, print contract, 3 breakpoints, 0 console errors, 0 external requests |
 
 Reproduce any of them:
 
@@ -139,6 +179,7 @@ Reproduce any of them:
 .venv/bin/python eval/run_eval.py          # 23/23
 .venv/bin/python eval/offline_proof.py     # 0 sockets, writes eval/OFFLINE_PROOF.md
 .venv/bin/python -m pytest backend/tests -q
+.venv/bin/python eval/ui_proof.py          # 105/105 in real Chromium (needs requirements-dev.txt)
 ```
 
 ---
@@ -193,8 +234,10 @@ All tunable constants live in a single file with their rationale: [`rag/config.p
 ├── backend/          # FastAPI surface (thin: HTTP/SSE, schema mapping, errors)
 ├── web/              # Next.js static export (chat, inspector, studio views)
 ├── eval/             # Evaluation set, gates, and one-off closing measurements
+│   └── fixtures/     #   deterministic DB for the browser proof (built on demand)
 ├── data/             # Markdown fixtures used by the evaluation set
 └── docs/             # FEATURE_SPEC · STUDIO_PLAN · DESIGN_SYSTEM (Turkish)
+    └── screenshots/  #   regenerated by `ui_proof.py --shots-dir`
 ```
 
 ---
@@ -216,9 +259,23 @@ Documented rather than hidden — this is the project's core discipline.
   five-chunk context `qwen2.5-7b` abandoned the required output format entirely, so the layer
   silently disabled itself. Numbers and reasoning: `PROJE_DURUMU.md`.
 - **Hardware bound:** 16 GB RAM; concurrent model runs will OOM. Foundry Local GPU model variants
-  are assumed. <!-- TODO: Confirm behaviour on Windows/CUDA hosts; only macOS/M4 has been measured. -->
+  are assumed.
+- **Only macOS / Apple Silicon has been measured.** Windows and CUDA hosts are **untested** —
+  not "probably fine", untested. CI passing on `ubuntu-latest` proves only that the package
+  installs and imports; it does not prove the product runs there. This is stated rather than
+  quietly assumed, because the whole project rests on measured claims: an unmeasured platform
+  would be the one unmeasured claim in the README. The OCR path is macOS-only by construction
+  (`pyobjc` + Vision) and degrades gracefully — scanned pages are skipped and reported.
 - **`expected_keywords` in the evaluation harness reports loosely** (a correct answer can look
   "incomplete" when a keyword does not match verbatim). Deliberately not loosened.
+- **`short_answer` questions are never marked right or wrong.** The similarity shown is an
+  answer↔answer cosine, and no usable threshold exists for it — `eval/short_answer_calibration.py`
+  labelled 18 reference answers × 3 classes and swept 0.50–0.95: the best threshold reaches only
+  **74.1 % accuracy**, calling 6 of 18 correct answers wrong and 8 of 36 wrong answers correct.
+  Correct answers and *topically adjacent but wrong* answers overlap almost completely
+  (0.4772–0.8135 vs 0.3434–0.7664). Off-topic answers **do** separate cleanly, which is exactly
+  the distinction a quiz does not need. So the UI shows the user's answer beside the expected one
+  and lets them judge. Known limit of the measurement: 18 items, single annotator.
 - **Turkish grammar is imperfect** in `qwen2.5-7b` output; one generated label carried an accent typo.
 - **Quiz distractor quality** is bounded by the same lexical heuristic the fidelity layer uses;
   ordinary words capitalised mid-sentence can enter the pool.

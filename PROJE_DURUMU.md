@@ -1501,6 +1501,76 @@ eval **23/23** (175 sn) · `pytest` **229 passed** · `fidelity_trap` PASS ·
 
 Modernist yeniden tasarım (v3 arayüz) **kapandı**.
 
+## Teslim turu — README'nin bayat sayıları ve kanıtın canlı veriden ayrılması
+
+Modernist fazları kapandıktan sonraki denetimde iki şey çıktı; ikisi de kodda
+değil, **projenin kendini anlattığı yerde**.
+
+### README kendi tezini vuruyordu
+
+Bu projenin tek iddiası "her sayı ölçülmüştür". README ise **28 Ağustos**'tan
+beri dokunulmamıştı — yani Faz 2–6'nın tamamından önce — ve iki bayat sayı
+taşıyordu: rozet ve tablo **201 test** diyordu (gerçek 229), tarayıcı kanıtı
+**42/42** diyordu (gerçek 105).
+
+Bu, bu depoda aynı sınıf hatanın **üçüncü tekrarı**: pytest kapısı bir zamanlar
+"91/91" yazarken gerçek 93'tü; `ui_proof`'un yazdırma kontrolü Faz 1'in
+değiştirdiği paleti fark etmemişti; şimdi README. `AGENTS.md` bunu zaten
+adlandırıyor: *"bayat bir sayı, kaybolmuş bir testi yeşil gösterir."*
+
+Düzeltme sayıyı yenilemekle bitmedi — **rozetten sayı tamamen çıkarıldı**
+(`backend_tests-passing`). Sabit sayı yazmak, `AGENTS.md`'nin eval kapısı için
+bilinçle reddettiği desenin ta kendisi; README'de de aynı tuzaktı.
+
+Ayrıca README **v3'ü hiç anlatmıyordu**: alıntı çekmecesi, sayfa görüntüsü,
+Modernist, Archivo, `pypdfium2` kelimelerinin hiçbiri geçmiyordu ve **tek bir
+ekran görüntüsü yoktu** (yedi görselin hepsi rozetti). Bir arayüz yeniden
+tasarımını anlatan bir teslimde en zayıf noktaydı.
+
+### `ui_proof` artık kullanıcının verisine bağlı değil
+
+Kanıt koşucusu gerçek `rag.db`'yi kopyalıyordu ve o veritabanı değiştikçe
+kırılıyordu. **İki kez ölçüldü**: kullanıcı bir zihin haritası ürettiğinde
+artefakt listesinin başı değişti ve "listenin ilki aradığım rapordur" varsayan
+bölüm YANLIŞ artefaktı ölçmeye başladı; kullanıcı PDF'i yeniden yüklediğinde
+"kaynağı saklanmamış belge 404 verir" kolu, öyle bir belge kalmadığı için
+düştü. Her kırılış 3–4 dakikalık bir tarayıcı koşumu yakıyordu ve hata mesajı
+insanı kodun yanlış yerine götürüyordu.
+
+`eval/fixtures/ui_fixture.py` deterministik bir veritabanı üretiyor —
+`eval/eval.db` ile aynı desen: depoya işlenmez, ilk koşumda kurulur. İçeriği
+kasıtlı seçildi:
+
+- kaynak PDF'i **saklanmış** belge → sayfa görüntüsü ucu gerçekten render eder
+- kaynak PDF'i **saklanmamış** belge → §13.4'ün geriye dönük sınırı. Bu kol
+  gerçek `rag.db` ile artık kurulamıyordu ve kanıtta **ATLANIYORDU**; şimdi
+  koşuyor.
+- iddiaları **canlı chunk'lara bağlı** bir rapor → atıf üst simgesi kontrolü
+  eskiden "0 üst simge = 0 beklenen" ölçüyordu, yani hiçbir şey kanıtlamıyordu.
+  Şimdi 4/4 ölçüyor ve "çapa sayısı sıfır değil" diye ayrı bir kontrol, bu
+  kontrolün bir daha boşa düşmesini engelliyor.
+
+Yan kazanç: `ui_proof` deterministik olduğu için artık **CI'a taşınabilir**
+(model yüklemiyor). `--db rag.db` gerçek veriye bakmak isteyene duruyor.
+
+`--shots-dir` seçeneği eklendi; README'nin dokuz ekran görüntüsü artık
+`docs/screenshots/` altında ve **kanıtla birlikte tazeleniyor** — elle
+kopyalanmadıkları için bayatlayamıyorlar.
+
+### Kapatılamayan sınır BEYAN edildi
+
+Windows/CUDA ölçülmedi ve bu turda ölçülmeyecek (MVP kararı). README'deki
+`<!-- TODO -->` yorumu açık bir sınır maddesine çevrildi: *"Windows ve CUDA
+host'ları TEST EDİLMEDİ — 'muhtemelen çalışır' değil, test edilmedi."*
+Gerekçe kayda geçti: ölçülmemiş bir platform, README'deki tek ölçülmemiş
+iddia olurdu. `short_answer` eşiğinin %74.1'lik ölçümü de sınır olarak
+README'ye taşındı — daha önce yalnızca burada duruyordu.
+
+**Kapılar (teslim turu).** eval **23/23** (174 sn) · `offline_proof`
+**23/23, 0 soket** · `fidelity_trap` PASS · `pytest` **229 passed** ·
+`ui_proof` **105/105 PASS** (deterministik fixture) · `check_contrast` PASS ·
+build + lint 0.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan

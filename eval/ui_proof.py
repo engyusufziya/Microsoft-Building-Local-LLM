@@ -65,6 +65,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Deterministik fixture (eval/eval.db ile aynı desen: depoya işlenmez,
+# istendiğinde üretilir).
+FIXTURE_DB = PROJECT_ROOT / "eval" / "fixtures" / "ui.db"
+
 def _multipart(filename: str, data: bytes) -> tuple[bytes, str]:
     """Tek dosyalık multipart gövdesi — `requests` bağımlılığı eklemeden.
 
@@ -383,9 +387,15 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--db", default=str(PROJECT_ROOT / "rag.db"),
-        help="kopyalanacak veritabanı (varsayılan: rag.db). İçinde gerçek bir "
-             "rapor artefaktı varsa ekranda o render edilir.",
+        "--db", default=None,
+        help="kopyalanacak veritabanı. VARSAYILAN: eval/fixtures/ui.db -- "
+             "deterministik fixture, yoksa üretilir. Gerçek veriye bakmak için "
+             "`--db rag.db` verin (o zaman kanıt sizin verinize bağlı olur).",
+    )
+    parser.add_argument(
+        "--shots-dir", default=None,
+        help="ekran görüntülerinin yazılacağı dizin (varsayılan: geçici dizin). "
+             "README görsellerini tazelemek için `docs/screenshots` verin.",
     )
     args = parser.parse_args(argv)
 
@@ -396,14 +406,31 @@ def main(argv=None) -> int:
         print("  .venv/bin/pip install -r requirements-dev.txt && .venv/bin/playwright install chromium")
         return 2
 
-    source_db = Path(args.db)
+    if args.db is None:
+        # Deterministik fixture. Kanıtın kullanıcının gerçek verisine bağlı
+        # olmaması KASITLI: iki kez o bağ yüzünden kırıldı (bkz. fixture
+        # modülünün docstring'i).
+        from eval.fixtures import ui_fixture
+
+        source_db = FIXTURE_DB
+        if not source_db.exists():
+            print(f"  fixture kuruluyor: {source_db}")
+            ui_fixture.build(source_db)
+    else:
+        source_db = Path(args.db)
     if not source_db.exists():
         print(f"{source_db} yok -- önce bir belge yükleyin.")
         return 2
 
     tmp = Path(tempfile.mkdtemp(prefix="ui_proof_"))
-    shots = tmp / "shots"
-    shots.mkdir()
+    if args.shots_dir is None:
+        shots = tmp / "shots"
+    else:
+        shots = Path(args.shots_dir)
+        # Tazelenen görüntüler ESKİLERİN ÜSTÜNE yazılır; dizin silinmez ki
+        # depoda elle eklenmiş başka görseller varsa kaybolmasın.
+        shots.mkdir(parents=True, exist_ok=True)
+    shots.mkdir(parents=True, exist_ok=True)
     db_path = _copy_db(source_db, tmp)
 
     fails: list[str] = []
@@ -494,25 +521,26 @@ def main(argv=None) -> int:
             check("her cümle node_path taşıyor",
                   report.locator("[data-node-path]").count() == expected_sentences,
                   f"{report.locator('[data-node-path]').count()}/{expected_sentences}")
-            # Bu artefakt rag.db'den geliyor ve BAYAT: bağlandığı belge
-            # silinmiş, `artifact_claims.chunk_id` şemadaki
-            # `ON DELETE SET NULL` ile boşalmış. `report-view.tsx` üst
-            # simgeyi yalnızca chunk çapası duruyorsa basar.
+            # Üst simgenin GERÇEK koşulu iki tane (report-view.tsx): iddianın
+            # `chunk_id` çapası olacak VE o chunk `payload.citations`
+            # listesinde bulunacak -- numara o listenin sırasından geliyor.
             #
-            # Bu kontrol ÖNCEDEN "her cümlenin üst simgesi var" diyordu ve
-            # kırmızıydı; ölçüldüğünde bunun bir kod hatası DEĞİL, tasarlanmış
-            # bir bozunma olduğu görüldü. Kontrol gevşetilmedi -- YERİ
-            # değiştirildi: burada çapasız artefaktın çökmeden ve sahte atıf
-            # uydurmadan render edildiği doğrulanır; üst simgelerin GERÇEKTEN
-            # basıldığı ise aşağıda TAZE üretilen raporda ölçülür.
+            # Bu kontrol önce "her cümlenin üst simgesi var" diyordu; iki
+            # koşulu da atlayan bir varsayımdı ve kırmızıydı. Sonra gerçek
+            # sözleşmeye bağlandı ama gerçek `rag.db`'de çapalar boş olduğu
+            # için "0 = 0" ölçüyordu, yani hiçbir şey kanıtlamıyordu.
+            # Fixture (eval/fixtures/ui_fixture.py) çapaları BİLEREK canlı
+            # kuruyor, böylece kontrol POZİTİF bir durumu ölçüyor.
             cited_chunks = {c["chunk_id"] for c in payload["citations"]}
             live_anchors = sum(
                 1 for c in detail["claims"] if c.get("chunk_id") in cited_chunks
             )
-            check("bayat artefakt: üst simge sayısı alıntılanan çapa sayısıyla eşit",
+            check("üst simge sayısı alıntılanan çapa sayısıyla eşit",
                   report.locator("sup").count() == live_anchors,
                   f"{report.locator('sup').count()} üst simge / {live_anchors} çapa")
-            check("bayat artefakt yine de tam metinle render ediliyor",
+            check("çapa sayısı SIFIR DEĞİL (kontrol gerçekten bir şey ölçüyor)",
+                  live_anchors > 0, str(live_anchors))
+            check("rapor tam metinle render ediliyor",
                   report.locator("[data-node-path]").count() == expected_sentences)
             check("Sadakat oranı ve çıkarılan iddia meta'da",
                   "Sadakat oranı" in report.inner_text() and "Çıkarılan iddia" in report.inner_text())
