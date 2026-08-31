@@ -1571,6 +1571,52 @@ README'ye taşındı — daha önce yalnızca burada duruyordu.
 `ui_proof` **105/105 PASS** (deterministik fixture) · `check_contrast` PASS ·
 build + lint 0.
 
+## Kanıt bayatlığına kapı kondu
+
+Dört kez tekrarlayan bir kalıp isimlendirildi: **kod ilerlerken üretilmiş
+kanıt bayatlıyor.** pytest kapısı "91/91" derken gerçek 93'tü; README 201
+test / 42 tarayıcı kontrolü derken gerçek 229 / 105'ti; `ui_proof`'un
+yazdırma kontrolü Faz 1'in değiştirdiği paleti fark etmedi; ve
+`eval/results.json` 26 Ağustos'ta kalmışken kod 31 Ağustos'a gelmişti —
+yani ürünün Metrics sayfası eski ölçümü servis ediyordu.
+
+Kod tarafı disiplinli çünkü orada kapı var. Kanıt tarafında kapı yoktu,
+hafıza vardı; hafıza tutmadı.
+
+`backend/tests/test_results_freshness.py` oraya bir kapı koyuyor:
+`results.json`'ın `config` bloğu `rag/config.py` ile, ölçülen soru sayısı
+`eval_set.json` ile, aktif model `CHAT_MODEL` ile karşılaştırılıyor. Kapının
+gerçekten ayırt ettiği doğrulandı — `min_score` ve soru sayısı bilerek
+bozulduğunda **iki test kırmızıya döndü**, geri alınınca üçü de yeşil.
+
+**Kapının BİLİNÇLİ sınırı:** "kod değişti ama eval koşulmadı" durumunu genel
+olarak yakalamaz. Yakalamak için `results.json`'ın tarihini `rag/`'ın son
+commit tarihiyle kıyaslamak gerekirdi; CI `actions/checkout`'u varsayılan
+`depth: 1` ile çalıştığı için o karşılaştırma CI'da güvenilmez, dosya
+mtime'ları da checkout anına eşitlendiği için işe yaramaz. O kol ürünün
+kendi mekanizmasına bırakıldı: Metrics sayfası `generated_at` tarihini
+her zaman basıyor, yani bayat veri kendini ele veriyor. Bu, önerilen
+kapının olduğundan güçlü sunulmaması için kayda geçti.
+
+## `ui_proof` CI'a taşındı
+
+Deterministik fixture'a geçmesi bunu mümkün kıldı; eskiden geliştiricinin
+`rag.db`'sine bağlı olduğu için CI'da anlamsız olurdu. Ayrı bir iş
+(`browser`), çünkü hem Python hem Node araç zinciri istiyor.
+
+**Her push'ta DEĞİL** — yalnızca pull request ve `main`'e push. Gerekçe:
+değeri merge öncesi regresyon yakalamak, ve chromium indirmesi (~130 MB,
+önbelleğe alınıyor) her WIP commit'inde ödenecek bir bedel değil.
+
+Neden hak ettiği ölçülü: bu projede tarayıcı kanıtı **üç kez** diğer
+kapıların göremediğini yakaladı — alıntı üst simgesinin sıfır yükseklikte
+olması (DOM'da var, tıklanamaz), `tailwind-merge`'in yazı boyutunu sessizce
+düşürmesi, yazdırma paletinin faz sonrası kayması. Üçünde de pytest, build
+ve lint yeşildi.
+
+Kapının modelli yarısı (eval, offline proof) **yerelde kalıyor**; AGENTS.md
+§5'in "tek koşum, tek koşucu" kuralı değişmedi.
+
 ## Açık işler
 
 **Studio katmanının dört fazı da kapandı**; `docs/STUDIO_PLAN.md §9`'da planlanan
@@ -1595,11 +1641,6 @@ Açıkta kalan, gerekçesi kayıtlı işler:
   (`eval/short_answer_calibration.py`). Kararı yeniden açacak tek şey daha
   büyük ve **bağımsız etiketlenmiş** bir küme — o yapılmadan eşik açmak,
   dört yargıdan birini yanlış vermek demek. Ayrıntı yukarıda.
-- **`ui_proof` CI'a taşınabilir ama taşınmadı.** Faz sonrası deterministik
-  fixture'a geçtiği için artık kullanıcının verisine bağlı değil ve model
-  yüklemiyor — yani CI'ın model yüklemeyen yarısına girebilir. Maliyeti
-  chromium indirmesi (~130 MB) ve koşum süresi; getirisi kapının üçte
-  ikisinin otomatikleşmesi. Ölçülmedi, karar verilmedi.
 - **Data Table artefaktı** (STUDIO_PLAN §8): hat üç tiple kanıtlandı,
   dördüncüsü değerlendirilebilir.
 - **Windows/CUDA host davranışı** ölçülmedi; yalnızca macOS/M4 ölçüldü. CI'ın

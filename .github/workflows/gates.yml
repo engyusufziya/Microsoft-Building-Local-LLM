@@ -3,9 +3,17 @@
 # AGENTS.md §3'teki teslim kapısı dört parçadan oluşur; bu workflow yalnızca
 # ikisini koşar:
 #
-#   burada  : pytest backend/tests · web build · web lint   (model YÜKLEMEZ)
+#   burada  : pytest backend/tests · web build · web lint · eval/ui_proof.py
+#                                                          (model YÜKLEMEZ)
 #   yerelde : eval/run_eval.py (23/23) · eval/offline_proof.py (0 soket)
 #             ve faz kapanma ölçümleri                      (7B + embedding)
+#
+# `ui_proof` buraya SONRADAN girdi ve girebilmesinin tek sebebi deterministik
+# hale gelmesi: eskiden geliştiricinin `rag.db`'sini kopyalıyordu ve o veri
+# değiştikçe kırılıyordu (iki kez ölçüldü). `eval/fixtures/ui_fixture.py`
+# o bağı kopardıktan sonra koşum tekrar edilebilir oldu. Modeli hâlâ
+# yüklemiyor: embedding ve sohbet akışı sahte, Hit'ler fixture'ın gerçek
+# chunk'larından geliyor.
 #
 # Model yükleyen kapılar KASITLI olarak burada değil. Foundry Local yerel bir
 # runtime; barındırılan runner'da yok, olsaydı bile 7B modeli her push'ta
@@ -86,3 +94,72 @@ jobs:
       - run: npm run build
 
       - run: npm run lint
+
+  # ui_proof HEM Python HEM Node ister: uvicorn'u başlatıyor ve `web/out`
+  # statik export'unu servis ediyor. Bu yüzden ayrı bir iş -- diğer ikisinin
+  # araç zincirlerini birleştirmek onları da yavaşlatırdı.
+  #
+  # `push`'ta DEĞİL, yalnızca `main`'e push ve pull request'te koşar:
+  # değeri merge öncesi regresyon yakalamak, ve chromium indirmesi +
+  # tarayıcı koşumu her WIP commit'inde ödenecek bir bedel değil.
+  #
+  # Yakaladığı şey diğer iki işin GÖREMEDİĞİ türden: bu projede üç kez
+  # tarayıcıda yakalandı -- alıntı üst simgesinin sıfır yükseklikte olması
+  # (DOM'da var, tıklanamaz), `tailwind-merge`'in yazı boyutunu sessizce
+  # düşürmesi, ve yazdırma paletinin faz sonrası kayması. Üçünde de
+  # pytest + build + lint yeşildi.
+  browser:
+    name: ui_proof (gerçek Chromium, model yüklemez)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Bağımlılıkları kur
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # Chromium önbelleğe alınır; indirmesi ~130 MB ve her koşumda
+      # tekrarlanması işin süresini ikiye katlardı.
+      - name: Playwright önbelleği
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Chromium kur
+        run: python -m playwright install --with-deps chromium
+
+      # ui_proof statik export'u servis ediyor; önce üretilmeli.
+      - name: Arayüzü derle
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      # Fixture depoda DEĞİL (eval.db deseni): ilk koşumda kurulur.
+      - name: ui_proof
+        run: python eval/ui_proof.py
+
+      # Kanıt görüntüleri koşum artefaktı olarak saklanır -- CI'da bir kontrol
+      # düşerse ekranın o anki hâli elde olur.
+      - name: Ekran görüntülerini yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-proof-shots
+          path: /tmp/ui_proof_*/shots
+          if-no-files-found: ignore

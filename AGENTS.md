@@ -164,8 +164,10 @@ artifact changed the list order, once when re-uploading a PDF removed the
 "document without a stored source" case the proof asserted. `--db rag.db`
 still points it at real data when you want to look at real data.
 
-`.github/workflows/gates.yml` runs the model-free half of that gate (pytest ·
-frontend build · lint) on every push. The model-loading half — eval, offline
+`.github/workflows/gates.yml` runs the model-free part of that gate: pytest ·
+frontend build · lint on every push, plus `eval/ui_proof.py` on pull requests
+and pushes to `main` (a separate job — it needs both toolchains and a
+cached Chromium, so it is not worth paying on every WIP commit). The model-loading half — eval, offline
 proof, the trap runners — stays local by design (see `PROJE_DURUMU.md`,
 "Kapıların model yüklemeyen yarısı CI'a devredildi"). CI passing is therefore
 necessary, never sufficient.

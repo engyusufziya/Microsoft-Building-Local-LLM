@@ -283,7 +283,8 @@ Documented rather than hidden — this is the project's core discipline.
   is narrowed to that document *before* clustering, so a one-chunk document returns
   `422 INSUFFICIENT_CORPUS` before the stream opens. Honest behaviour rather than a corpus-wide
   artifact wearing a document's name — see `PROJE_DURUMU.md` for the drift this replaced.
-- **CI covers only the model-free half of the gate suite** (`pytest` + frontend build + lint).
+- **CI covers only the model-free part of the gate suite** (`pytest` + frontend build + lint,
+  plus the browser proof on pull requests and pushes to `main`).
   The evaluation run and the offline proof load a 7B model through Foundry Local, which is a *local*
   runtime — a hosted runner does not have it. Those gates stay local, run once per delivery, and are
   stamped into `eval/baselines/`. A deliberate choice, not an omission: an unattended automated
