@@ -891,15 +891,19 @@ def main(argv=None) -> int:
 
         # Gerçek yükleme yolundan geçen bir PDF: baytlar saklanmalı ve sayfa
         # rasterlenebilmeli. Embedding sahte, ama YÜKLEME YOLU gerçek.
-        pdf_path = PROJECT_ROOT / "Foundry_Local_Plan.pdf"
-        with open(pdf_path, "rb") as fh:
-            body, content_type = _multipart(pdf_path.name, fh.read())
+        # PDF ÜRETİLİR, depodan okunmaz: eskiden `Foundry_Local_Plan.pdf`
+        # okunuyordu ama o dosya `.gitignore`'da -- geliştiricinin kendi
+        # belgesi. Yerelde geçiyordu, CI'da düştü.
+        from eval.fixtures import ui_fixture
+
+        upload_name = "yuklenen.pdf"
+        body, content_type = _multipart(upload_name, ui_fixture.pdf_bytes(4))
         req = urllib.request.Request(f"{BASE}/api/documents", data=body,
                                      headers={"Content-Type": content_type})
         urllib.request.urlopen(req).read()  # SSE gövdesi tüketilir
 
         image_url = (
-            f"{BASE}/api/documents/{urllib.parse.quote(pdf_path.name)}/pages/2/image"
+            f"{BASE}/api/documents/{urllib.parse.quote(upload_name)}/pages/2/image"
         )
         with urllib.request.urlopen(image_url) as resp:
             image_bytes = resp.read()
@@ -909,7 +913,7 @@ def main(argv=None) -> int:
               f"{image_type} / {len(image_bytes)} bayt")
         try:
             urllib.request.urlopen(
-                f"{BASE}/api/documents/{urllib.parse.quote(pdf_path.name)}/pages/999/image"
+                f"{BASE}/api/documents/{urllib.parse.quote(upload_name)}/pages/999/image"
             )
             check("aralık dışı sayfa 404", False, "200 döndü")
         except urllib.error.HTTPError as exc:

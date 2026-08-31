@@ -92,13 +92,13 @@ def _raster_probe() -> int:
     göstermek. PDF yoksa 0 döner ve denetim yine anlamlıdır (yalnızca bu kol
     ölçülmemiş olur).
     """
+    from eval.fixtures import ui_fixture
     from rag import raster
 
-    pdf_path = Path(__file__).resolve().parent.parent / "Foundry_Local_Plan.pdf"
-    if not pdf_path.exists():
-        return 0
-
-    data = pdf_path.read_bytes()
+    # PDF ÜRETİLİR. Eskiden depo kökündeki `Foundry_Local_Plan.pdf` okunuyordu;
+    # o dosya `.gitignore`'da olduğu için başka bir makinede kol SESSİZCE
+    # atlanıyor ve "Rasterlenen sayfa: 0" yazıyordu -- ölçülmemiş bir iddia.
+    data = ui_fixture.pdf_bytes(3)
     rendered = 0
     for page in (1, 2):
         try:

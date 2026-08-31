@@ -69,16 +69,73 @@ def _embedding(index: int) -> list[float]:
     return vector
 
 
-def _pdf_bytes(pages: int) -> bytes:
-    """Fixture'ın kendi PDF'i — depoya ikili dosya eklemeden."""
-    import pypdfium2 as pdfium
+def pdf_bytes(pages: int) -> bytes:
+    """METİN TAŞIYAN minimal bir PDF üretir — depoya ikili dosya eklemeden.
 
-    document = pdfium.PdfDocument.new()
-    for _ in range(pages):
-        document.new_page(420, 595)
-    buffer = io.BytesIO()
-    document.save(buffer)
-    return buffer.getvalue()
+    DIŞA AÇIK: `ui_proof` ve `offline_proof` de bunu kullanır. Eskiden ikisi
+    de depo kökündeki `Foundry_Local_Plan.pdf`'i okuyordu -- o dosya
+    `.gitignore`'da, yani geliştiricinin kendi belgesi. CI'da yoktu ve
+    `ui_proof`'un yükleme adımı orada düştü ("yerelde çalışıyordu"nun ikinci
+    ölçülmüş örneği).
+
+    Neden `pypdfium2.new_page()` DEĞİL: o boş sayfa üretiyor, `pdf_loader`
+    hiç metin bulamıyor ve ingest `NO_CONTENT` ile düşüyor (ölçüldü). Yükleme
+    yolunun gerçekten çalıştığını göstermek için sayfaların metni olmalı.
+
+    PDF elle kuruluyor: yeni bir bağımlılık (reportlab vb.) eklemek, tek
+    kullanımlık bir yardımcı için ürün dışı bir paket demek olurdu.
+    """
+    objects: list[bytes] = []
+
+    def add(body: bytes) -> int:
+        objects.append(body)
+        return len(objects)
+
+    font = add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+    page_ids: list[int] = []
+    content_ids: list[int] = []
+    for index in range(pages):
+        lines = [
+            f"Sayfa {index + 1} - yerel RAG asistani kanit belgesi.",
+            "Bu sayfa ui_proof ve offline_proof icin uretildi.",
+            f"Belge {pages} sayfadan olusuyor ve her sayfada metin var.",
+        ]
+        stream = "BT /F1 12 Tf 60 760 Td 16 TL\n"
+        stream += "".join(f"({line}) Tj T*\n" for line in lines)
+        stream += "ET"
+        encoded = stream.encode("latin-1")
+        content_ids.append(
+            add(b"<< /Length %d >>\nstream\n%s\nendstream" % (len(encoded), encoded))
+        )
+        page_ids.append(0)  # yer tutucu; Pages nesnesi kurulduktan sonra dolar
+
+    pages_obj = len(objects) + pages + 1
+    for index in range(pages):
+        page_ids[index] = add(
+            b"<< /Type /Page /Parent %d 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>"
+            % (pages_obj, font, content_ids[index])
+        )
+    kids = b" ".join(b"%d 0 R" % pid for pid in page_ids)
+    add(b"<< /Type /Pages /Kids [%s] /Count %d >>" % (kids, pages))
+    catalog = add(b"<< /Type /Catalog /Pages %d 0 R >>" % pages_obj)
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+
+    xref_at = len(out)
+    out += b"xref\n0 %d\n" % (len(objects) + 1)
+    out += b"0000000000 65535 f \n"
+    for offset in offsets[1:]:
+        out += b"%010d 00000 n \n" % offset
+    out += b"trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1, catalog, xref_at
+    )
+    return bytes(out)
 
 
 def _chunks(filename: str, rows: list[tuple[str, int]]):
@@ -103,7 +160,7 @@ def build(path: Path) -> Path:
             conn, WITH_PDF, page_count=3,
             chunks=_chunks(WITH_PDF, _WITH_PDF_CHUNKS),
             embeddings=[_embedding(i) for i in range(len(_WITH_PDF_CHUNKS))],
-            pdf_bytes=_pdf_bytes(3),
+            pdf_bytes=pdf_bytes(3),
         )
         store.upsert_document(
             conn, WITHOUT_PDF, page_count=2,
