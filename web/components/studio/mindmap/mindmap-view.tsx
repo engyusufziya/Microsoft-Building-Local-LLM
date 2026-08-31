@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { ChevronRightIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { ArtifactScreen } from "../artifact-screen"
@@ -257,20 +258,31 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
 
                     {/* Yapraklar: konunun alıntıları, geldikleri sayfayla
                         etiketli. Mockup'ın "s.N" rozeti. */}
+                    {/* Yapraklar BELGEYE göre gruplanır, chunk başına DEĞİL.
+                        Ölçüldü: tek belgeli bir korpusta bir dal aynı dosya
+                        adını 6+ kez tekrar ediyor ve satır yüksekliği o kadar
+                        büyüyordu ki dokuz daldan yalnızca biri ekrana
+                        sığıyordu. Bilgi kaybı yok -- sayfalar rozet olarak
+                        yan yana duruyor, tekrar eden yalnızca dosya adıydı. */}
                     <ul className="flex flex-1 flex-col justify-center gap-1.5 border-l-2 border-border-strong pl-3.5">
-                      {node.citations.map((citation) => (
+                      {groupCitations(node.citations).map((group) => (
                         <li
-                          key={citation.chunk_id}
+                          key={group.source}
                           className="flex items-center gap-2.5 border border-border bg-surface px-2.5 py-1.5"
                         >
                           <span className="min-w-0 flex-1 truncate text-body-sm text-text-secondary">
-                            {citation.source}
+                            {group.source}
                           </span>
-                          {citation.page > 0 && (
-                            <span className="shrink-0 border border-border px-1 font-mono text-mono text-text-tertiary tabular-nums">
-                              {t.pageShort(citation.page)}
-                            </span>
-                          )}
+                          <span className="flex shrink-0 flex-wrap gap-1">
+                            {group.pages.map((page) => (
+                              <span
+                                key={page}
+                                className="border border-border px-1 font-mono text-mono text-text-tertiary tabular-nums"
+                              >
+                                {t.pageShort(page)}
+                              </span>
+                            ))}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -281,6 +293,15 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
           </div>
           {payload.edges.length === 0 && (
             <p className="mt-2 text-caption text-text-tertiary">{t.mindMapNoEdges}</p>
+          )}
+
+          {/* Düşürülen öneriler artık AKAN alanın içinde, haritanın altında:
+              sabit bir dip panel olarak dururken ekranın altını kalıcı olarak
+              yiyordu. */}
+          {payload.dropped.length > 0 && (
+            <div className="mt-8">
+              <DroppedLabels dropped={payload.dropped} />
+            </div>
           )}
         </div>
 
@@ -294,11 +315,6 @@ export function MindMapView({ artifact, onClose, className }: MindMapViewProps) 
         </aside>
       </div>
 
-      {payload.dropped.length > 0 && (
-        <div className="px-6 pb-6">
-          <DroppedLabels dropped={payload.dropped} />
-        </div>
-      )}
       </div>
     </ArtifactScreen>
   )
@@ -344,6 +360,25 @@ function NodeSources({ node }: { node: MindMapNode }) {
  * §11.5: kapıdan geçemeyen etiket ÖNERİLERİ. Haritada gösterilmezler ama
  * varlıkları gizlenmez — raporun "çıkarılan iddialar" panelinin aynı kuralı.
  */
+/**
+ * Bir düğümün alıntılarını BELGEYE göre gruplar; sayfalar tekilleştirilip
+ * sıralanır. Sayfası olmayan alıntı (markdown fixture) sayfasız görünür.
+ */
+function groupCitations(
+  citations: MindMapNode["citations"]
+): { source: string; pages: number[] }[] {
+  const bySource = new Map<string, Set<number>>()
+  for (const citation of citations) {
+    const pages = bySource.get(citation.source) ?? new Set<number>()
+    if (citation.page > 0) pages.add(citation.page)
+    bySource.set(citation.source, pages)
+  }
+  return [...bySource].map(([source, pages]) => ({
+    source,
+    pages: [...pages].sort((a, b) => a - b),
+  }))
+}
+
 function DroppedLabels({ dropped }: { dropped: MindMapDroppedLabel[] }) {
   const t = useT(studio)
   const reasonLabel = (reason: MindMapDroppedLabel["reason"]): string => {
@@ -358,11 +393,27 @@ function DroppedLabels({ dropped }: { dropped: MindMapDroppedLabel[] }) {
         return t.droppedReasonLabelInvalid
     }
   }
+  // KATLANABİLİR, ve varsayılan KAPALI. Panel SİLİNMEDİ: düşürülen
+  // önerilerin görünür kalması bu ürünün dürüstlük iddiasının parçası
+  // (panelin kendi metni "Ürün sınırını gizlemiyoruz" diyor) ve `ui_proof`
+  // bunu tutuyor. Ama açık hâlde ekranın yarısını kaplıyor ve asıl işi --
+  // haritayı incelemeyi -- engelliyordu. Katlanmış başlıkta SAYI görünür,
+  // yani bilgi gizlenmiyor: kaç öneri düştüğü tek bakışta okunuyor, ayrıntı
+  // bir tık uzakta.
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-h2 font-semibold text-text-primary">{t.droppedLabelsHeading}</h2>
-      <p className="text-body-sm text-text-secondary">{t.droppedIntro}</p>
-      <ul className="flex flex-col gap-2">
+    <details className="border-t-2 border-border pt-4">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-body-sm font-semibold text-text-primary">
+        <ChevronRightIcon
+          aria-hidden="true"
+          className="size-4 shrink-0 text-text-tertiary transition-transform group-open:rotate-90 [details[open]_&]:rotate-90"
+        />
+        {t.droppedLabelsHeading}
+        <span className="font-mono text-mono text-text-tertiary tabular-nums">
+          {dropped.length}
+        </span>
+      </summary>
+      <p className="mt-2.5 text-body-sm text-text-secondary">{t.droppedIntro}</p>
+      <ul className="mt-2.5 flex flex-col gap-2">
         {dropped.map((item, index) => (
           <li
             key={index}
@@ -389,6 +440,6 @@ function DroppedLabels({ dropped }: { dropped: MindMapDroppedLabel[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </details>
   )
 }

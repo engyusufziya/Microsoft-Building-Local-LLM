@@ -678,9 +678,25 @@ def main(argv=None) -> int:
         check("yedek etiketli düğüm 'korpustan türetildi' uyarısı taşıyor",
               fallback.count() == 1
               and "korpustan türetildi" in (fallback.text_content() or ""))
-        check("düşürülen etiket önerisi ayrı panelde",
-              "Haritaya alınmayan etiket önerileri" in mindmap.inner_text()
-              and "gpt-4" in mindmap.inner_text())
+        # Düşürülen öneriler paneli KATLANABİLİR oldu ve KAPALI başlıyor:
+        # açıkken ekranın altını kalıcı olarak yiyor, haritayı incelemeyi
+        # engelliyordu. Sözleşme değişmedi -- iddia "panel her zaman açık"
+        # değil, "bilgi gizlenmiyor". Bu yüzden üç şey birden ölçülür:
+        # kapalıyken BAŞLIK ve SAYI görünür (kaç öneri düştüğü saklanmıyor),
+        # içerik kapalıyken görünmez (yer kaplamıyor), ve tek tıkla ulaşılır.
+        dropped_panel = mindmap.locator("details").first
+        check("düşürülen öneriler paneli KAPALI başlıyor",
+              dropped_panel.get_attribute("open") is None)
+        summary_text = dropped_panel.locator("summary").inner_text()
+        check("kapalıyken başlık ve SAYI görünüyor (bilgi gizlenmiyor)",
+              "Haritaya alınmayan etiket önerileri" in summary_text
+              and any(ch.isdigit() for ch in summary_text), summary_text)
+        check("içerik kapalıyken ekranda yer KAPLAMIYOR",
+              "gpt-4" not in mindmap.inner_text())
+        dropped_panel.locator("summary").click()
+        check("tek tıkla açılıyor ve düşürülen öneri görünüyor",
+              "gpt-4" in mindmap.inner_text())
+        dropped_panel.locator("summary").click()
         export_href = mindmap.get_by_role("link", name="Markdown indir").get_attribute("href") or ""
         check("harita export bağlantısı aynı origin'de",
               export_href.startswith("/api/") and export_href.endswith("/export?format=md"),
