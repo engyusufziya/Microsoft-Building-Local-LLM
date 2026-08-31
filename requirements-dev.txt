@@ -21,4 +21,11 @@ playwright>=1.40
 # birleştirmesini yapmış ama JetBrains Mono'ya yapmamıştı; sonuç, mono
 # metinlerde "ş/ğ/İ" harflerinin sistem fontuna düşmesiydi (ölçüldü).
 # Ürün yolunda HİÇ import edilmez -- font birleştirme dev-zamanı bir iş.
-fonttools>=4.60
+#
+# `[woff]` EKSTRASI ZORUNLU, süs değil: woff2 çözücüsü `brotli` uzantısını
+# istiyor ve çıplak `fonttools` onu getirmiyor. Yerelde başka bir paket
+# brotli'yi kurduğu için testler geçiyordu; CI'ın TEMİZ kurulumunda
+# `ImportError: No module named brotli` ile düştü. Tam olarak CI'ın var
+# olma sebebi -- ve "yerelde çalışıyordu"nun neden bir kanıt olmadığının
+# ölçülmüş örneği.
+fonttools[woff]>=4.60
