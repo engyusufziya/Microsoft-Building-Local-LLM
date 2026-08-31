@@ -1590,6 +1590,16 @@ Açıkta kalan, gerekçesi kayıtlı işler:
   çelişki için ölçülmüş savunma yok. LLM doğrulayıcı denendi ve reddedildi.
 - **Hibrit retrieval** kapalı duruyor. Önkoşulu kod değil korpus büyüklüğü;
   bu ölçekte (20–40 chunk) ölçülmüş getirisi yok (23/23 → 22/23).
+- **`short_answer` eşiği ERTELENDİ** (31 Ağustos 2026, MVP kararı). Ölçüm
+  yapıldı ve eşik reddedildi: 18 referans x 3 sınıf, en iyi eşik %74.1 isabet
+  (`eval/short_answer_calibration.py`). Kararı yeniden açacak tek şey daha
+  büyük ve **bağımsız etiketlenmiş** bir küme — o yapılmadan eşik açmak,
+  dört yargıdan birini yanlış vermek demek. Ayrıntı yukarıda.
+- **`ui_proof` CI'a taşınabilir ama taşınmadı.** Faz sonrası deterministik
+  fixture'a geçtiği için artık kullanıcının verisine bağlı değil ve model
+  yüklemiyor — yani CI'ın model yüklemeyen yarısına girebilir. Maliyeti
+  chromium indirmesi (~130 MB) ve koşum süresi; getirisi kapının üçte
+  ikisinin otomatikleşmesi. Ölçülmedi, karar verilmedi.
 - **Data Table artefaktı** (STUDIO_PLAN §8): hat üç tiple kanıtlandı,
   dördüncüsü değerlendirilebilir.
 - **Windows/CUDA host davranışı** ölçülmedi; yalnızca macOS/M4 ölçüldü. CI'ın
