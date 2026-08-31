@@ -6,16 +6,28 @@ import {
   LoaderIcon,
   NetworkIcon,
   SparklesIcon,
+  Trash2Icon,
 } from "lucide-react"
 
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
+import { common } from "@/lib/i18n/common"
 import { studio } from "@/lib/i18n/studio"
 import type { ApiErrorBody, ArtifactSummary, DocumentInfo } from "@/lib/types"
 import { useKnowledge } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -52,6 +64,9 @@ export function StudioPanel({ className }: StudioPanelProps) {
     open,
     generate,
     openArtifact,
+    remove,
+    deletingId,
+    deleteError,
   } = useArtifacts()
 
   // Kenar çubuğunun store'u PAYLAŞILIYOR: `useKnowledge()` varsayılan kaynakla
@@ -166,7 +181,14 @@ export function StudioPanel({ className }: StudioPanelProps) {
               key={artifact.id}
               artifact={artifact}
               active={open?.id === artifact.id}
+              deleting={deletingId === artifact.id}
+              deleteErrorText={
+                deletingId === artifact.id || deleteError === null
+                  ? undefined
+                  : t.deleteArtifactFailed
+              }
               onOpen={() => void openArtifact(artifact.id)}
+              onDelete={() => remove(artifact.id)}
             />
           ))}
         </ul>
@@ -280,14 +302,29 @@ const KIND_ICON: Record<ArtifactSummary["kind"], React.ReactNode> = {
 function ArtifactRow({
   artifact,
   active,
+  deleting,
+  deleteErrorText,
   onOpen,
+  onDelete,
 }: {
   artifact: ArtifactSummary
   active: boolean
+  deleting: boolean
+  deleteErrorText?: string
   onOpen: () => void
+  onDelete: () => Promise<boolean>
 }) {
   const t = useT(studio)
+  const tc = useT(common)
   const name = useArtifactName(artifact)
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
+
+  // Diyalog yalnızca silme BAŞARILI olduğunda kapanır; hata durumunda açık
+  // kalır ve sebebi orada görünür (belge silmenin aynı deseni, §1.4).
+  const handleConfirm = async () => {
+    if (await onDelete()) setConfirmOpen(false)
+  }
+
   return (
     <li
       data-kind={artifact.kind}
@@ -305,6 +342,50 @@ function ArtifactRow({
         <p className="flex-1 text-body-sm font-medium text-text-primary">
           {name}
         </p>
+
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogTrigger
+            render={
+              <Button
+                type="button"
+                data-slot="artifact-delete"
+                variant="ghost"
+                size="icon-xs"
+                disabled={deleting}
+                aria-label={t.deleteArtifactAction(name)}
+              />
+            }
+          >
+            <Trash2Icon />
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t.deleteArtifactConfirmTitle}</DialogTitle>
+              <DialogDescription>
+                {t.deleteArtifactConfirmBody(name)}
+              </DialogDescription>
+            </DialogHeader>
+            {deleteErrorText && (
+              <p className="text-body-sm text-danger">{deleteErrorText}</p>
+            )}
+            <DialogFooter>
+              <DialogClose
+                render={<Button type="button" variant="outline" />}
+                disabled={deleting}
+              >
+                {tc.cancel}
+              </DialogClose>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleting}
+                onClick={() => void handleConfirm()}
+              >
+                {tc.delete}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {/* Oran; güven bandı rengi YOK (§9.1). */}

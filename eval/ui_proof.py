@@ -989,6 +989,51 @@ def main(argv=None) -> int:
         page.screenshot(path=str(shots / "settings.png"), full_page=True)
         page.get_by_role("button", name="Ayarları kapat").click()
 
+        print("\n--- Artefakt silme (onay diyaloğu, §1.4 deseni) ---")
+        # Sohbet bölümündeki `page.reload()` sol paneli varsayılan sekmeye
+        # (Kaynaklar) döndürüyor; Çıktılar paneli `hidden` olduğu için satırlar
+        # DOM'da MOUNT'LU ama GÖRÜNMEZ kalıyor. Bu, kanıtın öğrendiği bir
+        # tuzak: `count()` gizli elemanı da sayar, yani "satır listede"
+        # kontrolü yeşil kalırken tıklama zaman aşımına uğruyordu.
+        page.get_by_role("tab", name="Çıktılar").click()
+        page.wait_for_selector('[data-slot="studio-panel"]')
+        # Uç (DELETE /api/artifacts/{id}) baştan beri vardı ama ARAYÜZDE
+        # karşılığı yoktu: kullanıcı ürettiği bir çıktıyı kaldıramıyordu.
+        before = json.loads(urllib.request.urlopen(f"{BASE}/api/artifacts").read())
+        victim = before[-1]  # en eskisi; üstteki satırların testlerini bozmasın
+        row = page.locator(f'li[data-artifact-id="{victim["id"]}"]')
+        check("silinecek satır listede", row.count() == 1)
+
+        # Silme ONAY DİYALOĞUNDAN geçer -- belge silmenin (§1.4) aynı deseni.
+        delete_button = row.locator('[data-slot="artifact-delete"]')
+        # Erişilebilir ad AYRICA ölçülür: ikon-only bir düğme ekran
+        # okuyucuya kendini tanıtmak zorunda (WCAG).
+        check("silme düğmesinin erişilebilir adı var",
+              (delete_button.get_attribute("aria-label") or "").endswith("sil"),
+              str(delete_button.get_attribute("aria-label")))
+        delete_button.click()
+        page.wait_for_selector('[role="dialog"]')
+        check("onay diyaloğu açıldı, kalıcı silme uyarısı var",
+              "kalıcı olarak silinecek" in page.locator('[role="dialog"]').inner_text())
+
+        # İptal ÖNCE denenir: onaylamadan silmediğini de ölçüyoruz.
+        page.get_by_role("button", name="İptal").click()
+        page.wait_for_selector('[role="dialog"]', state="detached")
+        still = json.loads(urllib.request.urlopen(f"{BASE}/api/artifacts").read())
+        check("İptal gerçekten SİLMİYOR", len(still) == len(before))
+
+        delete_button.click()
+        page.wait_for_selector('[role="dialog"]')
+        page.locator('[role="dialog"]').get_by_role("button", name="Sil", exact=True).click()
+        page.wait_for_selector(
+            f'li[data-artifact-id="{victim["id"]}"]', state="detached", timeout=10000
+        )
+        after = json.loads(urllib.request.urlopen(f"{BASE}/api/artifacts").read())
+        check("onaylanınca sunucudan da silindi",
+              len(after) == len(before) - 1
+              and all(a["id"] != victim["id"] for a in after),
+              f"{len(before)} -> {len(after)}")
+
         print("\n--- Boş korpus: tam-ekran ilk açılış (§13.5) ---")
         # Bu geçiş BUGÜNE KADAR HİÇ ölçülmemişti: ui_proof her zaman dolu bir
         # korpusla koşuyordu, yani boş durum ekranı kanıtın dışındaydı.

@@ -5,6 +5,7 @@ import * as React from "react"
 import {
   ApiRequestError,
   createArtifact,
+  deleteArtifact,
   getArtifact,
   listArtifacts,
 } from "@/lib/api"
@@ -47,6 +48,9 @@ export interface ArtifactsSnapshot {
   generateError: ApiErrorBody["code"] | null
   /** Açık rapor; `null` = sohbet görünümü. */
   open: ArtifactDetail | null
+  /** Silme sürerken o satır devre dışı kalır; null = silme yok. */
+  deletingId: number | null
+  deleteError: ApiErrorBody["code"] | null
   openLoading: boolean
   openError: ApiErrorBody["code"] | null
 }
@@ -59,6 +63,8 @@ const INITIAL: ArtifactsSnapshot = {
   progressDetail: null,
   generateError: null,
   open: null,
+  deletingId: null,
+  deleteError: null,
   openLoading: false,
   openError: null,
 }
@@ -160,6 +166,30 @@ class ArtifactsStore {
   close = (): void => {
     this.update({ open: null, openError: null })
   }
+
+  /**
+   * Artefaktı siler ve listeyi tazeler.
+   *
+   * Silinen artefakt O AN AÇIKSA görüntüleyici kapatılır: aksi halde ekranda
+   * artık var olmayan bir artefakt kalırdı ve "Yeniden üret" / "Markdown
+   * indir" düğmeleri 404'e giderdi.
+   *
+   * Başarısızlıkta `deleteError` doldurulur ve liste DEĞİŞMEZ -- kullanıcı
+   * silinmemiş bir satırın kaybolduğunu görmemeli.
+   */
+  remove = async (artifactId: number): Promise<boolean> => {
+    this.update({ deletingId: artifactId, deleteError: null })
+    try {
+      await deleteArtifact(artifactId)
+    } catch (error) {
+      this.update({ deletingId: null, deleteError: errorCode(error) })
+      return false
+    }
+    if (this.snapshot.open?.id === artifactId) this.close()
+    this.update({ deletingId: null })
+    await this.refresh()
+    return true
+  }
 }
 
 const store = new ArtifactsStore()
@@ -181,5 +211,6 @@ export function useArtifacts() {
     generate: store.generate,
     openArtifact: store.openArtifact,
     close: store.close,
+    remove: store.remove,
   }
 }

@@ -43,6 +43,28 @@ export const studio = {
    */
   closeArtifact: { tr: "Sohbete dön", en: "Back to chat" },
   regenerate: { tr: "Yeniden üret", en: "Regenerate" },
+  // --- Artefakt silme ---
+  // Silme onay diyaloğundan geçer: FEATURE_SPEC §1.4'ün belge silme için
+  // koyduğu kuralın aynısı. Artefakt yeniden üretilebilir ama üretimi
+  // dakikalar sürüyor -- yanlışlıkla silmenin bedeli gerçek.
+  deleteArtifactAction: {
+    tr: (name: string) => `${name} sil`,
+    en: (name: string) => `Delete ${name}`,
+  },
+  deleteArtifactConfirmTitle: {
+    tr: "Bu çıktı silinsin mi?",
+    en: "Delete this output?",
+  },
+  deleteArtifactConfirmBody: {
+    tr: (name: string) =>
+      `"${name}" kalıcı olarak silinecek. Kaynak belgeleriniz etkilenmez; çıktıyı yeniden üretebilirsiniz ama bu birkaç dakika sürer.`,
+    en: (name: string) =>
+      `"${name}" will be permanently deleted. Your source documents are unaffected; you can regenerate it, but that takes a few minutes.`,
+  },
+  deleteArtifactFailed: {
+    tr: "Çıktı silinemedi.",
+    en: "Could not delete the output.",
+  },
   /** Tam-ekran üst çubuğun mono künyeleri (§13.5 Faz 4). */
   reportSectionCount: {
     tr: (n: number) => `${n} bölüm`,
